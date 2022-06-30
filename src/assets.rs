@@ -1200,7 +1200,7 @@ pub(crate) async fn load_ktx2_cubemap(
                                 layout: Some(&pipeline_layout),
                                 vertex: wgpu::VertexState {
                                     module: context.shader_cache.get("fullscreen_tri", || {
-                                        context.device.create_shader_module(&wgpu::include_spirv!(
+                                        context.device.create_shader_module(wgpu::include_spirv!(
                                             "../compiled-shaders/fullscreen_tri.spv"
                                         ))
                                     }),
@@ -1209,12 +1209,12 @@ pub(crate) async fn load_ktx2_cubemap(
                                 },
                                 fragment: Some(wgpu::FragmentState {
                                     module: context.shader_cache.get("bc6", || {
-                                        context.device.create_shader_module(&wgpu::include_spirv!(
+                                        context.device.create_shader_module(wgpu::include_spirv!(
                                             "../compiled-shaders/bc6.spv"
                                         ))
                                     }),
                                     entry_point: "main",
-                                    targets: &[wgpu::TextureFormat::Rg11b10Float.into()],
+                                    targets: &[Some(wgpu::TextureFormat::Rg11b10Float.into())],
                                 }),
                                 primitive: Default::default(),
                                 depth_stencil: None,
@@ -1315,14 +1315,14 @@ pub(crate) async fn load_ktx2_cubemap(
                         let mut render_pass =
                             command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                                 label: None,
-                                color_attachments: &[wgpu::RenderPassColorAttachment {
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                     view: &output_view,
                                     resolve_target: None,
                                     ops: wgpu::Operations {
                                         load: wgpu::LoadOp::Load,
                                         store: true,
                                     },
-                                }],
+                                })],
                                 depth_stencil_attachment: None,
                             });
 

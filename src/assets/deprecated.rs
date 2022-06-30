@@ -175,7 +175,7 @@ pub(super) fn load_standard_image_format(
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: context.shader_cache.get("fullscreen_tri", || {
-                            context.device.create_shader_module(&wgpu::include_spirv!(
+                            context.device.create_shader_module(wgpu::include_spirv!(
                                 "../../compiled-shaders/fullscreen_tri.spv"
                             ))
                         }),
@@ -184,12 +184,12 @@ pub(super) fn load_standard_image_format(
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: context.shader_cache.get("blit", || {
-                            context.device.create_shader_module(&wgpu::include_spirv!(
+                            context.device.create_shader_module(wgpu::include_spirv!(
                                 "../../compiled-shaders/blit.spv"
                             ))
                         }),
                         entry_point: "blit",
-                        targets: &[format.into()],
+                        targets: &[Some(format.into())],
                     }),
                     primitive: Default::default(),
                     depth_stencil: None,
@@ -230,14 +230,14 @@ pub(super) fn load_standard_image_format(
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("blit render pass"),
-            color_attachments: &[wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &temp_blit_texture.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: true,
                 },
-            }],
+            })],
             depth_stencil_attachment: None,
         });
 

@@ -36,14 +36,14 @@ zstd = { version = "0.11.2", default-features = false, features = ["wasm"] }
 wasm-futures-executor = { git = "https://github.com/wngr/wasm-futures-executor" }
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
-egui-wgpu = { git = "https://github.com/expenses/egui", branch = "fixes" }
-egui = { git = "https://github.com/expenses/egui", branch = "fixes" }
+egui-wgpu = { git = "https://github.com/expenses/egui", branch = "update-wgsl-syntax" }
+egui = { git = "https://github.com/expenses/egui", branch = "update-wgsl-syntax" }
 slotmap = "1.0.6"
 range-alloc = { git = "https://github.com/expenses/gfx", branch = "range-allocator" }
 raw-window-handle = "0.4.3"
 
 [dependencies.web-sys]
-version = "0.3.57"
+version = "0.3.58"
 features = [
   'Document',
   'Element',
@@ -111,16 +111,9 @@ thread_pool = []
 webgl = ["wgpu/webgl"]
 
 [patch.crates-io]
-web-sys = { git = "https://github.com/expenses/wasm-bindgen", branch = "gamepad-without-webgpu-update" }
-wasm-bindgen = { git = "https://github.com/expenses/wasm-bindgen", branch = "gamepad-without-webgpu-update" }
-wasm-bindgen-shared = { git = "https://github.com/expenses/wasm-bindgen", branch = "gamepad-without-webgpu-update" }
-js-sys = { git = "https://github.com/expenses/wasm-bindgen", branch = "gamepad-without-webgpu-update" }
-glow = { git = "https://github.com/expenses/glow", branch = "webxr" }
+glow = { git = "https://github.com/expenses/glow", branch = "multiview" }
 wgpu = { git = "https://github.com/expenses/wgpu", branch = "webxr-more-extensions" }
 wgpu-hal = { git = "https://github.com/expenses/wgpu", branch = "webxr-more-extensions" }
-
-[patch.'https://github.com/gfx-rs/naga']
-naga = { git = "https://github.com/expenses/naga", branch = "webxr" }
 
 [workspace]
 members = [

@@ -1129,7 +1129,7 @@ pub async fn run() -> Result<(), wasm_bindgen::JsValue> {
 
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("main render pass"),
-            color_attachments: &[wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: if render_direct_to_framebuffer {
                     &framebuffer_colour_attachment.view
                 } else {
@@ -1140,7 +1140,7 @@ pub async fn run() -> Result<(), wasm_bindgen::JsValue> {
                     load: wgpu::LoadOp::Load,
                     store: true,
                 },
-            }],
+            })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &depth.get().view,
                 depth_ops: Some(wgpu::Operations {
@@ -1188,14 +1188,14 @@ pub async fn run() -> Result<(), wasm_bindgen::JsValue> {
 
             let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("tonemap render pass"),
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &framebuffer_colour_attachment.view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: true,
                     },
-                }],
+                })],
                 depth_stencil_attachment: None,
             });
 
