@@ -330,7 +330,7 @@ dependencies = [
 [[package]]
 name = "egui"
 version = "0.18.1"
-source = "git+https://github.com/expenses/egui?branch=update-wgsl-syntax#bd03413201f3bc97d49f5a2e7714f033293b3553"
+source = "git+https://github.com/expenses/egui?branch=update-wgsl-syntax#576737498397a9ce3ca0c4f2e2dec92999921a68"
 dependencies = [
  "ahash",
  "epaint",
@@ -340,7 +340,7 @@ dependencies = [
 [[package]]
 name = "egui-wgpu"
 version = "0.18.0"
-source = "git+https://github.com/expenses/egui?branch=update-wgsl-syntax#bd03413201f3bc97d49f5a2e7714f033293b3553"
+source = "git+https://github.com/expenses/egui?branch=update-wgsl-syntax#576737498397a9ce3ca0c4f2e2dec92999921a68"
 dependencies = [
  "bytemuck",
  "egui",
@@ -361,7 +361,7 @@ dependencies = [
 [[package]]
 name = "emath"
 version = "0.18.0"
-source = "git+https://github.com/expenses/egui?branch=update-wgsl-syntax#bd03413201f3bc97d49f5a2e7714f033293b3553"
+source = "git+https://github.com/expenses/egui?branch=update-wgsl-syntax#576737498397a9ce3ca0c4f2e2dec92999921a68"
 dependencies = [
  "bytemuck",
 ]
@@ -369,7 +369,7 @@ dependencies = [
 [[package]]
 name = "epaint"
 version = "0.18.1"
-source = "git+https://github.com/expenses/egui?branch=update-wgsl-syntax#bd03413201f3bc97d49f5a2e7714f033293b3553"
+source = "git+https://github.com/expenses/egui?branch=update-wgsl-syntax#576737498397a9ce3ca0c4f2e2dec92999921a68"
 dependencies = [
  "ab_glyph",
  "ahash",
@@ -533,7 +533,7 @@ dependencies = [
 [[package]]
 name = "gltf"
 version = "1.0.0"
-source = "git+https://github.com/expenses/gltf?branch=third-party-extensions#dbb2b6770853210596452b7964d31c49d0ae2a3e"
+source = "git+https://github.com/expenses/gltf?branch=extended#1ad1488ef29b4e5a8766299fd85b24c725701244"
 dependencies = [
  "byteorder",
  "gltf-derive",
@@ -545,7 +545,7 @@ dependencies = [
 [[package]]
 name = "gltf-derive"
 version = "1.0.0"
-source = "git+https://github.com/expenses/gltf?branch=third-party-extensions#dbb2b6770853210596452b7964d31c49d0ae2a3e"
+source = "git+https://github.com/expenses/gltf?branch=extended#1ad1488ef29b4e5a8766299fd85b24c725701244"
 dependencies = [
  "inflections",
  "proc-macro2",
@@ -567,7 +567,7 @@ dependencies = [
 [[package]]
 name = "gltf-json"
 version = "1.0.0"
-source = "git+https://github.com/expenses/gltf?branch=third-party-extensions#dbb2b6770853210596452b7964d31c49d0ae2a3e"
+source = "git+https://github.com/expenses/gltf?branch=extended#1ad1488ef29b4e5a8766299fd85b24c725701244"
 dependencies = [
  "gltf-derive",
  "serde",

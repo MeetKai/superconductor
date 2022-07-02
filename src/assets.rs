@@ -205,7 +205,7 @@ impl StagingModelPrimitive {
                 Rc::clone(&context.default_metallic_roughness_image),
                 context,
             ),
-            emissive_texture: MaterialTexture::new(Rc::clone(&context.black_image), context),
+            emissive_texture: MaterialTexture::new(Rc::clone(&context.white_image), context),
         });
 
         let material_index = self.material_index;
@@ -440,7 +440,7 @@ pub(crate) async fn load_gltf_from_bytes(
                                     contents: bytemuck::bytes_of(
                                         &shared_structs::MaterialSettings {
                                             base_color_factor: pbr.base_color_factor().into(),
-                                            emissive_factor: material.emissive_factor().into(),
+                                            emissive_factor: Vec3::from(material.emissive_factor()) * material.emissive_strength().unwrap_or(1.0),
                                             metallic_factor: pbr.metallic_factor(),
                                             roughness_factor: pbr.roughness_factor(),
                                             is_unlit: unlit as u32,

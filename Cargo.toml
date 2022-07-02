@@ -14,7 +14,7 @@ log = "0.4.17"
 wasm-bindgen-futures = "0.4.30"
 wgpu = { version = "0.13.0", features = ["spirv"] }
 futures = { version = "0.3.21", default-features = false }
-gltf = {  git = "https://github.com/expenses/gltf", branch = "third-party-extensions", features = ["KHR_materials_unlit"], default-features = false }
+gltf = {  git = "https://github.com/expenses/gltf", branch = "extended", features = ["KHR_materials_unlit", "KHR_materials_emissive_strength"], default-features = false }
 gltf-helpers = { path = "gltf-helpers" }
 glam = "0.20.5"
 bytemuck = { version = "1.9.1", features = ["derive"] }
