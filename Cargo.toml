@@ -52,6 +52,9 @@ members = [
   "demo",
 ]
 
+[profile.release]
+lto = true
+
 [patch.crates-io]
 web-sys = { git = "https://github.com/expenses/wasm-bindgen", branch = "no-webgpu-update-rebase" }
 wasm-bindgen = { git = "https://github.com/expenses/wasm-bindgen", branch = "no-webgpu-update-rebase" }
