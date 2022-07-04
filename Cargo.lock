@@ -3,22 +3,6 @@
 version = 3
 
 [[package]]
-name = "ab_glyph"
-version = "0.2.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24606928a235e73cdef55a0c909719cadd72fce573e5713d58cb2952d8f5794c"
-dependencies = [
- "ab_glyph_rasterizer",
- "owned_ttf_parser",
-]
-
-[[package]]
-name = "ab_glyph_rasterizer"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a13739d7177fbd22bb0ed28badfff9f372f8bef46c863db4e1c6248f6b223b6e"
-
-[[package]]
 name = "adler"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -106,12 +90,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30696a84d817107fc028e049980e09d5e140e8da8f1caeb17e8e950658a3cea9"
 
 [[package]]
-name = "atomic_refcell"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73b5e5f48b927f04e952dedc932f31995a65a0bf65ec971c74436e51bf6e970d"
-
-[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -124,36 +102,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
-name = "basis-universal"
-version = "0.1.1"
-source = "git+https://github.com/expenses/basis-universal-rs?branch=wasm-support#8e574b16da844fd4b15af39c188c3b86d81c35d3"
-dependencies = [
- "basis-universal-sys",
- "basis-universal-wasm",
- "bitflags",
- "js-sys",
- "lazy_static",
-]
-
-[[package]]
-name = "basis-universal-sys"
-version = "0.1.1"
-source = "git+https://github.com/expenses/basis-universal-rs?branch=wasm-support#8e574b16da844fd4b15af39c188c3b86d81c35d3"
-dependencies = [
- "cc",
-]
-
-[[package]]
-name = "basis-universal-wasm"
-version = "0.1.0"
-source = "git+https://github.com/expenses/basis-universal-rs-wasm#6c19af422ffee2d6df1abb9c33ec30001bc1eea1"
-dependencies = [
- "js-sys",
- "wasm-bindgen",
- "wasm-bindgen-futures",
-]
-
-[[package]]
 name = "bevy_app"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -161,6 +109,7 @@ checksum = "32660ae99fa3498ca379de28b7e2f447e6531b0e432bf200901efeec075553c1"
 dependencies = [
  "bevy_derive",
  "bevy_ecs",
+ "bevy_reflect",
  "bevy_utils",
  "wasm-bindgen",
  "web-sys",
@@ -513,59 +462,6 @@ name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
-
-[[package]]
-name = "egui"
-version = "0.18.1"
-source = "git+https://github.com/expenses/egui?branch=fixes#f8b00920b8b166994939c57e98c172c942c7a679"
-dependencies = [
- "ahash",
- "epaint",
- "nohash-hasher",
-]
-
-[[package]]
-name = "egui-wgpu"
-version = "0.18.0"
-source = "git+https://github.com/expenses/egui?branch=fixes#f8b00920b8b166994939c57e98c172c942c7a679"
-dependencies = [
- "bytemuck",
- "egui",
- "tracing",
- "type-map",
- "wgpu",
-]
-
-[[package]]
-name = "elsa"
-version = "1.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b4b5d23ed6b6948d68240aafa4ac98e568c9a020efd9d4201a6288bc3006e09"
-dependencies = [
- "stable_deref_trait",
-]
-
-[[package]]
-name = "emath"
-version = "0.18.0"
-source = "git+https://github.com/expenses/egui?branch=fixes#f8b00920b8b166994939c57e98c172c942c7a679"
-dependencies = [
- "bytemuck",
-]
-
-[[package]]
-name = "epaint"
-version = "0.18.1"
-source = "git+https://github.com/expenses/egui?branch=fixes#f8b00920b8b166994939c57e98c172c942c7a679"
-dependencies = [
- "ab_glyph",
- "ahash",
- "atomic_refcell",
- "bytemuck",
- "emath",
- "nohash-hasher",
- "parking_lot 0.12.1",
-]
 
 [[package]]
 name = "erased-serde"
@@ -1051,47 +947,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3e378b66a060d48947b590737b30a1be76706c8dd7b8ba0f2fe3989c68a853f"
 
 [[package]]
-name = "mateversum"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64",
- "basis-universal",
- "basis-universal-wasm",
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "crevice",
- "egui",
- "egui-wgpu",
- "elsa",
- "futures",
- "glam",
- "glow",
- "gltf",
- "gltf-helpers",
- "image",
- "js-sys",
- "ktx2",
- "log",
- "range-alloc 0.1.2 (git+https://github.com/expenses/gfx?branch=range-allocator)",
- "raw-window-handle",
- "renderer-core",
- "serde",
- "serde_json",
- "shared-structs",
- "slotmap",
- "url",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-futures-executor",
- "web-sys",
- "wgpu",
- "wgpu-hal",
- "zstd",
-]
-
-[[package]]
 name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1144,12 +999,6 @@ dependencies = [
  "thiserror",
  "unicode-xid",
 ]
-
-[[package]]
-name = "nohash-hasher"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
 
 [[package]]
 name = "num-integer"
@@ -1235,15 +1084,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7940cf2ca942593318d07fcf2596cdca60a85c9e7fab408a5e21a4f9dcd40d87"
 dependencies = [
  "num-traits",
-]
-
-[[package]]
-name = "owned_ttf_parser"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fb1e509cfe7a12db2a90bfa057dfcdbc55a347f5da677c506b53dd099cfec9d"
-dependencies = [
- "ttf-parser",
 ]
 
 [[package]]
@@ -1457,9 +1297,6 @@ name = "serde"
 version = "1.0.137"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61ea8d54c77f8315140a05f4c7237403bf38b72704d031543aa1d16abbf517d1"
-dependencies = [
- "serde_derive",
-]
 
 [[package]]
 name = "serde_derive"
@@ -1523,12 +1360,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "stable_deref_trait"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
-
-[[package]]
 name = "superconductor"
 version = "0.1.0"
 dependencies = [
@@ -1545,6 +1376,22 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu",
+]
+
+[[package]]
+name = "superconductor-demo"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "console_error_panic_hook",
+ "console_log",
+ "futures",
+ "js-sys",
+ "log",
+ "superconductor",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -1603,15 +1450,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
-name = "tokio"
-version = "1.19.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c51a52ed6686dd62c320f9b89299e9dfb46f730c7a48e635c19f21d116cb1439"
-dependencies = [
- "pin-project-lite",
-]
-
-[[package]]
 name = "toml"
 version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1651,21 +1489,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7709595b8878a4965ce5e87ebf880a7d39c9afc6837721b21a5a816a8117d921"
 dependencies = [
  "once_cell",
-]
-
-[[package]]
-name = "ttf-parser"
-version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42d4b50cba812f0f04f0707bb6a0eaa5fae4ae05d90fc2a377998d2f21e77a1c"
-
-[[package]]
-name = "type-map"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deb68604048ff8fa93347f02441e4487594adc20bb8a084f9e564d2b827a0a9f"
-dependencies = [
- "rustc-hash",
 ]
 
 [[package]]
@@ -1711,7 +1534,6 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
- "serde",
 ]
 
 [[package]]
@@ -1810,21 +1632,6 @@ dependencies = [
 name = "wasm-bindgen-shared"
 version = "0.2.81"
 source = "git+https://github.com/expenses/wasm-bindgen?branch=no-webgpu-update-rebase#2ebcf17c3fe94bab891062b35b609c4734f55f85"
-
-[[package]]
-name = "wasm-futures-executor"
-version = "0.2.0"
-source = "git+https://github.com/wngr/wasm-futures-executor#be944fac6416f053ab22bf86d2682d8c43fc5ad8"
-dependencies = [
- "futures",
- "js-sys",
- "log",
- "parking_lot 0.12.1",
- "tokio",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
 
 [[package]]
 name = "web-sys"
