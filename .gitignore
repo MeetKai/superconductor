@@ -1,7 +1,3 @@
 /target
-web/pkg
-/**/*.blend1
-web/other_models
-/**/*.dds
 shaders/src/tonemapping.rs
 shaders/target
