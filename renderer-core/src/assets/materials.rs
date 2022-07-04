@@ -1,6 +1,4 @@
-use super::textures;
 use crate::{BindGroupLayouts, Texture};
-use arc_swap::ArcSwap;
 use crevice::std140::AsStd140;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -10,8 +8,8 @@ fn load_single_pixel_image(
     queue: &wgpu::Queue,
     format: wgpu::TextureFormat,
     bytes: &[u8; 4],
-) -> ArcSwap<Texture> {
-    ArcSwap::from(Arc::new(Texture::new(device.create_texture_with_data(
+) -> Arc<Texture> {
+    Arc::new(Texture::new(device.create_texture_with_data(
         queue,
         &wgpu::TextureDescriptor {
             label: None,
@@ -27,16 +25,16 @@ fn load_single_pixel_image(
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
         },
         bytes,
-    ))))
+    )))
 }
 
 pub(super) struct MaterialBindings {
-    pub(super) albedo: ArcSwap<Texture>,
-    pub(super) normal: ArcSwap<Texture>,
-    pub(super) metallic_roughness: ArcSwap<Texture>,
-    pub(super) emission: ArcSwap<Texture>,
+    pub(super) albedo: Arc<Texture>,
+    pub(super) normal: Arc<Texture>,
+    pub(super) metallic_roughness: Arc<Texture>,
+    pub(super) emission: Arc<Texture>,
+    pub(super) material_settings: wgpu::Buffer,
 
-    material_settings: wgpu::Buffer,
     bind_group_layouts: Arc<BindGroupLayouts>,
 }
 
@@ -83,18 +81,14 @@ impl MaterialBindings {
         }
     }
 
-    pub(super) fn create_bind_group(
-        &self,
-        device: &wgpu::Device,
-        settings: &textures::Settings,
-    ) -> wgpu::BindGroup {
+    pub(super) fn create_bind_group(&self, device: &wgpu::Device) -> wgpu::BindGroup {
         let linear_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::Repeat,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Linear,
-            anisotropy_clamp: settings.anisotropy_clamp,
+            anisotropy_clamp: Some(std::num::NonZeroU8::new(16).unwrap()), //performance_settings.anisotropy_clamp(),
             ..Default::default()
         });
 
@@ -104,21 +98,19 @@ impl MaterialBindings {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.albedo.load().view),
+                    resource: wgpu::BindingResource::TextureView(&self.albedo.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.normal.load().view),
+                    resource: wgpu::BindingResource::TextureView(&self.normal.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::TextureView(
-                        &self.metallic_roughness.load().view,
-                    ),
+                    resource: wgpu::BindingResource::TextureView(&self.metallic_roughness.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&self.emission.load().view),
+                    resource: wgpu::BindingResource::TextureView(&self.emission.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
