@@ -1,3 +1,4 @@
 /target
 shaders/src/tonemapping.rs
 shaders/target
+demo/web/pkg
