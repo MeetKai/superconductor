@@ -117,6 +117,10 @@ pub async fn initialise(
     Queue,
     renderer_core::PipelineOptions,
 ) {
+    let canvas = renderer_core::Canvas::default();
+    let webgl2_context =
+        canvas.create_webgl2_context(renderer_core::ContextCreationOptions { stencil: true });
+
     let mode = match mode {
         Mode::Vr => web_sys::XrSessionMode::ImmersiveVr,
         Mode::Ar => web_sys::XrSessionMode::ImmersiveAr,
@@ -137,7 +141,23 @@ pub async fn initialise(
         .unwrap()
         .into();
 
-    let canvas = renderer_core::Canvas::default();
+    let mut layer_init = web_sys::XrWebGlLayerInit::new();
+
+    let pipeline_options = if mode == web_sys::XrSessionMode::ImmersiveVr {
+        renderer_core::PipelineOptions {
+            multiview: Some(std::num::NonZeroU32::new(2).unwrap()),
+            inline_tonemapping: true,
+        }
+    } else {
+        renderer_core::PipelineOptions {
+            multiview: None,
+            inline_tonemapping: true,
+        }
+    };
+
+    layer_init
+        .depth(pipeline_options.render_direct_to_framebuffer())
+        .stencil(pipeline_options.render_direct_to_framebuffer());
 
     let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
     let instance = wgpu::Instance::new(backend);
@@ -172,27 +192,6 @@ pub async fn initialise(
         )
         .await
         .expect("Unable to find a suitable GPU adapter!");
-
-    let mut layer_init = web_sys::XrWebGlLayerInit::new();
-
-    let pipeline_options = if mode == web_sys::XrSessionMode::ImmersiveVr {
-        renderer_core::PipelineOptions {
-            multiview: Some(std::num::NonZeroU32::new(2).unwrap()),
-            inline_tonemapping: true,
-        }
-    } else {
-        renderer_core::PipelineOptions {
-            multiview: None,
-            inline_tonemapping: true,
-        }
-    };
-
-    layer_init
-        .depth(pipeline_options.render_direct_to_framebuffer())
-        .stencil(pipeline_options.render_direct_to_framebuffer());
-
-    let webgl2_context =
-        canvas.create_webgl2_context(renderer_core::ContextCreationOptions { stencil: true });
 
     wasm_bindgen_futures::JsFuture::from(webgl2_context.make_xr_compatible())
         .await
