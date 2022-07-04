@@ -1,3 +1,4 @@
+use super::textures;
 use crate::{BindGroupLayouts, Texture};
 use crevice::std140::AsStd140;
 use std::sync::Arc;
@@ -33,8 +34,8 @@ pub(super) struct MaterialBindings {
     pub(super) normal: Arc<Texture>,
     pub(super) metallic_roughness: Arc<Texture>,
     pub(super) emission: Arc<Texture>,
-    pub(super) material_settings: wgpu::Buffer,
 
+    material_settings: wgpu::Buffer,
     bind_group_layouts: Arc<BindGroupLayouts>,
 }
 
@@ -81,14 +82,18 @@ impl MaterialBindings {
         }
     }
 
-    pub(super) fn create_bind_group(&self, device: &wgpu::Device) -> wgpu::BindGroup {
+    pub(super) fn create_bind_group(
+        &self,
+        device: &wgpu::Device,
+        settings: &textures::Settings,
+    ) -> wgpu::BindGroup {
         let linear_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::Repeat,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Linear,
-            anisotropy_clamp: Some(std::num::NonZeroU8::new(16).unwrap()), //performance_settings.anisotropy_clamp(),
+            anisotropy_clamp: settings.anisotropy_clamp,
             ..Default::default()
         });
 

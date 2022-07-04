@@ -18,6 +18,7 @@ pub struct Context<T> {
     pub vertex_buffers: Arc<parking_lot::Mutex<crate::buffers::VertexBuffers>>,
     pub index_buffer: Arc<parking_lot::Mutex<crate::buffers::IndexBuffer>>,
     pub pipelines: Arc<crate::Pipelines>,
+    pub texture_settings: textures::Settings,
 }
 
 #[derive(Default, Debug)]
@@ -196,14 +197,14 @@ impl Model {
                 );
 
                 let bind_group = Swappable::new(Arc::new(
-                    material_bindings.create_bind_group(&context.device),
+                    material_bindings.create_bind_group(&context.device, &context.texture_settings),
                 ));
 
                 let bind_group_setter = bind_group.setter.clone();
 
                 primitives.push(Primitive {
                     index_buffer_range: staging_buffers.collect(&staging_primitive.buffers),
-                    bind_group: bind_group,
+                    bind_group,
                 });
 
                 spawn_texture_loading_futures(
@@ -239,7 +240,7 @@ impl Model {
                 context,
                 gltf.clone(),
                 buffer_map.clone(),
-                &root_url,
+                root_url,
             ),
             alpha_clipped: collect_primitives(
                 &mut primitives,
@@ -248,7 +249,7 @@ impl Model {
                 context,
                 gltf.clone(),
                 buffer_map.clone(),
-                &root_url,
+                root_url,
             ),
             opaque_double_sided: collect_primitives(
                 &mut primitives,
@@ -257,16 +258,16 @@ impl Model {
                 context,
                 gltf.clone(),
                 buffer_map.clone(),
-                &root_url,
+                root_url,
             ),
             alpha_clipped_double_sided: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
                 alpha_clipped_double_sided_primitives.values(),
                 context,
-                gltf.clone(),
-                buffer_map.clone(),
-                &root_url,
+                gltf,
+                buffer_map,
+                root_url,
             ),
         };
 
@@ -372,12 +373,16 @@ fn spawn_texture_loading_futures<T: HttpClient + Clone + 'static>(
         queue: context.queue.clone(),
         http_client: context.http_client.clone(),
         pipelines: context.pipelines.clone(),
+        settings: context.texture_settings.clone(),
     };
 
     wasm_bindgen_futures::spawn_local({
         let material_bindings = Arc::clone(&material_bindings);
         let textures_context = textures_context.clone();
         let root_url = root_url.clone();
+        let gltf = gltf.clone();
+        let bind_group_setter = bind_group_setter.clone();
+        let buffer_map = buffer_map.clone();
 
         async move {
             if let Some(material) = gltf.materials().nth(material_index) {
@@ -405,8 +410,56 @@ fn spawn_texture_loading_futures<T: HttpClient + Clone + 'static>(
 
                             material_bindings.albedo = texture;
 
+                            bind_group_setter.set(Arc::new(material_bindings.create_bind_group(
+                                &textures_context.device,
+                                &textures_context.settings,
+                            )));
+                        }
+                        Err(error) => {
+                            log::info!("Failed to load tex: {}", error)
+                        }
+                    }
+                }
+            } else {
+                log::warn!("Material index is invalid or model doesn't contain any materials.")
+            }
+        }
+    });
+
+    /*
+    wasm_bindgen_futures::spawn_local({
+        let material_bindings = Arc::clone(&material_bindings);
+        let textures_context = textures_context.clone();
+        let root_url = root_url.clone();
+
+        async move {
+            if let Some(material) = gltf.materials().nth(material_index) {
+                let pbr = material.pbr_metallic_roughness();
+                if let Some(metallic_roughness_texture) = pbr.metallic_roughness_texture() {
+                    let metallic_roughness_texture = metallic_roughness_texture.texture();
+
+                    let image_source = metallic_roughness_texture.source();
+
+                    let source = image_source.source();
+
+                    let result = load_image_from_source(
+                        source,
+                        &gltf,
+                        &buffer_map,
+                        false,
+                        &textures_context,
+                        &root_url,
+                    )
+                    .await;
+
+                    match result {
+                        Ok(texture) => {
+                            let mut material_bindings = material_bindings.lock();
+
+                            material_bindings.metallic_roughness = texture;
+
                             bind_group_setter.set(Arc::new(
-                                material_bindings.create_bind_group(&textures_context.device),
+                                material_bindings.create_bind_group(&textures_context.device, &textures_context.settings),
                             ));
                         }
                         Err(error) => {
@@ -419,6 +472,7 @@ fn spawn_texture_loading_futures<T: HttpClient + Clone + 'static>(
             }
         }
     });
+    */
 }
 
 async fn load_image_from_source<T: HttpClient + 'static>(
@@ -453,6 +507,95 @@ async fn load_image_from_source<T: HttpClient + 'static>(
                     .await
             } else {
                 load_image_with_mime_type(ImageSource::Url(url), srgb, mime_type, context).await
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+struct ImageContext<T> {
+    gltf: Arc<gltf::Gltf>,
+    buffer_map: Arc<HashMap<usize, Vec<u8>>>,
+    root_url: url::Url,
+    textures_context: textures::Context<T>,
+    bind_group_setter: Setter<Arc<wgpu::BindGroup>>,
+    material_bindings: Arc<parking_lot::Mutex<MaterialBindings>>,
+}
+
+async fn load_image_from_gltf_with_followup<T: HttpClient + 'static, F: Fn(Arc<Texture>)>(
+    texture: gltf::Texture<'_, ()>,
+    srgb: bool,
+    context: &ImageContext<T>,
+    follow_up: F,
+) {
+    let result = load_image_from_gltf(texture, srgb, context).await;
+
+    match result {
+        Ok(texture) => {
+            //let mut material_bindings = context.material_bindings.lock();
+
+            follow_up(texture);
+
+            context.bind_group_setter.set(Arc::new(
+                context.material_bindings.lock().create_bind_group(
+                    &context.textures_context.device,
+                    &context.textures_context.settings,
+                ),
+            ));
+        }
+        Err(error) => {
+            log::error!("Failed to load texture for {}: {}", context.root_url, error);
+        }
+    }
+}
+
+async fn load_image_from_gltf<T: HttpClient + 'static>(
+    texture: gltf::Texture<'_, ()>,
+    srgb: bool,
+    context: &ImageContext<T>,
+) -> anyhow::Result<Arc<Texture>> {
+    match texture.source().source() {
+        gltf::image::Source::View { mime_type, view } => {
+            let buffer = get_buffer(&context.gltf, &context.buffer_map, view.buffer()).unwrap();
+
+            let bytes = &buffer[view.offset()..view.offset() + view.length()];
+
+            load_image_with_mime_type(
+                ImageSource::Bytes(bytes),
+                srgb,
+                Some(mime_type),
+                &context.textures_context,
+            )
+            .await
+        }
+        gltf::image::Source::Uri { uri, mime_type } => {
+            let url = url::Url::options()
+                .base_url(Some(&context.root_url))
+                .parse(uri)?;
+
+            if url.scheme() == "data" {
+                let (_mime_type, data) = url
+                    .path()
+                    .split_once(',')
+                    .ok_or_else(|| anyhow::anyhow!("Failed to get data uri seperator"))?;
+
+                let bytes = base64::decode(data)?;
+
+                load_image_with_mime_type(
+                    ImageSource::Bytes(&bytes),
+                    srgb,
+                    mime_type,
+                    &context.textures_context,
+                )
+                .await
+            } else {
+                load_image_with_mime_type(
+                    ImageSource::Url(url),
+                    srgb,
+                    mime_type,
+                    &context.textures_context,
+                )
+                .await
             }
         }
     }

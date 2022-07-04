@@ -105,10 +105,10 @@ impl Plugin for SuperconductorPlugin {
 
         superconductor::XrPlugin.build(app);
 
-        /*app.insert_resource(NewIblTextures(Some(NewIblTexturesInner {
+        app.insert_resource(NewIblTextures(Some(NewIblTexturesInner {
             diffuse_cubemap: url::Url::parse("https://expenses.github.io/mateversum-web/environment_maps/helipad/diffuse_compressed.ktx2").unwrap(),
             specular_cubemap: url::Url::parse("https://expenses.github.io/mateversum-web/environment_maps/helipad/specular_compressed.ktx2").unwrap()
-        })));*/
+        })));
     }
 }
 

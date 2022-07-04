@@ -6,7 +6,7 @@ use renderer_core::assets::models::PrimitiveRanges;
 use renderer_core::create_view_from_device_framebuffer;
 use renderer_core::utils::BorrowedOrOwned;
 
-pub fn render(
+pub(crate) fn render(
     frame: NonSend<web_sys::XrFrame>,
     device: Res<Device>,
     queue: Res<Queue>,
@@ -48,7 +48,7 @@ pub fn render(
             .into();
 
     let framebuffer_colour_attachment = create_view_from_device_framebuffer(
-        &device,
+        device,
         framebuffer.clone(),
         &base_layer,
         wgpu::TextureFormat::Rgba8Unorm,
@@ -125,8 +125,8 @@ pub fn render(
 
     let depth_attachment = if pipeline_options.render_direct_to_framebuffer() {
         BorrowedOrOwned::Owned(create_view_from_device_framebuffer(
-            &device,
-            framebuffer.clone(),
+            device,
+            framebuffer,
             &base_layer,
             wgpu::TextureFormat::Depth24PlusStencil8,
             "device framebuffer (depth)",
@@ -203,7 +203,7 @@ pub fn render(
         render_pass.set_vertex_buffer(2, vertex_buffers.uv.slice(..));
         render_pass.set_vertex_buffer(3, instance_buffer.0.buffer.slice(..));
 
-        render_pass.set_bind_group(0, &main_bind_group, &[]);
+        render_pass.set_bind_group(0, main_bind_group, &[]);
 
         {
             render_pass.set_pipeline(&pipelines.pbr.opaque);
@@ -266,7 +266,7 @@ pub fn render(
 
         render_pass.set_pipeline(&pipelines.tonemap);
 
-        render_pass.set_bind_group(0, &main_bind_group, &[]);
+        render_pass.set_bind_group(0, main_bind_group, &[]);
         render_pass.set_bind_group(1, composite_bind_group, &[]);
 
         render_pass.draw(0..3, 0..1);
