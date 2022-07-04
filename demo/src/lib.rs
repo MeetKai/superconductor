@@ -1,5 +1,11 @@
 use wasm_bindgen::prelude::wasm_bindgen;
 
+use superconductor::{
+    bevy_ecs, components, renderer_core,
+    resources::{FrameTime, NewIblTextures, NewIblTexturesInner},
+    url, Vec3,
+};
+
 #[wasm_bindgen(start)]
 pub fn main() {
     wasm_bindgen_futures::spawn_local(run());
@@ -32,12 +38,10 @@ async fn run() {
 
         app.insert_non_send_resource(frame);
         app.insert_non_send_resource(pose);
-        app.insert_resource(superconductor::FrameTime(time));
+        app.insert_resource(FrameTime(time));
         app.schedule.run_once(&mut app.world);
     });
 }
-
-pub use superconductor::*;
 
 use bevy_app::{App, Plugin};
 use bevy_ecs::prelude::{Component, Query, With};

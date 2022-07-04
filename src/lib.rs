@@ -1,10 +1,10 @@
 use bevy_app::{App, Plugin};
-use bevy_ecs::prelude::{Entity, SystemStage};
-use std::collections::HashMap;
+use bevy_ecs::prelude::SystemStage;
 use std::ops::Range;
 use std::sync::Arc;
 
 pub mod components;
+pub mod resources;
 mod systems;
 
 pub use bevy_app;
@@ -15,36 +15,7 @@ pub use url;
 pub use renderer_core::{assets::textures, glam::Vec3, utils::Swappable};
 
 use components::Instance;
-
-pub struct Device(Arc<wgpu::Device>);
-pub struct Queue(Arc<wgpu::Queue>);
-struct Pipelines(Arc<renderer_core::Pipelines>);
-struct BindGroupLayouts(Arc<renderer_core::BindGroupLayouts>);
-
-struct UniformBuffer(Arc<wgpu::Buffer>);
-struct MainBindGroup(Swappable<wgpu::BindGroup>);
-struct SkyboxUniformBuffer(wgpu::Buffer);
-struct SkyboxUniformBindGroup(wgpu::BindGroup);
-
-struct IndexBuffer(Arc<parking_lot::Mutex<renderer_core::IndexBuffer>>);
-struct VertexBuffers(Arc<parking_lot::Mutex<renderer_core::VertexBuffers>>);
-struct InstanceBuffer(renderer_core::InstanceBuffer);
-
-pub struct FrameTime(pub f64);
-
-struct IntermediateDepthFramebuffer(Option<renderer_core::Texture>);
-struct IntermediateColorFramebuffer(Option<renderer_core::Texture>);
-struct CompositeBindGroup(Option<wgpu::BindGroup>);
-struct LinearSampler(Arc<wgpu::Sampler>);
-
-struct ModelUrls(pub HashMap<url::Url, Entity>);
-
-pub struct NewIblTextures(pub Option<NewIblTexturesInner>);
-
-pub struct NewIblTexturesInner {
-    pub diffuse_cubemap: url::Url,
-    pub specular_cubemap: url::Url,
-}
+use resources::{Device, ModelUrls, NewIblTextures, Queue};
 
 #[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
 pub enum StartupStage {

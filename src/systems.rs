@@ -1,7 +1,7 @@
 use crate::components::{
     Instance, InstanceOf, InstanceRange, Instances, Model, ModelUrl, PendingModel,
 };
-use crate::{
+use crate::resources::{
     BindGroupLayouts, CompositeBindGroup, Device, IndexBuffer, InstanceBuffer,
     IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LinearSampler, MainBindGroup,
     ModelUrls, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer,

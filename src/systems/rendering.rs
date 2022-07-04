@@ -1,4 +1,10 @@
-use crate::*;
+use crate::resources::{
+    BindGroupLayouts, CompositeBindGroup, Device, IndexBuffer, InstanceBuffer,
+    IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LinearSampler, MainBindGroup,
+    Pipelines, Queue, SkyboxUniformBindGroup, VertexBuffers,
+};
+use std::ops::Range;
+use std::sync::Arc;
 
 use crate::components::{InstanceRange, Model};
 use bevy_ecs::prelude::{Local, NonSend, Query, Res, ResMut};
