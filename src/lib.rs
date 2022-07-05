@@ -82,10 +82,12 @@ impl Plugin for XrPlugin {
         let mut buffer_resetting_stage =
             SystemStage::single_threaded().with_system(systems::clear_instance_buffers);
 
-        buffer_resetting_stage = if self.mode != Mode::Desktop {
-            buffer_resetting_stage.with_system(systems::update_uniform_buffers)
-        } else {
-            buffer_resetting_stage.with_system(systems::set_desktop_uniform_buffers)
+        buffer_resetting_stage = match self.mode {
+            Mode::Desktop => {
+                buffer_resetting_stage.with_system(systems::set_desktop_uniform_buffers)
+            }
+            #[cfg(feature = "webgl")]
+            _ => buffer_resetting_stage.with_system(systems::update_uniform_buffers),
         };
 
         app.add_stage_after(
@@ -108,10 +110,10 @@ impl Plugin for XrPlugin {
 
         let mut rendering_stage = SystemStage::single_threaded();
 
-        rendering_stage = if self.mode == Mode::Desktop {
-            rendering_stage.with_system(systems::rendering::render_desktop)
-        } else {
-            rendering_stage.with_system(systems::rendering::render)
+        rendering_stage = match self.mode {
+            Mode::Desktop => rendering_stage.with_system(systems::rendering::render_desktop),
+            #[cfg(feature = "webgl")]
+            _ => rendering_stage.with_system(systems::rendering::render),
         };
 
         app.add_stage_after(Stage::BufferUploading, Stage::Rendering, rendering_stage);
@@ -136,12 +138,15 @@ impl Plugin for XrPlugin {
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Mode {
+    #[cfg(feature = "webgl")]
     Vr,
+    #[cfg(feature = "webgl")]
     Ar,
     Desktop,
 }
 
 enum ModeSpecificState {
+    #[cfg(feature = "webgl")]
     Xr {
         session: web_sys::XrSession,
         reference_space: web_sys::XrReferenceSpace,
@@ -163,12 +168,15 @@ pub struct InitialisedState {
 
 pub async fn initialise(mode: Mode) -> InitialisedState {
     match mode {
+        #[cfg(feature = "webgl")]
         Mode::Vr => initialise_xr(web_sys::XrSessionMode::ImmersiveVr).await,
+        #[cfg(feature = "webgl")]
         Mode::Ar => initialise_xr(web_sys::XrSessionMode::ImmersiveAr).await,
         Mode::Desktop => initialise_desktop().await,
     }
 }
 
+#[cfg(feature = "webgl")]
 pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState {
     let canvas = renderer_core::Canvas::default();
     let webgl2_context =
@@ -194,7 +202,7 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         renderer_core::PipelineOptions {
             multiview: Some(std::num::NonZeroU32::new(2).unwrap()),
             inline_tonemapping: true,
-            srgb_framebuffer_format: false,
+            framebuffer_format: wgpu::TextureFormat::Rgba8Unorm,
             // As we're doing multiview.
             flip_viewport: false,
         }
@@ -202,7 +210,7 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         renderer_core::PipelineOptions {
             multiview: None,
             inline_tonemapping: true,
-            srgb_framebuffer_format: false,
+            framebuffer_format: wgpu::TextureFormat::Rgba8Unorm,
             // As we're rendering directly to the framebuffer.
             flip_viewport: true,
         }
@@ -294,6 +302,7 @@ pub async fn initialise_desktop() -> InitialisedState {
 
     let window = builder.build(&event_loop).unwrap();
 
+    #[cfg(feature = "webgl")]
     {
         use winit::platform::web::WindowExtWebSys;
         // On wasm, append the canvas to the document body
@@ -345,26 +354,28 @@ pub async fn initialise_desktop() -> InitialisedState {
         mode_specific: ModeSpecificState::Desktop { window, event_loop },
         device,
         queue,
-        adapter,
-        surface,
         pipeline_options: renderer_core::PipelineOptions {
             multiview: None,
             inline_tonemapping: true,
-            srgb_framebuffer_format: true,
+            framebuffer_format: surface.get_preferred_format(&adapter).unwrap(),
             // wgpu handles this for us.
             flip_viewport: false,
         },
+        adapter,
+        surface,
     }
 }
 
 pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: InitialisedState) {
     let device = Arc::new(initialised_state.device);
+    let framebuffer_format = initialised_state.pipeline_options.framebuffer_format;
 
     app.insert_resource(Device(device.clone()))
         .insert_resource(Queue(Arc::new(initialised_state.queue)))
         .insert_resource(initialised_state.pipeline_options);
 
     match initialised_state.mode_specific {
+        #[cfg(feature = "webgl")]
         ModeSpecificState::Xr {
             session,
             reference_space,
@@ -388,10 +399,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
 
             let mut config = wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                format: initialised_state
-                    .surface
-                    .get_preferred_format(&initialised_state.adapter)
-                    .unwrap(),
+                format: framebuffer_format,
                 width: size.width,
                 height: size.height,
                 present_mode: wgpu::PresentMode::Fifo,
@@ -448,9 +456,11 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
     }
 }
 
+#[cfg(feature = "webgl")]
 #[derive(Clone)]
 struct SimpleHttpClient;
 
+#[cfg(feature = "webgl")]
 impl renderer_core::assets::HttpClient for SimpleHttpClient {
     type Future = std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>>>>;
 
@@ -491,14 +501,52 @@ impl renderer_core::assets::HttpClient for SimpleHttpClient {
     }
 }
 
+#[derive(Clone, Default)]
+struct DummyHttpClient {
+    inner: reqwest::Client,
+}
+
+impl renderer_core::assets::HttpClient for DummyHttpClient {
+    #[cfg(not(target_arch = "wasm32"))]
+    type Future =
+        std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>> + Send>>;
+
+    #[cfg(target_arch = "wasm32")]
+    type Future = std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>>>>;
+
+    fn fetch_bytes(&self, url: &url::Url, byte_range: Option<Range<usize>>) -> Self::Future {
+        let url = url.clone();
+
+        let mut request_builder = self.inner.get(url.clone());
+
+        if let Some(byte_range) = byte_range {
+            request_builder = request_builder.header("Range", byte_range_string(byte_range));
+        }
+
+        Box::pin(async move {
+            println!("Requesting {}", url);
+
+            let response = request_builder.send().await?;
+
+            println!("Got response for {}", url);
+
+            let bytes = response.bytes().await?;
+
+            println!("Got bytes for {}: {}", url, bytes.len());
+
+            Ok(bytes.as_ref().to_vec())
+        })
+    }
+}
+
+fn byte_range_string(range: Range<usize>) -> String {
+    format!("bytes={}-{}", range.start, range.end - 1)
+}
+
 fn construct_request_init(
     byte_range: Option<Range<usize>>,
 ) -> anyhow::Result<web_sys::RequestInit> {
     let mut request_init = web_sys::RequestInit::new();
-
-    fn byte_range_string(range: Range<usize>) -> String {
-        format!("bytes={}-{}", range.start, range.end - 1)
-    }
 
     if let Some(byte_range) = byte_range {
         let headers = js_sys::Object::new();

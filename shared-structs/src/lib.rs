@@ -87,10 +87,12 @@ impl From<Mat4> for FlatMat4 {
     }
 }
 
-#[cfg_attr(not(target_arch = "spirv"), derive(AsStd140))]
+#[cfg_attr(not(target_arch = "spirv"), derive(AsStd140, Debug))]
 pub struct MaterialSettings {
     pub base_color_factor: Vec4,
     pub emissive_factor: Vec3,
+    #[cfg(all(not(target_arch = "spirv"), not(feature = "webgl")))]
+    pub _padding: u32,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
     pub is_unlit: u32,

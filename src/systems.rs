@@ -11,7 +11,7 @@ use bevy_ecs::prelude::{Added, Commands, Entity, NonSend, Query, Res, ResMut};
 use renderer_core::utils::{Setter, Swappable};
 use renderer_core::{
     arc_swap::ArcSwap, assets::textures, bytemuck, create_main_bind_group,
-    crevice::std140::AsStd140, ibl::IblTextures, shared_structs, Texture,
+    crevice::std140::AsStd140, ibl::IblTextures, shared_structs, spawn, Texture,
 };
 use std::sync::Arc;
 
@@ -198,13 +198,13 @@ pub(crate) fn allocate_bind_groups(
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
         queue: queue.clone(),
-        http_client: super::SimpleHttpClient,
+        http_client: super::DummyHttpClient::default(),
         bind_group_layouts: bind_group_layouts.clone(),
         pipelines: pipelines.clone(),
         settings: texture_settings.clone(),
     };
 
-    wasm_bindgen_futures::spawn_local(async move {
+    spawn(async move {
         use renderer_core::assets::HttpClient;
 
         let lut_url = url::Url::parse("https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Viewer/master/assets/images/lut_ggx.png").unwrap();
@@ -292,13 +292,13 @@ pub(crate) fn update_ibl_textures(
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
         queue: queue.clone(),
-        http_client: super::SimpleHttpClient,
+        http_client: super::DummyHttpClient::default(),
         bind_group_layouts: bind_group_layouts.clone(),
         pipelines: pipelines.clone(),
         settings: texture_settings.clone(),
     };
 
-    wasm_bindgen_futures::spawn_local(async move {
+    spawn(async move {
         let diffuse_fut = renderer_core::assets::textures::load_ktx2_cubemap(
             textures_context.clone(),
             &new_ibl_textures.diffuse_cubemap,
@@ -339,9 +339,49 @@ pub(crate) fn set_desktop_uniform_buffers(
 ) {
     let queue = &queue.0;
 
-    use renderer_core::glam::{Mat4, Vec3};
+    use renderer_core::glam::{Mat4, Vec3, Vec4};
 
-    let perspective_matrix = Mat4::perspective_rh(
+    #[cfg(feature = "webgl")]
+    fn create_perspective_matrix(
+        vertical_fov: f32,
+        aspect_ratio: f32,
+        z_near: f32,
+        z_far: f32,
+    ) -> Mat4 {
+        let t = (vertical_fov / 2.0).tan();
+        let sy = 1.0 / t;
+        let sx = sy / aspect_ratio;
+        let nmf = z_near - z_far;
+
+        Mat4::from_cols(
+            Vec4::new(sx, 0.0, 0.0, 0.0),
+            Vec4::new(0.0, sy, 0.0, 0.0),
+            Vec4::new(0.0, 0.0, z_far / nmf, -1.0),
+            Vec4::new(0.0, 0.0, z_near * z_far / nmf, 0.0),
+        )
+    }
+
+    #[cfg(not(feature = "webgl"))]
+    fn create_perspective_matrix(
+        vertical_fov: f32,
+        aspect_ratio: f32,
+        z_near: f32,
+        z_far: f32,
+    ) -> Mat4 {
+        let t = (vertical_fov / 2.0).tan();
+        let sy = 1.0 / t;
+        let sx = sy / aspect_ratio;
+        let nmf = z_near - z_far;
+
+        Mat4::from_cols(
+            Vec4::new(sx, 0.0, 0.0, 0.0),
+            Vec4::new(0.0, -sy, 0.0, 0.0),
+            Vec4::new(0.0, 0.0, z_far / nmf, -1.0),
+            Vec4::new(0.0, 0.0, z_near * z_far / nmf, 0.0),
+        )
+    }
+
+    let perspective_matrix = create_perspective_matrix(
         59.0_f32.to_radians(),
         surface_frame_view.width as f32 / surface_frame_view.height as f32,
         0.01,
@@ -355,7 +395,7 @@ pub(crate) fn set_desktop_uniform_buffers(
         right_projection_view: projection_view.into(),
         left_eye_position: camera.position,
         right_eye_position: camera.position,
-        flip_viewport: pipeline_options.flip_viewport as u32,
+        flip_viewport: false as u32,
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
         inline_srgb: false as u32,
     };
@@ -380,6 +420,7 @@ pub(crate) fn set_desktop_uniform_buffers(
     );
 }
 
+#[cfg(feature = "webgl")]
 pub(crate) fn update_uniform_buffers(
     pose: NonSend<web_sys::XrViewerPose>,
     pipeline_options: Res<renderer_core::PipelineOptions>,
@@ -484,7 +525,7 @@ pub(crate) fn start_loading_models(
         // Insert a link back from the url to the entity for lookups.
         model_urls.0.insert(url.clone(), entity);
 
-        wasm_bindgen_futures::spawn_local({
+        spawn({
             let device = device.clone();
             let queue = queue.clone();
             let bind_group_layouts = bind_group_layouts.0.clone();
@@ -496,7 +537,7 @@ pub(crate) fn start_loading_models(
                         device,
                         queue,
                         bind_group_layouts,
-                        http_client: super::SimpleHttpClient,
+                        http_client: super::DummyHttpClient::default(),
                         index_buffer,
                         vertex_buffers,
                         pipelines,
@@ -519,7 +560,7 @@ pub(crate) fn start_loading_models(
                     }
                 }
             }
-        })
+        });
     })
 }
 

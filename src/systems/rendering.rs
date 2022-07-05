@@ -9,6 +9,7 @@ use std::sync::Arc;
 use crate::components::{InstanceRange, Model};
 use bevy_ecs::prelude::{Local, NonSend, Query, Res, ResMut};
 use renderer_core::assets::models::PrimitiveRanges;
+#[cfg(feature = "webgl")]
 use renderer_core::create_view_from_device_framebuffer;
 use renderer_core::utils::BorrowedOrOwned;
 
@@ -144,6 +145,7 @@ pub(crate) fn render_desktop(
     queue.submit(std::iter::once(command_encoder.finish()));
 }
 
+#[cfg(feature = "webgl")]
 pub(crate) fn render(
     frame: NonSend<web_sys::XrFrame>,
     device: Res<Device>,

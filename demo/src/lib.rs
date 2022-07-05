@@ -12,12 +12,16 @@ pub fn main() {
     wasm_bindgen_futures::spawn_local(run());
 }
 
-async fn run() {
-    console_error_panic_hook::set_once();
+pub async fn run() {
+    //console_error_panic_hook::set_once();
 
-    console_log::init_with_level(log::Level::Info).unwrap();
+    //console_log::init_with_level(log::Level::Info).unwrap();
 
+    #[cfg(feature = "webgl")]
     let mode = select_mode_via_buttons().await;
+
+    #[cfg(not(feature = "webgl"))]
+    let mode = Mode::Desktop;
 
     let initialised_state = superconductor::initialise(mode).await;
 
@@ -118,6 +122,7 @@ impl Plugin for SuperconductorPlugin {
     }
 }
 
+#[cfg(feature = "webgl")]
 pub async fn select_mode_via_buttons() -> superconductor::Mode {
     let vr_button = create_button("Start VR");
     let ar_button = create_button("Start AR");
@@ -134,6 +139,7 @@ pub async fn select_mode_via_buttons() -> superconductor::Mode {
     }
 }
 
+#[cfg(feature = "webgl")]
 async fn button_click_future(button: &web_sys::HtmlButtonElement) {
     wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, _reject| {
         button.set_onclick(Some(&resolve))
@@ -142,6 +148,7 @@ async fn button_click_future(button: &web_sys::HtmlButtonElement) {
     .unwrap();
 }
 
+#[cfg(feature = "webgl")]
 fn create_button(text: &str) -> web_sys::HtmlButtonElement {
     let button: web_sys::HtmlButtonElement = web_sys::window()
         .unwrap()

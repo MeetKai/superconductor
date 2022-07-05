@@ -2,6 +2,7 @@ use super::materials::MaterialBindings;
 use super::textures::{self, load_image_with_mime_type, ImageSource};
 use super::HttpClient;
 use crate::{
+    spawn,
     utils::{Setter, Swappable},
     BindGroupLayouts, Texture,
 };
@@ -123,13 +124,15 @@ impl Model {
 
                         StagingPrimitive {
                             buffers: StagingBuffers::default(),
-                            material_settings: shared_structs::MaterialSettings {
+                            material_settings: dbg!(shared_structs::MaterialSettings {
                                 base_color_factor: pbr.base_color_factor().into(),
                                 emissive_factor: material.emissive_factor().into(),
                                 metallic_factor: pbr.metallic_factor(),
                                 roughness_factor: pbr.roughness_factor(),
                                 is_unlit: unlit as u32,
-                            },
+                                #[cfg(not(feature = "webgl"))]
+                                _padding: 0,
+                            }),
                             material_index: material.index().unwrap_or(0),
                         }
                     });
@@ -388,7 +391,7 @@ fn spawn_texture_loading_futures<T: HttpClient + Clone + 'static>(
         material_bindings: Arc::new(material_bindings),
     };
 
-    wasm_bindgen_futures::spawn_local({
+    spawn({
         let image_context = image_context.clone();
 
         async move {
@@ -413,7 +416,7 @@ fn spawn_texture_loading_futures<T: HttpClient + Clone + 'static>(
         }
     });
 
-    wasm_bindgen_futures::spawn_local({
+    spawn({
         let image_context = image_context.clone();
 
         async move {
@@ -441,7 +444,7 @@ fn spawn_texture_loading_futures<T: HttpClient + Clone + 'static>(
         }
     });
 
-    wasm_bindgen_futures::spawn_local({
+    spawn({
         let image_context = image_context.clone();
 
         async move {
@@ -465,7 +468,7 @@ fn spawn_texture_loading_futures<T: HttpClient + Clone + 'static>(
         }
     });
 
-    wasm_bindgen_futures::spawn_local({
+    spawn({
         async move {
             let material = image_context
                 .gltf
