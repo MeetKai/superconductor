@@ -35,7 +35,7 @@ pub(crate) fn create_bind_group_layouts_and_pipelines(
     commands.insert_resource(CompositeBindGroup(None));
 }
 
-pub(crate) fn clear_instance_buffer(
+pub(crate) fn clear_instance_buffers(
     mut instance_buffer: ResMut<InstanceBuffer>,
     mut query: Query<&mut Instances>,
 ) {

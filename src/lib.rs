@@ -23,6 +23,15 @@ pub enum StartupStage {
     BindGroupCreation,
 }
 
+#[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
+pub enum Stage {
+    AssetLoading,
+    BufferResetting,
+    InstanceBuffering,
+    BufferUploading,
+    Rendering,
+}
+
 #[derive(Default)]
 pub struct XrPlugin;
 
@@ -45,15 +54,39 @@ impl Plugin for XrPlugin {
             SystemStage::single_threaded().with_system(systems::allocate_bind_groups),
         );
 
-        app.add_system(systems::start_loading_models);
-        app.add_system(systems::finish_loading_models);
-        app.add_system(systems::update_ibl_textures);
+        app.add_stage(
+            Stage::AssetLoading,
+            SystemStage::single_threaded()
+                .with_system(systems::start_loading_models)
+                .with_system(systems::finish_loading_models)
+                .with_system(systems::update_ibl_textures),
+        );
 
-        app.add_system(systems::update_uniform_buffers);
-        app.add_system(systems::clear_instance_buffer);
-        app.add_system(systems::push_entity_instances);
-        app.add_system(systems::upload_instances);
-        app.add_system(systems::rendering::render);
+        app.add_stage_after(
+            Stage::AssetLoading,
+            Stage::BufferResetting,
+            SystemStage::single_threaded()
+                .with_system(systems::update_uniform_buffers)
+                .with_system(systems::clear_instance_buffers),
+        );
+
+        app.add_stage_after(
+            Stage::BufferResetting,
+            Stage::InstanceBuffering,
+            SystemStage::single_threaded().with_system(systems::push_entity_instances),
+        );
+
+        app.add_stage_after(
+            Stage::InstanceBuffering,
+            Stage::BufferUploading,
+            SystemStage::single_threaded().with_system(systems::upload_instances),
+        );
+
+        app.add_stage_after(
+            Stage::BufferUploading,
+            Stage::Rendering,
+            SystemStage::single_threaded().with_system(systems::rendering::render),
+        );
 
         app.world
             .spawn()
@@ -79,24 +112,33 @@ pub enum Mode {
     Desktop,
 }
 
-pub async fn initialise(
-    mode: Mode,
-) -> (
-    web_sys::XrSession,
-    web_sys::XrReferenceSpace,
-    Device,
-    Queue,
-    renderer_core::PipelineOptions,
-) {
+enum ModeSpecificState {
+    Xr {
+        session: web_sys::XrSession,
+        reference_space: web_sys::XrReferenceSpace,
+    },
+    Desktop,
+}
+
+pub struct InitialisedState {
+    mode_specific: ModeSpecificState,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    pipeline_options: renderer_core::PipelineOptions,
+}
+
+pub async fn initialise(mode: Mode) -> InitialisedState {
+    match mode {
+        Mode::Vr => initialise_xr(web_sys::XrSessionMode::ImmersiveVr).await,
+        Mode::Ar => initialise_xr(web_sys::XrSessionMode::ImmersiveAr).await,
+        Mode::Desktop => initialise_desktop().await,
+    }
+}
+
+pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState {
     let canvas = renderer_core::Canvas::default();
     let webgl2_context =
         canvas.create_webgl2_context(renderer_core::ContextCreationOptions { stencil: true });
-
-    let mode = match mode {
-        Mode::Vr => web_sys::XrSessionMode::ImmersiveVr,
-        Mode::Ar => web_sys::XrSessionMode::ImmersiveAr,
-        Mode::Desktop => unimplemented!("A desktop mode isn't supported yet"),
-    };
 
     let navigator = web_sys::window().unwrap().navigator();
     let xr = navigator.xr();
@@ -105,7 +147,7 @@ pub async fn initialise(
 
     let xr_session: web_sys::XrSession =
         wasm_bindgen_futures::JsFuture::from(xr.request_session_with_options(
-            mode,
+            xr_mode,
             web_sys::XrSessionInit::new().required_features(&required_features),
         ))
         .await
@@ -114,7 +156,7 @@ pub async fn initialise(
 
     let mut layer_init = web_sys::XrWebGlLayerInit::new();
 
-    let pipeline_options = if mode == web_sys::XrSessionMode::ImmersiveVr {
+    let pipeline_options = if xr_mode == web_sys::XrSessionMode::ImmersiveVr {
         renderer_core::PipelineOptions {
             multiview: Some(std::num::NonZeroU32::new(2).unwrap()),
             inline_tonemapping: true,
@@ -181,7 +223,7 @@ pub async fn initialise(
         .base_layer(Some(&xr_gl_layer));
     xr_session.update_render_state_with_state(&render_state_init);
 
-    let reference_space_type = match mode {
+    let reference_space_type = match xr_mode {
         web_sys::XrSessionMode::Inline => web_sys::XrReferenceSpaceType::Viewer,
         _ => web_sys::XrReferenceSpaceType::LocalFloor,
     };
@@ -193,13 +235,47 @@ pub async fn initialise(
     .unwrap()
     .into();
 
-    (
-        xr_session,
-        xr_reference_space,
-        Device(Arc::new(device)),
-        Queue(Arc::new(queue)),
+    InitialisedState {
+        mode_specific: ModeSpecificState::Xr {
+            session: xr_session,
+            reference_space: xr_reference_space,
+        },
+        device,
+        queue,
         pipeline_options,
-    )
+    }
+}
+
+pub async fn initialise_desktop() -> InitialisedState {
+    panic!("Not yet implemented")
+}
+
+pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: InitialisedState) {
+    app.insert_resource(Device(Arc::new(initialised_state.device)))
+        .insert_resource(Queue(Arc::new(initialised_state.queue)))
+        .insert_resource(initialised_state.pipeline_options);
+
+    match initialised_state.mode_specific {
+        ModeSpecificState::Xr {
+            session,
+            reference_space,
+        } => {
+            renderer_core::run_rendering_loop(&session, move |time, frame| {
+                let pose = match frame.get_viewer_pose(&reference_space) {
+                    Some(pose) => pose,
+                    // I'm not 100% sure in what circumstances this is `None`.
+                    // We can't really do much without a pose though as this is how you fetch the views.
+                    None => return,
+                };
+
+                app.insert_non_send_resource(frame);
+                app.insert_non_send_resource(pose);
+                app.insert_resource(resources::FrameTime(time));
+                app.schedule.run_once(&mut app.world);
+            });
+        }
+        ModeSpecificState::Desktop => {}
+    }
 }
 
 #[derive(Clone)]

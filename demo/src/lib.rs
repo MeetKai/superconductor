@@ -18,29 +18,13 @@ async fn run() {
 
     let mode = select_mode_via_buttons().await;
 
-    let (xr_session, xr_reference_space, device, queue, pipeline_options) =
-        superconductor::initialise(mode).await;
+    let initialised_state = superconductor::initialise(mode).await;
 
     let mut app = bevy_app::App::new();
 
-    app.insert_resource(device)
-        .insert_resource(queue)
-        .insert_resource(pipeline_options)
-        .add_plugin(SuperconductorPlugin::default());
+    app.add_plugin(SuperconductorPlugin::default());
 
-    superconductor::renderer_core::run_rendering_loop(&xr_session, move |time, frame| {
-        let pose = match frame.get_viewer_pose(&xr_reference_space) {
-            Some(pose) => pose,
-            // I'm not 100% sure in what circumstances this is `None`.
-            // We can't really do much without a pose though as this is how you fetch the views.
-            None => return,
-        };
-
-        app.insert_non_send_resource(frame);
-        app.insert_non_send_resource(pose);
-        app.insert_resource(FrameTime(time));
-        app.schedule.run_once(&mut app.world);
-    });
+    superconductor::run_rendering_loop(app, initialised_state);
 }
 
 use bevy_app::{App, Plugin};
@@ -119,13 +103,16 @@ impl Plugin for SuperconductorPlugin {
 pub async fn select_mode_via_buttons() -> superconductor::Mode {
     let vr_button = create_button("Start VR");
     let ar_button = create_button("Start AR");
+    let desktop_button = create_button("Start Desktop");
 
     let start_vr_future = button_click_future(&vr_button);
     let start_ar_future = button_click_future(&ar_button);
+    let start_desktop_future = button_click_future(&desktop_button);
 
     futures::select! {
         _ = Box::pin(start_vr_future.fuse()) => superconductor::Mode::Vr,
         _ = Box::pin(start_ar_future.fuse()) => superconductor::Mode::Ar,
+        _ = Box::pin(start_desktop_future.fuse()) => superconductor::Mode::Desktop,
     }
 }
 
