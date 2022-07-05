@@ -2,10 +2,11 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use superconductor::{
     bevy_ecs, components, renderer_core,
-    resources::{FrameTime, NewIblTextures, NewIblTexturesInner},
-    url, Mode, Vec3,
+    resources::{Camera, FrameTime, KeyboardInputQueue, NewIblTextures, NewIblTexturesInner},
+    url,
+    winit::event::{ElementState, VirtualKeyCode},
+    Mode, Vec3,
 };
-
 #[wasm_bindgen(start)]
 pub fn main() {
     wasm_bindgen_futures::spawn_local(run());
@@ -28,7 +29,7 @@ async fn run() {
 }
 
 use bevy_app::{App, Plugin};
-use bevy_ecs::prelude::{Component, Query, With};
+use bevy_ecs::prelude::{Component, Query, Res, ResMut, With};
 use futures::FutureExt;
 use wasm_bindgen::JsCast;
 
@@ -96,7 +97,17 @@ impl Plugin for SuperconductorPlugin {
                 Default::default(),
             )));
 
+        let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()
+            .with(dolly::drivers::Position::new(Vec3::new(0.0, 1.75, 0.0)))
+            .with(dolly::drivers::YawPitch::new().pitch_degrees(0.0))
+            .build();
+
+        app.insert_resource(KeyboardState::default());
+        app.insert_resource(camera_rig);
+
         app.add_system(rotate_entities);
+        app.add_system(handle_keyboard_input);
+        app.add_system(update_camera);
 
         superconductor::XrPlugin::new(self.mode).build(app);
 
@@ -158,8 +169,65 @@ fn create_button(text: &str) -> web_sys::HtmlButtonElement {
 #[derive(Component)]
 struct Spinning;
 
+#[derive(Default)]
+struct KeyboardState {
+    forwards: bool,
+    right: bool,
+    left: bool,
+    backwards: bool,
+}
+
 fn rotate_entities(mut query: Query<&mut components::Instance, With<Spinning>>) {
     query.for_each_mut(|mut instance| {
         instance.0.rotation *= renderer_core::glam::Quat::from_rotation_y(0.01)
     });
+}
+
+fn handle_keyboard_input(
+    mut input: ResMut<KeyboardInputQueue>,
+    mut keyboard_state: ResMut<KeyboardState>,
+) {
+    for input in input.0.drain(..) {
+        let pressed = input.state == ElementState::Pressed;
+
+        match input.virtual_keycode {
+            Some(VirtualKeyCode::W | VirtualKeyCode::Up) => {
+                keyboard_state.forwards = pressed;
+            }
+            Some(VirtualKeyCode::A | VirtualKeyCode::Left) => {
+                keyboard_state.left = pressed;
+            }
+            Some(VirtualKeyCode::S | VirtualKeyCode::Down) => {
+                keyboard_state.backwards = pressed;
+            }
+            Some(VirtualKeyCode::D | VirtualKeyCode::Right) => {
+                keyboard_state.right = pressed;
+            }
+            _ => {}
+        }
+    }
+}
+
+fn update_camera(
+    keyboard_state: Res<KeyboardState>,
+    mut camera: ResMut<Camera>,
+    mut camera_rig: ResMut<dolly::rig::CameraRig>,
+) {
+    let forwards = keyboard_state.forwards as i32 - keyboard_state.backwards as i32;
+    let right = keyboard_state.right as i32 - keyboard_state.left as i32;
+
+    let move_vec = camera_rig.final_transform.rotation
+        * Vec3::new(right as f32, 0.0, -forwards as f32).clamp_length_max(1.0);
+
+    let delta_time = 1.0 / 60.0;
+    let speed = 3.0;
+
+    camera_rig
+        .driver_mut::<dolly::drivers::Position>()
+        .translate(move_vec * delta_time * speed);
+
+    camera_rig.update(delta_time);
+
+    camera.position = camera_rig.final_transform.position;
+    camera.rotation = camera_rig.final_transform.rotation;
 }

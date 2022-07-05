@@ -3,6 +3,7 @@ use renderer_core::glam::{Mat4, Quat, Vec3};
 use renderer_core::utils::Swappable;
 use std::collections::HashMap;
 use std::sync::Arc;
+use winit::event::KeyboardInput;
 
 pub struct Device(pub(crate) Arc<wgpu::Device>);
 pub struct Queue(pub(crate) Arc<wgpu::Queue>);
@@ -15,6 +16,8 @@ pub struct NewIblTexturesInner {
     pub diffuse_cubemap: url::Url,
     pub specular_cubemap: url::Url,
 }
+
+pub struct KeyboardInputQueue(pub Vec<KeyboardInput>);
 
 pub(crate) struct Pipelines(pub(crate) Arc<renderer_core::Pipelines>);
 pub(crate) struct BindGroupLayouts(pub(crate) Arc<renderer_core::BindGroupLayouts>);

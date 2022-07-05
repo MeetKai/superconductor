@@ -16,11 +16,14 @@ pub use bevy_app;
 pub use bevy_ecs;
 pub use renderer_core;
 pub use url;
+pub use winit;
 
 pub use renderer_core::{assets::textures, glam::Vec3, utils::Swappable};
 
 use components::Instance;
-use resources::{Camera, Device, ModelUrls, NewIblTextures, Queue, SurfaceFrameView};
+use resources::{
+    Camera, Device, KeyboardInputQueue, ModelUrls, NewIblTextures, Queue, SurfaceFrameView,
+};
 
 #[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
 pub enum StartupStage {
@@ -50,6 +53,7 @@ impl XrPlugin {
 impl Plugin for XrPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Camera::default());
+        app.insert_resource(KeyboardInputQueue(Default::default()));
         app.insert_resource(ModelUrls(Default::default()));
         app.insert_resource(textures::Settings {
             anisotropy_clamp: Some(std::num::NonZeroU8::new(16).unwrap()),
@@ -79,9 +83,9 @@ impl Plugin for XrPlugin {
             SystemStage::single_threaded().with_system(systems::clear_instance_buffers);
 
         buffer_resetting_stage = if self.mode != Mode::Desktop {
-            buffer_resetting_stage.with_system(systems::update_uniform_buffers);
+            buffer_resetting_stage.with_system(systems::update_uniform_buffers)
         } else {
-            buffer_resetting_stage.with_system(systems::set_desktop_uniform_buffers);
+            buffer_resetting_stage.with_system(systems::set_desktop_uniform_buffers)
         };
 
         app.add_stage_after(
@@ -394,7 +398,21 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
             };
             initialised_state.surface.configure(&device, &config);
 
+            app.world
+                .get_resource_or_insert_with(|| KeyboardInputQueue(Default::default()))
+                .0
+                .clear();
+
             event_loop.run(move |event, _, control_flow| match event {
+                event::Event::WindowEvent { event, .. } => match event {
+                    event::WindowEvent::KeyboardInput { input, .. } => {
+                        app.world
+                            .get_resource_or_insert_with(|| KeyboardInputQueue(Default::default()))
+                            .0
+                            .push(input);
+                    }
+                    _ => {}
+                },
                 event::Event::RedrawEventsCleared => {
                     window.request_redraw();
                 }

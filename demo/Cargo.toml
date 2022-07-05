@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 bevy_app = "0.7.0"
 console_error_panic_hook = "0.1.7"
 console_log = "0.2.0"
+dolly = "0.3.1"
 futures = "0.3.21"
 js-sys = "0.3.58"
 log = "0.4.17"
