@@ -1,7 +1,7 @@
 use crate::resources::{
     BindGroupLayouts, CompositeBindGroup, Device, IndexBuffer, InstanceBuffer,
     IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LinearSampler, MainBindGroup,
-    Pipelines, Queue, SkyboxUniformBindGroup, VertexBuffers,
+    Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
 };
 use std::ops::Range;
 use std::sync::Arc;
@@ -11,6 +11,138 @@ use bevy_ecs::prelude::{Local, NonSend, Query, Res, ResMut};
 use renderer_core::assets::models::PrimitiveRanges;
 use renderer_core::create_view_from_device_framebuffer;
 use renderer_core::utils::BorrowedOrOwned;
+
+pub(crate) fn render_desktop(
+    device: Res<Device>,
+    queue: Res<Queue>,
+    pipelines: Res<Pipelines>,
+    mut main_bind_group: ResMut<MainBindGroup>,
+    skybox_uniform_bind_group: Res<SkyboxUniformBindGroup>,
+    surface_frame_view: Res<SurfaceFrameView>,
+    mut intermediate_depth_framebuffer: ResMut<IntermediateDepthFramebuffer>,
+    (index_buffer, vertex_buffers, instance_buffer): (
+        Res<IndexBuffer>,
+        Res<VertexBuffers>,
+        Res<InstanceBuffer>,
+    ),
+    mut models: Query<(&mut Model, &InstanceRange)>,
+    mut model_bind_groups: Local<ModelBindGroups>,
+) {
+    let device = &device.0;
+    let queue = &queue.0;
+    let pipelines = &pipelines.0;
+    let main_bind_group = main_bind_group.0.get();
+
+    // These `.lock`s looks scary, but it will never actually block (in wasm)
+    // because that would panic the main thread otherwise!
+    let vertex_buffers = &vertex_buffers.0.lock();
+    let index_buffer = &index_buffer.0.lock();
+
+    let depth_attachment = intermediate_depth_framebuffer.0.get_or_insert_with(|| {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("intermediate depth framebuffer"),
+            size: wgpu::Extent3d {
+                width: surface_frame_view.width,
+                height: surface_frame_view.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth24PlusStencil8,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+        });
+
+        let view = texture.create_view(&Default::default());
+
+        renderer_core::Texture { texture, view }
+    });
+
+    model_bind_groups.collect(&mut models);
+
+    let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("command encoder"),
+    });
+
+    let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("main render pass"),
+        color_attachments: &[wgpu::RenderPassColorAttachment {
+            view: &surface_frame_view.view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::RED),
+                store: true,
+            },
+        }],
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: &depth_attachment.view,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: true,
+            }),
+            stencil_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(0),
+                store: true,
+            }),
+        }),
+    });
+
+    {
+        render_pass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_vertex_buffer(0, vertex_buffers.position.slice(..));
+        render_pass.set_vertex_buffer(1, vertex_buffers.normal.slice(..));
+        render_pass.set_vertex_buffer(2, vertex_buffers.uv.slice(..));
+        render_pass.set_vertex_buffer(3, instance_buffer.0.buffer.slice(..));
+
+        render_pass.set_bind_group(0, main_bind_group, &[]);
+
+        {
+            render_pass.set_pipeline(&pipelines.pbr.opaque);
+
+            render_all_primitives(
+                &mut render_pass,
+                &models,
+                &model_bind_groups,
+                |primitive_ranges| primitive_ranges.opaque.clone(),
+            );
+
+            render_pass.set_pipeline(&pipelines.pbr_double_sided.opaque);
+
+            render_all_primitives(
+                &mut render_pass,
+                &models,
+                &model_bind_groups,
+                |primitive_ranges| primitive_ranges.opaque_double_sided.clone(),
+            );
+
+            render_pass.set_pipeline(&pipelines.pbr.alpha_clipped);
+
+            render_all_primitives(
+                &mut render_pass,
+                &models,
+                &model_bind_groups,
+                |primitive_ranges| primitive_ranges.alpha_clipped.clone(),
+            );
+
+            render_pass.set_pipeline(&pipelines.pbr_double_sided.alpha_clipped);
+
+            render_all_primitives(
+                &mut render_pass,
+                &models,
+                &model_bind_groups,
+                |primitive_ranges| primitive_ranges.alpha_clipped_double_sided.clone(),
+            );
+        }
+
+        render_pass.set_pipeline(&pipelines.skybox);
+        render_pass.set_bind_group(1, &skybox_uniform_bind_group.0, &[]);
+        render_pass.draw(0..3, 0..1);
+    }
+
+    drop(render_pass);
+
+    queue.submit(std::iter::once(command_encoder.finish()));
+}
 
 pub(crate) fn render(
     frame: NonSend<web_sys::XrFrame>,

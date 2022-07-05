@@ -2,10 +2,10 @@ use crate::components::{
     Instance, InstanceOf, InstanceRange, Instances, Model, ModelUrl, PendingModel,
 };
 use crate::resources::{
-    BindGroupLayouts, CompositeBindGroup, Device, IndexBuffer, InstanceBuffer,
+    BindGroupLayouts, Camera, CompositeBindGroup, Device, IndexBuffer, InstanceBuffer,
     IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LinearSampler, MainBindGroup,
     ModelUrls, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer,
-    UniformBuffer, VertexBuffers,
+    SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, NonSend, Query, Res, ResMut};
 use renderer_core::utils::{Setter, Swappable};
@@ -329,6 +329,57 @@ pub(crate) fn update_ibl_textures(
     });
 }
 
+pub(crate) fn set_desktop_uniform_buffers(
+    pipeline_options: Res<renderer_core::PipelineOptions>,
+    queue: Res<Queue>,
+    uniform_buffer: Res<UniformBuffer>,
+    skybox_uniform_buffer: Res<SkyboxUniformBuffer>,
+    surface_frame_view: Res<SurfaceFrameView>,
+    camera: Res<Camera>,
+) {
+    let queue = &queue.0;
+
+    use renderer_core::glam::{Mat4, Vec3};
+
+    let perspective_matrix = Mat4::perspective_rh(
+        59.0_f32.to_radians(),
+        surface_frame_view.width as f32 / surface_frame_view.height as f32,
+        0.01,
+        1000.0,
+    );
+
+    let projection_view = perspective_matrix * camera.view_matrix();
+
+    let uniforms = renderer_core::shared_structs::Uniforms {
+        left_projection_view: projection_view.into(),
+        right_projection_view: projection_view.into(),
+        left_eye_position: camera.position,
+        right_eye_position: camera.position,
+        flip_viewport: pipeline_options.flip_viewport as u32,
+        inline_tonemapping: pipeline_options.inline_tonemapping as u32,
+        inline_srgb: false as u32,
+    };
+
+    queue.write_buffer(
+        &uniform_buffer.0,
+        0,
+        renderer_core::bytemuck::bytes_of(&uniforms.as_std140()),
+    );
+
+    let skybox_uniforms = shared_structs::SkyboxUniforms {
+        left_projection_inverse: projection_view.inverse().into(),
+        right_projection_inverse: projection_view.inverse().into(),
+        left_view_inverse: camera.rotation.into(),
+        right_view_inverse: camera.rotation.into(),
+    };
+
+    queue.write_buffer(
+        &skybox_uniform_buffer.0,
+        0,
+        bytemuck::bytes_of(&skybox_uniforms.as_std140()),
+    );
+}
+
 pub(crate) fn update_uniform_buffers(
     pose: NonSend<web_sys::XrViewerPose>,
     pipeline_options: Res<renderer_core::PipelineOptions>,
@@ -379,8 +430,9 @@ pub(crate) fn update_uniform_buffers(
         right_projection_view,
         left_eye_position: left_instance.position,
         right_eye_position: right_instance.position,
-        render_direct_to_framebuffer: pipeline_options.render_direct_to_framebuffer() as u32,
+        flip_viewport: pipeline_options.flip_viewport as u32,
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
+        inline_srgb: true as u32,
     };
 
     queue.write_buffer(

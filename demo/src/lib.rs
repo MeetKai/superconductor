@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use superconductor::{
     bevy_ecs, components, renderer_core,
     resources::{FrameTime, NewIblTextures, NewIblTexturesInner},
-    url, Vec3,
+    url, Mode, Vec3,
 };
 
 #[wasm_bindgen(start)]
@@ -22,7 +22,7 @@ async fn run() {
 
     let mut app = bevy_app::App::new();
 
-    app.add_plugin(SuperconductorPlugin::default());
+    app.add_plugin(SuperconductorPlugin::new(mode));
 
     superconductor::run_rendering_loop(app, initialised_state);
 }
@@ -32,8 +32,15 @@ use bevy_ecs::prelude::{Component, Query, With};
 use futures::FutureExt;
 use wasm_bindgen::JsCast;
 
-#[derive(Default)]
-pub struct SuperconductorPlugin;
+pub struct SuperconductorPlugin {
+    mode: Mode,
+}
+
+impl SuperconductorPlugin {
+    fn new(mode: Mode) -> Self {
+        Self { mode }
+    }
+}
 
 impl Plugin for SuperconductorPlugin {
     fn build(&self, app: &mut App) {
@@ -91,7 +98,7 @@ impl Plugin for SuperconductorPlugin {
 
         app.add_system(rotate_entities);
 
-        superconductor::XrPlugin.build(app);
+        superconductor::XrPlugin::new(self.mode).build(app);
 
         app.insert_resource(NewIblTextures(Some(NewIblTexturesInner {
             diffuse_cubemap: url::Url::parse("https://expenses.github.io/mateversum-web/environment_maps/helipad/diffuse_compressed.ktx2").unwrap(),

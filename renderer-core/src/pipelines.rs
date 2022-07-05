@@ -3,6 +3,8 @@ use crate::bind_group_layouts::BindGroupLayouts;
 pub struct PipelineOptions {
     pub multiview: Option<std::num::NonZeroU32>,
     pub inline_tonemapping: bool,
+    pub srgb_framebuffer_format: bool,
+    pub flip_viewport: bool,
 }
 
 impl PipelineOptions {
@@ -33,15 +35,19 @@ impl Pipelines {
         bind_group_layouts: &BindGroupLayouts,
         options: &PipelineOptions,
     ) -> Self {
-        let target_format = if options.inline_tonemapping {
+        let framebuffer_format = if options.srgb_framebuffer_format {
+            wgpu::TextureFormat::Rgba8UnormSrgb
+        } else {
             wgpu::TextureFormat::Rgba8Unorm
+        };
+
+        let target_format = if options.inline_tonemapping {
+            framebuffer_format
         } else {
             wgpu::TextureFormat::Rgba16Float
         };
 
-        let flip_viewport = options.render_direct_to_framebuffer();
-
-        let front_face = if flip_viewport {
+        let front_face = if options.flip_viewport {
             wgpu::FrontFace::Cw
         } else {
             wgpu::FrontFace::Ccw
@@ -142,7 +148,7 @@ impl Pipelines {
                     wgpu::include_spirv!("../../compiled-shaders/tonemap.spv")
                 }),
                 entry_point: &format!("{}tonemap", prefix),
-                targets: &[wgpu::TextureFormat::Rgba8Unorm.into()],
+                targets: &[framebuffer_format.into()],
             }),
             primitive: Default::default(),
             depth_stencil: None,

@@ -2,6 +2,11 @@ use bevy_app::{App, Plugin};
 use bevy_ecs::prelude::SystemStage;
 use std::ops::Range;
 use std::sync::Arc;
+use winit::{
+    event::{self, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::Window,
+};
 
 pub mod components;
 pub mod resources;
@@ -15,7 +20,7 @@ pub use url;
 pub use renderer_core::{assets::textures, glam::Vec3, utils::Swappable};
 
 use components::Instance;
-use resources::{Device, ModelUrls, NewIblTextures, Queue};
+use resources::{Camera, Device, ModelUrls, NewIblTextures, Queue, SurfaceFrameView};
 
 #[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
 pub enum StartupStage {
@@ -32,11 +37,19 @@ pub enum Stage {
     Rendering,
 }
 
-#[derive(Default)]
-pub struct XrPlugin;
+pub struct XrPlugin {
+    mode: Mode,
+}
+
+impl XrPlugin {
+    pub fn new(mode: Mode) -> Self {
+        Self { mode }
+    }
+}
 
 impl Plugin for XrPlugin {
     fn build(&self, app: &mut App) {
+        app.insert_resource(Camera::default());
         app.insert_resource(ModelUrls(Default::default()));
         app.insert_resource(textures::Settings {
             anisotropy_clamp: Some(std::num::NonZeroU8::new(16).unwrap()),
@@ -62,12 +75,19 @@ impl Plugin for XrPlugin {
                 .with_system(systems::update_ibl_textures),
         );
 
+        let mut buffer_resetting_stage =
+            SystemStage::single_threaded().with_system(systems::clear_instance_buffers);
+
+        buffer_resetting_stage = if self.mode != Mode::Desktop {
+            buffer_resetting_stage.with_system(systems::update_uniform_buffers);
+        } else {
+            buffer_resetting_stage.with_system(systems::set_desktop_uniform_buffers);
+        };
+
         app.add_stage_after(
             Stage::AssetLoading,
             Stage::BufferResetting,
-            SystemStage::single_threaded()
-                .with_system(systems::update_uniform_buffers)
-                .with_system(systems::clear_instance_buffers),
+            buffer_resetting_stage,
         );
 
         app.add_stage_after(
@@ -82,11 +102,15 @@ impl Plugin for XrPlugin {
             SystemStage::single_threaded().with_system(systems::upload_instances),
         );
 
-        app.add_stage_after(
-            Stage::BufferUploading,
-            Stage::Rendering,
-            SystemStage::single_threaded().with_system(systems::rendering::render),
-        );
+        let mut rendering_stage = SystemStage::single_threaded();
+
+        rendering_stage = if self.mode == Mode::Desktop {
+            rendering_stage.with_system(systems::rendering::render_desktop)
+        } else {
+            rendering_stage.with_system(systems::rendering::render)
+        };
+
+        app.add_stage_after(Stage::BufferUploading, Stage::Rendering, rendering_stage);
 
         app.world
             .spawn()
@@ -106,6 +130,7 @@ impl Plugin for XrPlugin {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
 pub enum Mode {
     Vr,
     Ar,
@@ -117,13 +142,18 @@ enum ModeSpecificState {
         session: web_sys::XrSession,
         reference_space: web_sys::XrReferenceSpace,
     },
-    Desktop,
+    Desktop {
+        window: Window,
+        event_loop: EventLoop<()>,
+    },
 }
 
 pub struct InitialisedState {
     mode_specific: ModeSpecificState,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    adapter: wgpu::Adapter,
+    surface: wgpu::Surface,
     pipeline_options: renderer_core::PipelineOptions,
 }
 
@@ -160,11 +190,17 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         renderer_core::PipelineOptions {
             multiview: Some(std::num::NonZeroU32::new(2).unwrap()),
             inline_tonemapping: true,
+            srgb_framebuffer_format: false,
+            // As we're doing multiview.
+            flip_viewport: false,
         }
     } else {
         renderer_core::PipelineOptions {
             multiview: None,
             inline_tonemapping: true,
+            srgb_framebuffer_format: false,
+            // As we're rendering directly to the framebuffer.
+            flip_viewport: true,
         }
     };
 
@@ -242,16 +278,85 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         },
         device,
         queue,
+        adapter,
+        surface,
         pipeline_options,
     }
 }
 
 pub async fn initialise_desktop() -> InitialisedState {
-    panic!("Not yet implemented")
+    let event_loop = EventLoop::new();
+    let builder = winit::window::WindowBuilder::new();
+
+    let window = builder.build(&event_loop).unwrap();
+
+    {
+        use winit::platform::web::WindowExtWebSys;
+        // On wasm, append the canvas to the document body
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| doc.body())
+            .and_then(|body| {
+                body.append_child(&web_sys::Element::from(window.canvas()))
+                    .ok()
+            })
+            .expect("couldn't append canvas to document body");
+    }
+
+    let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let instance = wgpu::Instance::new(backend);
+    let surface = unsafe { instance.create_surface(&window) };
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            force_fallback_adapter: false,
+            compatible_surface: Some(&surface),
+        })
+        .await
+        .expect("No suitable GPU adapters found on the system!");
+
+    let adapter_info = adapter.get_info();
+    log::info!(
+        "Using '{}' with the {:?} backend. Downlevel capabilities: {:?}",
+        adapter_info.name,
+        adapter_info.backend,
+        adapter.get_downlevel_capabilities()
+    );
+
+    log::info!("Supported features: {:?}", adapter.features());
+
+    let (device, queue) = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                label: Some("device"),
+                features: adapter.features(),
+                limits: adapter.limits(),
+            },
+            None,
+        )
+        .await
+        .expect("Unable to find a suitable GPU adapter!");
+
+    InitialisedState {
+        mode_specific: ModeSpecificState::Desktop { window, event_loop },
+        device,
+        queue,
+        adapter,
+        surface,
+        pipeline_options: renderer_core::PipelineOptions {
+            multiview: None,
+            inline_tonemapping: true,
+            srgb_framebuffer_format: true,
+            // wgpu handles this for us.
+            flip_viewport: false,
+        },
+    }
 }
 
 pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: InitialisedState) {
-    app.insert_resource(Device(Arc::new(initialised_state.device)))
+    let device = Arc::new(initialised_state.device);
+
+    app.insert_resource(Device(device.clone()))
         .insert_resource(Queue(Arc::new(initialised_state.queue)))
         .insert_resource(initialised_state.pipeline_options);
 
@@ -274,7 +379,54 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                 app.schedule.run_once(&mut app.world);
             });
         }
-        ModeSpecificState::Desktop => {}
+        ModeSpecificState::Desktop { window, event_loop } => {
+            let size = window.inner_size();
+
+            let mut config = wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format: initialised_state
+                    .surface
+                    .get_preferred_format(&initialised_state.adapter)
+                    .unwrap(),
+                width: size.width,
+                height: size.height,
+                present_mode: wgpu::PresentMode::Fifo,
+            };
+            initialised_state.surface.configure(&device, &config);
+
+            event_loop.run(move |event, _, control_flow| match event {
+                event::Event::RedrawEventsCleared => {
+                    window.request_redraw();
+                }
+                event::Event::RedrawRequested(_) => {
+                    let frame = match initialised_state.surface.get_current_texture() {
+                        Ok(frame) => frame,
+                        Err(_) => {
+                            initialised_state.surface.configure(&device, &config);
+                            initialised_state
+                                .surface
+                                .get_current_texture()
+                                .expect("Failed to acquire next surface texture!")
+                        }
+                    };
+
+                    let view = frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
+
+                    app.insert_resource(SurfaceFrameView {
+                        view,
+                        width: size.width,
+                        height: size.height,
+                    });
+
+                    app.schedule.run_once(&mut app.world);
+
+                    frame.present();
+                }
+                _ => {}
+            })
+        }
     }
 }
 

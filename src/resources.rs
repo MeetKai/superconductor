@@ -1,4 +1,5 @@
 use bevy_ecs::prelude::Entity;
+use renderer_core::glam::{Mat4, Quat, Vec3};
 use renderer_core::utils::Swappable;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -33,3 +34,37 @@ pub(crate) struct CompositeBindGroup(pub(crate) Option<wgpu::BindGroup>);
 pub(crate) struct LinearSampler(pub(crate) Arc<wgpu::Sampler>);
 
 pub(crate) struct ModelUrls(pub(crate) HashMap<url::Url, Entity>);
+
+pub(crate) struct SurfaceFrameView {
+    pub(crate) view: wgpu::TextureView,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+}
+
+pub struct Camera {
+    pub position: Vec3,
+    pub rotation: Quat,
+}
+
+impl Camera {
+    pub fn forwards(&self) -> Vec3 {
+        self.rotation * Vec3::new(0.0, 0.0, -1.0)
+    }
+
+    pub fn up(&self) -> Vec3 {
+        self.rotation * Vec3::Y
+    }
+
+    pub fn view_matrix(&self) -> Mat4 {
+        Mat4::look_at_rh(self.position, self.position + self.forwards(), self.up())
+    }
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self {
+            position: Vec3::new(0.0, 1.75, 0.0),
+            rotation: Quat::IDENTITY,
+        }
+    }
+}

@@ -44,7 +44,7 @@ pub fn vertex(
     *out_normal = instance_rotation * normal;
     *out_uv = uv;
 
-    if uniforms.render_direct_to_framebuffer != 0 {
+    if uniforms.flip_viewport != 0 {
         builtin_pos.y = -builtin_pos.y;
     }
 }
@@ -405,7 +405,7 @@ pub fn vertex_mirrored(
     *out_normal = normal;
     *out_uv = uv;
 
-    if uniforms.render_direct_to_framebuffer != 0 {
+    if uniforms.flip_viewport != 0 {
         builtin_pos.y = -builtin_pos.y;
     }
 }
@@ -430,13 +430,8 @@ fn aces_filmic(x: Vec3) -> Vec3 {
     saturate((x * (a * x + b)) / (x * (c * x + d) + e))
 }
 
-fn tonemapping(hdr_linear: Vec3) -> Vec3 {
-    let tonemapped_linear = aces_filmic(hdr_linear);
-    linear_to_srgb_approx(tonemapped_linear)
-}
-
 fn potentially_convert_linear_to_srgb(mut output: Vec3, uniforms: &Uniforms) -> Vec3 {
-    if uniforms.inline_tonemapping != 0 {
+    if uniforms.inline_srgb != 0 {
         output = linear_to_srgb_approx(output);
     }
 
@@ -445,7 +440,10 @@ fn potentially_convert_linear_to_srgb(mut output: Vec3, uniforms: &Uniforms) -> 
 
 fn potentially_tonemap(mut output: Vec3, uniforms: &Uniforms) -> Vec3 {
     if uniforms.inline_tonemapping != 0 {
-        output = tonemapping(output);
+        output = aces_filmic(output);
+    }
+    if uniforms.inline_srgb != 0 {
+        output = linear_to_srgb_approx(output);
     }
 
     output
@@ -470,7 +468,10 @@ pub fn tonemap(
     let mut colour_output = sample.truncate();
 
     if uniforms.inline_tonemapping == 0 {
-        colour_output = tonemapping(colour_output);
+        colour_output = aces_filmic(colour_output);
+    }
+    if uniforms.inline_srgb == 0 {
+        colour_output = linear_to_srgb_approx(colour_output);
     }
 
     *output = colour_output.extend(1.0)
@@ -499,7 +500,7 @@ pub fn vertex_skybox(
 
     *builtin_pos = pos;
 
-    if uniforms.render_direct_to_framebuffer != 0 {
+    if uniforms.flip_viewport != 0 {
         builtin_pos.y = -builtin_pos.y;
     }
 }
@@ -531,7 +532,7 @@ pub fn vertex_skybox_mirrored(
 
     *builtin_pos = pos;
 
-    if uniforms.render_direct_to_framebuffer != 0 {
+    if uniforms.flip_viewport != 0 {
         builtin_pos.y = -builtin_pos.y;
     }
 }

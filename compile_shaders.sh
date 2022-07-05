@@ -7,7 +7,7 @@ for file in compiled-shaders/*.spv; do
     path=$(realpath $file)
     cd ../../spirv-extra-opt-passes/spirv-extra-opt
     cargo run --quiet -- $path --experimental-remove-bad-op-switches -o $path;
-    cd ../../vr/webxr-pbr
+    cd ../../work/superconductor
     spirv-val $file || echo $file;
 done;
 

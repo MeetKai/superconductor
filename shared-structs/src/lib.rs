@@ -11,8 +11,9 @@ pub struct Uniforms {
     pub right_projection_view: FlatMat4,
     pub left_eye_position: Vec3,
     pub right_eye_position: Vec3,
-    pub render_direct_to_framebuffer: u32,
+    pub flip_viewport: u32,
     pub inline_tonemapping: u32,
+    pub inline_srgb: u32,
 }
 
 impl Uniforms {
