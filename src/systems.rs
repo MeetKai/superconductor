@@ -8,10 +8,15 @@ use crate::resources::{
     SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, NonSend, Query, Res, ResMut};
-use renderer_core::utils::{Setter, Swappable};
 use renderer_core::{
-    arc_swap::ArcSwap, assets::textures, bytemuck, create_main_bind_group,
-    crevice::std140::AsStd140, ibl::IblTextures, shared_structs, Texture,
+    arc_swap::ArcSwap,
+    assets::{textures, HttpClient},
+    bytemuck, create_main_bind_group,
+    crevice::std140::AsStd140,
+    ibl::IblTextures,
+    shared_structs, spawn,
+    utils::{Setter, Swappable},
+    Texture,
 };
 use std::sync::Arc;
 
@@ -30,8 +35,8 @@ pub(crate) fn create_bind_group_layouts_and_pipelines(
 
     commands.insert_resource(BindGroupLayouts(Arc::new(bind_group_layouts)));
     commands.insert_resource(Pipelines(Arc::new(pipelines)));
-    commands.insert_resource(IntermediateColorFramebuffer(None));
-    commands.insert_resource(IntermediateDepthFramebuffer(None));
+    commands.insert_resource(IntermediateColorFramebuffer(Default::default()));
+    commands.insert_resource(IntermediateDepthFramebuffer(Default::default()));
     commands.insert_resource(CompositeBindGroup(None));
 }
 
@@ -83,12 +88,13 @@ pub(crate) fn upload_instances(
     queue.0.submit(std::iter::once(command_encoder.finish()));
 }
 
-pub(crate) fn allocate_bind_groups(
+pub(crate) fn allocate_bind_groups<T: HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<textures::Settings>,
+    http_client: Res<T>,
     mut commands: Commands,
 ) {
     let device = &device.0;
@@ -198,15 +204,13 @@ pub(crate) fn allocate_bind_groups(
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
         queue: queue.clone(),
-        http_client: super::SimpleHttpClient,
+        http_client: http_client.clone(),
         bind_group_layouts: bind_group_layouts.clone(),
         pipelines: pipelines.clone(),
         settings: texture_settings.clone(),
     };
 
-    wasm_bindgen_futures::spawn_local(async move {
-        use renderer_core::assets::HttpClient;
-
+    spawn(async move {
         let lut_url = url::Url::parse("https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Viewer/master/assets/images/lut_ggx.png").unwrap();
 
         // This results in only the skybox being rendered:
@@ -262,7 +266,7 @@ pub(crate) fn allocate_bind_groups(
     commands.insert_resource(InstanceBuffer(instance_buffer));
 }
 
-pub(crate) fn update_ibl_textures(
+pub(crate) fn update_ibl_textures<T: HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
@@ -273,6 +277,7 @@ pub(crate) fn update_ibl_textures(
     linear_sampler: Res<LinearSampler>,
     main_bind_group: Res<MainBindGroup>,
     uniform_buffer: Res<UniformBuffer>,
+    http_client: Res<T>,
 ) {
     let new_ibl_textures = match new_ibl_textures.0.take() {
         Some(new_ibl_textures) => new_ibl_textures,
@@ -292,13 +297,13 @@ pub(crate) fn update_ibl_textures(
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
         queue: queue.clone(),
-        http_client: super::SimpleHttpClient,
+        http_client: http_client.clone(),
         bind_group_layouts: bind_group_layouts.clone(),
         pipelines: pipelines.clone(),
         settings: texture_settings.clone(),
     };
 
-    wasm_bindgen_futures::spawn_local(async move {
+    spawn(async move {
         let diffuse_fut = renderer_core::assets::textures::load_ktx2_cubemap(
             textures_context.clone(),
             &new_ibl_textures.diffuse_cubemap,
@@ -339,13 +344,46 @@ pub(crate) fn set_desktop_uniform_buffers(
 ) {
     let queue = &queue.0;
 
-    use renderer_core::glam::Mat4;
+    use renderer_core::glam::{Mat4, Vec4};
 
-    let perspective_matrix = Mat4::perspective_rh(
+    // Adapted from the functions used in
+    // https://crates.io/crates/ultraviolet.
+    //
+    // Corresponds to `perspective_vk` if `flip` is `true`,
+    // `perspective_wgpu_dx` otherwise.
+    //
+    // todo: wait, why do we need to do this? I thought that wgpu handled viewport conversion
+    // for us.
+    fn create_perspective_matrix(
+        vertical_fov: f32,
+        aspect_ratio: f32,
+        z_near: f32,
+        z_far: f32,
+        flip: bool,
+    ) -> Mat4 {
+        let t = (vertical_fov / 2.0).tan();
+        let mut sy = 1.0 / t;
+        let sx = sy / aspect_ratio;
+        let nmf = z_near - z_far;
+
+        if flip {
+            sy = -sy;
+        }
+
+        Mat4::from_cols(
+            Vec4::new(sx, 0.0, 0.0, 0.0),
+            Vec4::new(0.0, sy, 0.0, 0.0),
+            Vec4::new(0.0, 0.0, z_far / nmf, -1.0),
+            Vec4::new(0.0, 0.0, z_near * z_far / nmf, 0.0),
+        )
+    }
+
+    let perspective_matrix = create_perspective_matrix(
         59.0_f32.to_radians(),
         surface_frame_view.width as f32 / surface_frame_view.height as f32,
         0.01,
         1000.0,
+        cfg!(not(feature = "wasm")),
     );
 
     let projection_view = perspective_matrix * camera.view_matrix();
@@ -355,7 +393,7 @@ pub(crate) fn set_desktop_uniform_buffers(
         right_projection_view: projection_view.into(),
         left_eye_position: camera.position,
         right_eye_position: camera.position,
-        flip_viewport: pipeline_options.flip_viewport as u32,
+        flip_viewport: false as u32,
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
         inline_srgb: false as u32,
     };
@@ -367,8 +405,8 @@ pub(crate) fn set_desktop_uniform_buffers(
     );
 
     let skybox_uniforms = shared_structs::SkyboxUniforms {
-        left_projection_inverse: projection_view.inverse().into(),
-        right_projection_inverse: projection_view.inverse().into(),
+        left_projection_inverse: perspective_matrix.inverse().into(),
+        right_projection_inverse: perspective_matrix.inverse().into(),
         left_view_inverse: camera.rotation.into(),
         right_view_inverse: camera.rotation.into(),
     };
@@ -380,6 +418,7 @@ pub(crate) fn set_desktop_uniform_buffers(
     );
 }
 
+#[cfg(feature = "wasm")]
 pub(crate) fn update_uniform_buffers(
     pose: NonSend<web_sys::XrViewerPose>,
     pipeline_options: Res<renderer_core::PipelineOptions>,
@@ -455,7 +494,7 @@ pub(crate) fn update_uniform_buffers(
     );
 }
 
-pub(crate) fn start_loading_models(
+pub(crate) fn start_loading_models<T: HttpClient>(
     query: Query<(Entity, &ModelUrl), Added<ModelUrl>>,
     device: Res<Device>,
     queue: Res<Queue>,
@@ -463,6 +502,7 @@ pub(crate) fn start_loading_models(
     bind_group_layouts: Res<BindGroupLayouts>,
     (index_buffer, vertex_buffers): (Res<IndexBuffer>, Res<VertexBuffers>),
     texture_settings: Res<textures::Settings>,
+    http_client: Res<T>,
     mut model_urls: ResMut<ModelUrls>,
     mut commands: Commands,
 ) {
@@ -484,27 +524,25 @@ pub(crate) fn start_loading_models(
         // Insert a link back from the url to the entity for lookups.
         model_urls.0.insert(url.clone(), entity);
 
-        wasm_bindgen_futures::spawn_local({
+        spawn({
             let device = device.clone();
             let queue = queue.clone();
             let bind_group_layouts = bind_group_layouts.0.clone();
             let pipelines = pipelines.0.clone();
 
+            let context = renderer_core::assets::models::Context {
+                device,
+                queue,
+                bind_group_layouts,
+                http_client: http_client.clone(),
+                index_buffer,
+                vertex_buffers,
+                pipelines,
+                texture_settings,
+            };
+
             async move {
-                let result = renderer_core::assets::models::Model::load(
-                    &renderer_core::assets::models::Context {
-                        device,
-                        queue,
-                        bind_group_layouts,
-                        http_client: super::SimpleHttpClient,
-                        index_buffer,
-                        vertex_buffers,
-                        pipelines,
-                        texture_settings: texture_settings.clone(),
-                    },
-                    &url,
-                )
-                .await;
+                let result = renderer_core::assets::models::Model::load(&context, &url).await;
 
                 match result {
                     Err(error) => {
@@ -519,7 +557,7 @@ pub(crate) fn start_loading_models(
                     }
                 }
             }
-        })
+        });
     })
 }
 

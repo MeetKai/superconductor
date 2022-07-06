@@ -7,14 +7,18 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-bevy_app = "0.7.0"
 console_error_panic_hook = "0.1.7"
 console_log = "0.2.0"
 dolly = "0.3.1"
+env_logger = "0.9.0"
 futures = "0.3.21"
 js-sys = "0.3.58"
 log = "0.4.17"
 superconductor = { path = ".." }
+tokio = { version = "1.19.2", features = ["rt", "macros", "rt-multi-thread"] }
 wasm-bindgen = "0.2.81"
 wasm-bindgen-futures = "0.4.31"
 web-sys = "0.3.58"
+
+[features]
+wasm = ["superconductor/wasm"]

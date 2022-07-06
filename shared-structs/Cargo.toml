@@ -9,3 +9,6 @@ glam = { version = "0.20.5", features = ["libm"], default-features = false }
 
 [target.'cfg(not(target_arch = "spirv"))'.dependencies]
 crevice = { version = "0.10.0", features = ["glam"] }
+
+[features]
+webgl = []

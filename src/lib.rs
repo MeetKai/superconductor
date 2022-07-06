@@ -18,11 +18,15 @@ pub use renderer_core;
 pub use url;
 pub use winit;
 
-pub use renderer_core::{assets::textures, glam::Vec3, utils::Swappable};
+pub use renderer_core::{
+    assets::{textures, HttpClient},
+    glam::Vec3,
+    utils::Swappable,
+};
 
 use components::Instance;
 use resources::{
-    Camera, Device, KeyboardInputQueue, ModelUrls, NewIblTextures, Queue, SurfaceFrameView,
+    Camera, Device, EventQueue, ModelUrls, NewIblTextures, Queue, SurfaceFrameView, WindowChanges,
 };
 
 #[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
@@ -40,25 +44,31 @@ pub enum Stage {
     Rendering,
 }
 
-pub struct XrPlugin {
-    mode: Mode,
+pub struct XrPlugin<T: HttpClient = ReqwestHttpClient> {
+    pub mode: Mode,
+    pub http_client: T,
 }
 
-impl XrPlugin {
+impl<T: HttpClient + Default> XrPlugin<T> {
     pub fn new(mode: Mode) -> Self {
-        Self { mode }
+        Self {
+            mode,
+            http_client: T::default(),
+        }
     }
 }
 
-impl Plugin for XrPlugin {
+impl<T: HttpClient> Plugin for XrPlugin<T> {
     fn build(&self, app: &mut App) {
         app.insert_resource(Camera::default());
-        app.insert_resource(KeyboardInputQueue(Default::default()));
+        app.insert_resource(EventQueue(Default::default()));
         app.insert_resource(ModelUrls(Default::default()));
         app.insert_resource(textures::Settings {
             anisotropy_clamp: Some(std::num::NonZeroU8::new(16).unwrap()),
         });
         app.insert_resource(NewIblTextures(None));
+        app.insert_resource(WindowChanges::default());
+        app.insert_resource(self.http_client.clone());
 
         app.add_startup_stage(
             StartupStage::PipelineCreation,
@@ -68,24 +78,26 @@ impl Plugin for XrPlugin {
         app.add_startup_stage_after(
             StartupStage::PipelineCreation,
             StartupStage::BindGroupCreation,
-            SystemStage::single_threaded().with_system(systems::allocate_bind_groups),
+            SystemStage::single_threaded().with_system(systems::allocate_bind_groups::<T>),
         );
 
         app.add_stage(
             Stage::AssetLoading,
             SystemStage::single_threaded()
-                .with_system(systems::start_loading_models)
+                .with_system(systems::start_loading_models::<T>)
                 .with_system(systems::finish_loading_models)
-                .with_system(systems::update_ibl_textures),
+                .with_system(systems::update_ibl_textures::<T>),
         );
 
         let mut buffer_resetting_stage =
             SystemStage::single_threaded().with_system(systems::clear_instance_buffers);
 
-        buffer_resetting_stage = if self.mode != Mode::Desktop {
-            buffer_resetting_stage.with_system(systems::update_uniform_buffers)
-        } else {
-            buffer_resetting_stage.with_system(systems::set_desktop_uniform_buffers)
+        buffer_resetting_stage = match self.mode {
+            Mode::Desktop => {
+                buffer_resetting_stage.with_system(systems::set_desktop_uniform_buffers)
+            }
+            #[cfg(feature = "wasm")]
+            _ => buffer_resetting_stage.with_system(systems::update_uniform_buffers),
         };
 
         app.add_stage_after(
@@ -108,10 +120,10 @@ impl Plugin for XrPlugin {
 
         let mut rendering_stage = SystemStage::single_threaded();
 
-        rendering_stage = if self.mode == Mode::Desktop {
-            rendering_stage.with_system(systems::rendering::render_desktop)
-        } else {
-            rendering_stage.with_system(systems::rendering::render)
+        rendering_stage = match self.mode {
+            Mode::Desktop => rendering_stage.with_system(systems::rendering::render_desktop),
+            #[cfg(feature = "wasm")]
+            _ => rendering_stage.with_system(systems::rendering::render),
         };
 
         app.add_stage_after(Stage::BufferUploading, Stage::Rendering, rendering_stage);
@@ -136,12 +148,15 @@ impl Plugin for XrPlugin {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
+    #[cfg(feature = "wasm")]
     Vr,
+    #[cfg(feature = "wasm")]
     Ar,
     Desktop,
 }
 
 enum ModeSpecificState {
+    #[cfg(feature = "wasm")]
     Xr {
         session: web_sys::XrSession,
         reference_space: web_sys::XrReferenceSpace,
@@ -156,19 +171,21 @@ pub struct InitialisedState {
     mode_specific: ModeSpecificState,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    adapter: wgpu::Adapter,
     surface: wgpu::Surface,
     pipeline_options: renderer_core::PipelineOptions,
 }
 
 pub async fn initialise(mode: Mode) -> InitialisedState {
     match mode {
+        #[cfg(feature = "wasm")]
         Mode::Vr => initialise_xr(web_sys::XrSessionMode::ImmersiveVr).await,
+        #[cfg(feature = "wasm")]
         Mode::Ar => initialise_xr(web_sys::XrSessionMode::ImmersiveAr).await,
         Mode::Desktop => initialise_desktop().await,
     }
 }
 
+#[cfg(feature = "wasm")]
 pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState {
     let canvas = renderer_core::Canvas::default();
     let webgl2_context =
@@ -194,7 +211,7 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         renderer_core::PipelineOptions {
             multiview: Some(std::num::NonZeroU32::new(2).unwrap()),
             inline_tonemapping: true,
-            srgb_framebuffer_format: false,
+            framebuffer_format: wgpu::TextureFormat::Rgba8Unorm,
             // As we're doing multiview.
             flip_viewport: false,
         }
@@ -202,7 +219,7 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         renderer_core::PipelineOptions {
             multiview: None,
             inline_tonemapping: true,
-            srgb_framebuffer_format: false,
+            framebuffer_format: wgpu::TextureFormat::Rgba8Unorm,
             // As we're rendering directly to the framebuffer.
             flip_viewport: true,
         }
@@ -282,7 +299,6 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         },
         device,
         queue,
-        adapter,
         surface,
         pipeline_options,
     }
@@ -294,6 +310,7 @@ pub async fn initialise_desktop() -> InitialisedState {
 
     let window = builder.build(&event_loop).unwrap();
 
+    #[cfg(feature = "wasm")]
     {
         use winit::platform::web::WindowExtWebSys;
         // On wasm, append the canvas to the document body
@@ -345,26 +362,27 @@ pub async fn initialise_desktop() -> InitialisedState {
         mode_specific: ModeSpecificState::Desktop { window, event_loop },
         device,
         queue,
-        adapter,
-        surface,
         pipeline_options: renderer_core::PipelineOptions {
             multiview: None,
             inline_tonemapping: true,
-            srgb_framebuffer_format: true,
+            framebuffer_format: surface.get_supported_formats(&adapter)[0],
             // wgpu handles this for us.
             flip_viewport: false,
         },
+        surface,
     }
 }
 
 pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: InitialisedState) {
     let device = Arc::new(initialised_state.device);
+    let framebuffer_format = initialised_state.pipeline_options.framebuffer_format;
 
     app.insert_resource(Device(device.clone()))
         .insert_resource(Queue(Arc::new(initialised_state.queue)))
         .insert_resource(initialised_state.pipeline_options);
 
     match initialised_state.mode_specific {
+        #[cfg(feature = "wasm")]
         ModeSpecificState::Xr {
             session,
             reference_space,
@@ -386,137 +404,130 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
         ModeSpecificState::Desktop { window, event_loop } => {
             let size = window.inner_size();
 
-            let config = wgpu::SurfaceConfiguration {
+            let mut config = wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                format: initialised_state
-                    .surface
-                    .get_supported_formats(&initialised_state.adapter)[0],
+                format: framebuffer_format,
                 width: size.width,
                 height: size.height,
                 present_mode: wgpu::PresentMode::Fifo,
             };
             initialised_state.surface.configure(&device, &config);
 
-            app.world
-                .get_resource_or_insert_with(|| KeyboardInputQueue(Default::default()))
-                .0
-                .clear();
-
-            event_loop.run(move |event, _, control_flow| match event {
-                event::Event::WindowEvent { event, .. } => {
-                    if event == event::WindowEvent::CloseRequested {
-                        *control_flow = ControlFlow::Exit;
-                    }
-
-                    match event {
-                        event::WindowEvent::KeyboardInput { input, .. } => {
-                            app.world
-                                .get_resource_or_insert_with(|| {
-                                    KeyboardInputQueue(Default::default())
-                                })
-                                .0
-                                .push(input);
+            event_loop.run(move |event, _, control_flow| {
+                match &event {
+                    event::Event::WindowEvent { event, .. } => match &event {
+                        event::WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        event::WindowEvent::Resized(new_size) => {
+                            config.width = new_size.width;
+                            config.height = new_size.height;
+                            initialised_state.surface.configure(&device, &config);
                         }
                         _ => {}
+                    },
+                    event::Event::RedrawEventsCleared => {
+                        window.request_redraw();
                     }
-                }
-                event::Event::RedrawEventsCleared => {
-                    window.request_redraw();
-                }
-                event::Event::RedrawRequested(_) => {
-                    let frame = match initialised_state.surface.get_current_texture() {
-                        Ok(frame) => frame,
-                        Err(_) => {
-                            initialised_state.surface.configure(&device, &config);
-                            initialised_state
-                                .surface
-                                .get_current_texture()
-                                .expect("Failed to acquire next surface texture!")
+                    event::Event::RedrawRequested(_) => {
+                        let frame = match initialised_state.surface.get_current_texture() {
+                            Ok(frame) => frame,
+                            Err(_) => {
+                                initialised_state.surface.configure(&device, &config);
+                                initialised_state
+                                    .surface
+                                    .get_current_texture()
+                                    .expect("Failed to acquire next surface texture!")
+                            }
+                        };
+
+                        let view = frame
+                            .texture
+                            .create_view(&wgpu::TextureViewDescriptor::default());
+
+                        app.insert_resource(SurfaceFrameView {
+                            view,
+                            width: config.width,
+                            height: config.height,
+                        });
+
+                        app.schedule.run_once(&mut app.world);
+
+                        // Reset event queue just in case nothing is consuming these.
+                        app.world
+                            .get_resource_or_insert_with(|| EventQueue(Default::default()))
+                            .0
+                            .clear();
+
+                        if let Some(mut window_changes) =
+                            app.world.get_resource_mut::<WindowChanges>()
+                        {
+                            if let Some(cursor_grab) = window_changes.cursor_grab {
+                                if let Err(error) = window.set_cursor_grab(cursor_grab) {
+                                    log::error!(
+                                        "Got an error when trying to set the cursor grab: {}",
+                                        error
+                                    );
+                                }
+                            }
+
+                            if let Some(cursor_visible) = window_changes.cursor_visible {
+                                window.set_cursor_visible(cursor_visible);
+                            }
+
+                            *window_changes = Default::default();
                         }
-                    };
 
-                    let view = frame
-                        .texture
-                        .create_view(&wgpu::TextureViewDescriptor::default());
-
-                    app.insert_resource(SurfaceFrameView {
-                        view,
-                        width: size.width,
-                        height: size.height,
-                    });
-
-                    app.schedule.run_once(&mut app.world);
-
-                    frame.present();
+                        frame.present();
+                    }
+                    _ => {}
                 }
-                _ => {}
+
+                if let Some(static_event) = event.to_static() {
+                    app.world
+                        .get_resource_or_insert_with(|| EventQueue(Default::default()))
+                        .0
+                        .push(static_event);
+                }
             })
         }
     }
 }
 
-#[derive(Clone)]
-struct SimpleHttpClient;
+#[derive(Clone, Default)]
+pub struct ReqwestHttpClient(reqwest::Client);
 
-impl renderer_core::assets::HttpClient for SimpleHttpClient {
+impl renderer_core::assets::HttpClient for ReqwestHttpClient {
+    #[cfg(not(feature = "wasm"))]
+    type Future =
+        std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>> + Send>>;
+
+    #[cfg(feature = "wasm")]
     type Future = std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>>>>;
 
     fn fetch_bytes(&self, url: &url::Url, byte_range: Option<Range<usize>>) -> Self::Future {
-        async fn resolve_promise(
-            promise: js_sys::Promise,
-        ) -> anyhow::Result<wasm_bindgen::JsValue> {
-            wasm_bindgen_futures::JsFuture::from(promise)
-                .await
-                .map_err(|err| anyhow::anyhow!("{:?}", err))
+        fn byte_range_string(range: Range<usize>) -> String {
+            format!("bytes={}-{}", range.start, range.end - 1)
         }
 
         let url = url.clone();
 
+        let mut request_builder = self.0.get(url.clone());
+
+        if let Some(byte_range) = byte_range {
+            request_builder = request_builder.header("Range", byte_range_string(byte_range));
+        }
+
         Box::pin(async move {
-            let request_init = construct_request_init(byte_range.clone())?;
+            log::debug!("Requesting {}", url);
 
-            let request = web_sys::Request::new_with_str_and_init(url.as_str(), &request_init)
-                .map_err(|err| anyhow::anyhow!("{:?}", err))?;
+            let response = request_builder.send().await?;
 
-            let response: web_sys::Response =
-                resolve_promise(web_sys::window().unwrap().fetch_with_request(&request))
-                    .await?
-                    .into();
+            log::debug!("Got response for {}", url);
 
-            let array_buffer: js_sys::ArrayBuffer = resolve_promise(
-                response
-                    .array_buffer()
-                    .map_err(|err| anyhow::anyhow!("{:?}", err))?,
-            )
-            .await?
-            .into();
+            let bytes = response.bytes().await?;
 
-            let uint8_array = js_sys::Uint8Array::new(&array_buffer);
+            log::debug!("Got bytes for {}: {}", url, bytes.len());
 
-            Ok(uint8_array.to_vec())
+            Ok(bytes.as_ref().to_vec())
         })
     }
-}
-
-fn construct_request_init(
-    byte_range: Option<Range<usize>>,
-) -> anyhow::Result<web_sys::RequestInit> {
-    let mut request_init = web_sys::RequestInit::new();
-
-    fn byte_range_string(range: Range<usize>) -> String {
-        format!("bytes={}-{}", range.start, range.end - 1)
-    }
-
-    if let Some(byte_range) = byte_range {
-        let headers = js_sys::Object::new();
-        js_sys::Reflect::set(
-            &headers,
-            &"Range".into(),
-            &byte_range_string(byte_range).into(),
-        )
-        .map_err(|err| anyhow::anyhow!("Js Error: {:?}", err))?;
-        request_init.headers(&headers);
-    }
-
-    Ok(request_init)
 }

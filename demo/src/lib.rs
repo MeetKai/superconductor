@@ -1,23 +1,28 @@
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use superconductor::{
-    bevy_ecs, components, renderer_core,
-    resources::{Camera, KeyboardInputQueue, NewIblTextures, NewIblTexturesInner},
-    url,
+    bevy_app, bevy_ecs, components, renderer_core,
+    resources::{Camera, EventQueue, NewIblTextures, NewIblTexturesInner, WindowChanges},
+    url, winit,
     winit::event::{ElementState, VirtualKeyCode},
     Mode, Vec3,
 };
+
+#[cfg(feature = "wasm")]
 #[wasm_bindgen(start)]
 pub fn main() {
+    console_error_panic_hook::set_once();
+    console_log::init_with_level(log::Level::Info).unwrap();
     wasm_bindgen_futures::spawn_local(run());
 }
 
-async fn run() {
-    console_error_panic_hook::set_once();
-
-    console_log::init_with_level(log::Level::Info).unwrap();
-
+pub async fn run() {
+    #[cfg(feature = "wasm")]
     let mode = select_mode_via_buttons().await;
+
+    #[cfg(not(feature = "wasm"))]
+    let mode = Mode::Desktop;
 
     let initialised_state = superconductor::initialise(mode).await;
 
@@ -30,8 +35,6 @@ async fn run() {
 
 use bevy_app::{App, Plugin};
 use bevy_ecs::prelude::{Component, Query, Res, ResMut, With};
-use futures::FutureExt;
-use wasm_bindgen::JsCast;
 
 pub struct SuperconductorPlugin {
     mode: Mode,
@@ -108,7 +111,9 @@ impl Plugin for SuperconductorPlugin {
         app.add_system(handle_keyboard_input);
         app.add_system(update_camera);
 
-        superconductor::XrPlugin::new(self.mode).build(app);
+        let plugin: superconductor::XrPlugin = superconductor::XrPlugin::new(self.mode);
+
+        plugin.build(app);
 
         app.insert_resource(NewIblTextures(Some(NewIblTexturesInner {
             diffuse_cubemap: url::Url::parse("https://expenses.github.io/mateversum-web/environment_maps/helipad/diffuse_compressed.ktx2").unwrap(),
@@ -117,7 +122,10 @@ impl Plugin for SuperconductorPlugin {
     }
 }
 
+#[cfg(feature = "wasm")]
 pub async fn select_mode_via_buttons() -> superconductor::Mode {
+    use futures::FutureExt;
+
     let vr_button = create_button("Start VR");
     let ar_button = create_button("Start AR");
     let desktop_button = create_button("Start Desktop");
@@ -133,6 +141,7 @@ pub async fn select_mode_via_buttons() -> superconductor::Mode {
     }
 }
 
+#[cfg(feature = "wasm")]
 async fn button_click_future(button: &web_sys::HtmlButtonElement) {
     wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, _reject| {
         button.set_onclick(Some(&resolve))
@@ -141,7 +150,10 @@ async fn button_click_future(button: &web_sys::HtmlButtonElement) {
     .unwrap();
 }
 
+#[cfg(feature = "wasm")]
 fn create_button(text: &str) -> web_sys::HtmlButtonElement {
+    use wasm_bindgen::JsCast;
+
     let button: web_sys::HtmlButtonElement = web_sys::window()
         .unwrap()
         .document()
@@ -174,6 +186,7 @@ struct KeyboardState {
     right: bool,
     left: bool,
     backwards: bool,
+    cursor_grab: bool,
 }
 
 fn rotate_entities(mut query: Query<&mut components::Instance, With<Spinning>>) {
@@ -183,25 +196,54 @@ fn rotate_entities(mut query: Query<&mut components::Instance, With<Spinning>>) 
 }
 
 fn handle_keyboard_input(
-    mut input: ResMut<KeyboardInputQueue>,
+    mut events: ResMut<EventQueue>,
     mut keyboard_state: ResMut<KeyboardState>,
+    mut camera_rig: ResMut<dolly::rig::CameraRig>,
+    mut window_changes: ResMut<WindowChanges>,
 ) {
-    for input in input.0.drain(..) {
-        let pressed = input.state == ElementState::Pressed;
+    for event in events.0.drain(..) {
+        match event {
+            winit::event::Event::WindowEvent { event, .. } => match event {
+                winit::event::WindowEvent::KeyboardInput { input, .. } => {
+                    let pressed = input.state == ElementState::Pressed;
 
-        match input.virtual_keycode {
-            Some(VirtualKeyCode::W | VirtualKeyCode::Up) => {
-                keyboard_state.forwards = pressed;
-            }
-            Some(VirtualKeyCode::A | VirtualKeyCode::Left) => {
-                keyboard_state.left = pressed;
-            }
-            Some(VirtualKeyCode::S | VirtualKeyCode::Down) => {
-                keyboard_state.backwards = pressed;
-            }
-            Some(VirtualKeyCode::D | VirtualKeyCode::Right) => {
-                keyboard_state.right = pressed;
-            }
+                    match input.virtual_keycode {
+                        Some(VirtualKeyCode::W | VirtualKeyCode::Up) => {
+                            keyboard_state.forwards = pressed;
+                        }
+                        Some(VirtualKeyCode::A | VirtualKeyCode::Left) => {
+                            keyboard_state.left = pressed;
+                        }
+                        Some(VirtualKeyCode::S | VirtualKeyCode::Down) => {
+                            keyboard_state.backwards = pressed;
+                        }
+                        Some(VirtualKeyCode::D | VirtualKeyCode::Right) => {
+                            keyboard_state.right = pressed;
+                        }
+                        Some(VirtualKeyCode::G) => {
+                            if pressed {
+                                keyboard_state.cursor_grab = !keyboard_state.cursor_grab;
+                                window_changes.cursor_grab = Some(keyboard_state.cursor_grab);
+                                window_changes.cursor_visible = Some(!keyboard_state.cursor_grab);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            },
+            winit::event::Event::DeviceEvent { event, .. } => match event {
+                winit::event::DeviceEvent::MouseMotion {
+                    delta: (delta_x, delta_y),
+                } => {
+                    if keyboard_state.cursor_grab {
+                        camera_rig
+                            .driver_mut::<dolly::drivers::YawPitch>()
+                            .rotate_yaw_pitch(-0.1 * delta_x as f32, -0.1 * delta_y as f32);
+                    }
+                }
+                _ => {}
+            },
             _ => {}
         }
     }

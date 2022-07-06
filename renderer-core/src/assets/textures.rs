@@ -1,5 +1,5 @@
 use super::HttpClient;
-use crate::Texture;
+use crate::{spawn, Texture};
 use std::borrow::Cow;
 use std::io::Read;
 use std::num::NonZeroU32;
@@ -21,7 +21,7 @@ pub struct Context<T> {
     pub settings: Settings,
 }
 
-pub async fn load_ktx2_cubemap<T: HttpClient + Clone + 'static>(
+pub async fn load_ktx2_cubemap<T: HttpClient>(
     context: Context<T>,
     url: &url::Url,
 ) -> anyhow::Result<Arc<Texture>> {
@@ -123,7 +123,7 @@ pub async fn load_ktx2_cubemap<T: HttpClient + Clone + 'static>(
         texture,
     });
 
-    wasm_bindgen_futures::spawn_local({
+    spawn({
         let texture = Arc::clone(&texture);
         let device = Arc::clone(&context.device);
         let queue = Arc::clone(&context.queue);
@@ -330,7 +330,7 @@ impl<'a> ImageSource<'a> {
     }
 }
 
-pub(super) async fn load_image_with_mime_type<T: HttpClient + 'static>(
+pub(super) async fn load_image_with_mime_type<T: HttpClient>(
     source: ImageSource<'_>,
     srgb: bool,
     mime_type: Option<&str>,
