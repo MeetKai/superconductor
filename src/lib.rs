@@ -3,7 +3,7 @@ use bevy_ecs::prelude::SystemStage;
 use std::ops::Range;
 use std::sync::Arc;
 use winit::{
-    event::{self, WindowEvent},
+    event,
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
@@ -386,12 +386,11 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
         ModeSpecificState::Desktop { window, event_loop } => {
             let size = window.inner_size();
 
-            let mut config = wgpu::SurfaceConfiguration {
+            let config = wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 format: initialised_state
                     .surface
-                    .get_preferred_format(&initialised_state.adapter)
-                    .unwrap(),
+                    .get_supported_formats(&initialised_state.adapter)[0],
                 width: size.width,
                 height: size.height,
                 present_mode: wgpu::PresentMode::Fifo,
@@ -404,15 +403,23 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                 .clear();
 
             event_loop.run(move |event, _, control_flow| match event {
-                event::Event::WindowEvent { event, .. } => match event {
-                    event::WindowEvent::KeyboardInput { input, .. } => {
-                        app.world
-                            .get_resource_or_insert_with(|| KeyboardInputQueue(Default::default()))
-                            .0
-                            .push(input);
+                event::Event::WindowEvent { event, .. } => {
+                    if event == event::WindowEvent::CloseRequested {
+                        *control_flow = ControlFlow::Exit;
                     }
-                    _ => {}
-                },
+
+                    match event {
+                        event::WindowEvent::KeyboardInput { input, .. } => {
+                            app.world
+                                .get_resource_or_insert_with(|| {
+                                    KeyboardInputQueue(Default::default())
+                                })
+                                .0
+                                .push(input);
+                        }
+                        _ => {}
+                    }
+                }
                 event::Event::RedrawEventsCleared => {
                     window.request_redraw();
                 }

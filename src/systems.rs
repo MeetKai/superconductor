@@ -339,7 +339,7 @@ pub(crate) fn set_desktop_uniform_buffers(
 ) {
     let queue = &queue.0;
 
-    use renderer_core::glam::{Mat4, Vec3};
+    use renderer_core::glam::Mat4;
 
     let perspective_matrix = Mat4::perspective_rh(
         59.0_f32.to_radians(),

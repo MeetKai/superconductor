@@ -2,7 +2,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use superconductor::{
     bevy_ecs, components, renderer_core,
-    resources::{Camera, FrameTime, KeyboardInputQueue, NewIblTextures, NewIblTexturesInner},
+    resources::{Camera, KeyboardInputQueue, NewIblTextures, NewIblTexturesInner},
     url,
     winit::event::{ElementState, VirtualKeyCode},
     Mode, Vec3,
@@ -49,8 +49,7 @@ impl Plugin for SuperconductorPlugin {
             .world
             .spawn()
             .insert(components::ModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/Alicia/AliciaSolid.vrm")
-                    .unwrap(),
+                url::Url::parse("http://localhost:8000/assets/models/ferris/ferris.gltf").unwrap(),
             ))
             .insert(components::Instances(Default::default()))
             .insert(components::InstanceRange(Default::default()))

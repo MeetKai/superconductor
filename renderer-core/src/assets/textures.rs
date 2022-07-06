@@ -213,14 +213,14 @@ pub async fn load_ktx2_cubemap<T: HttpClient + Clone + 'static>(
                         let mut render_pass =
                             command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                                 label: None,
-                                color_attachments: &[wgpu::RenderPassColorAttachment {
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                     view: &output_view,
                                     resolve_target: None,
                                     ops: wgpu::Operations {
                                         load: wgpu::LoadOp::Load,
                                         store: true,
                                     },
-                                }],
+                                })],
                                 depth_stencil_attachment: None,
                             });
 
@@ -462,14 +462,14 @@ pub fn load_image_crate_image<T>(
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("blit render pass"),
-            color_attachments: &[wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &temp_blit_texture.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: true,
                 },
-            }],
+            })],
             depth_stencil_attachment: None,
         });
 

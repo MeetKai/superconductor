@@ -10,7 +10,7 @@ license = "MIT"
 raw-window-handle = "0.4.3"
 wasm-bindgen = { version = "0.2.80", features = ["serde-serialize"] }
 glow = "0.11.2"
-wgpu = { version = "0.12.0", features = ["spirv", "webgl"] }
+wgpu = { version = "0.13.0", features = ["spirv", "webgl"] }
 wgpu-hal = { git = "https://github.com/expenses/wgpu", branch = "webxr-more-extensions" }
 log = "0.4.17"
 glam = { version = "0.20", features = ["bytemuck"] }
@@ -31,7 +31,7 @@ image = { version = "0.24.2", default-features = false, features = ["jpeg", "png
 arc-swap = "1.5.0"
 
 [dependencies.web-sys]
-version = "0.3.57"
+version = "0.3.58"
 features = [
     "XrSession",
     "XrFrame",
