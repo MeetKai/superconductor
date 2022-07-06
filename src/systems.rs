@@ -38,6 +38,12 @@ pub(crate) fn create_bind_group_layouts_and_pipelines(
     commands.insert_resource(IntermediateColorFramebuffer(Default::default()));
     commands.insert_resource(IntermediateDepthFramebuffer(Default::default()));
     commands.insert_resource(CompositeBindGroup(None));
+
+    let egui_ctx = egui::Context::default();
+    let mut egui_renderer =
+        egui_wgpu::renderer::RenderPass::new(&device, wgpu::TextureFormat::Rgba8Unorm, 1);
+    commands.insert_resource(egui_ctx);
+    commands.insert_resource(egui_renderer);
 }
 
 pub(crate) fn clear_instance_buffers(

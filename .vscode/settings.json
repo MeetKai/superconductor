@@ -1,0 +1,6 @@
+{
+    "rust-analyzer.checkOnSave.target": "wasm32-unknown-unknown"
+    // "rust-analyzer.server.extraEnv": {
+    //     "RUSTFLAGS": "--cfg=web_sys_unstable_apis"
+    // }
+}

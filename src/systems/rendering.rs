@@ -28,6 +28,9 @@ pub(crate) fn render_desktop(
     ),
     mut models: Query<(&mut Model, &InstanceRange)>,
     mut model_bind_groups: Local<ModelBindGroups>,
+
+    // egui
+    (mut egui_renderer, egui_ctx): (ResMut<egui_wgpu::renderer::RenderPass>, Res<egui::Context>),
 ) {
     let device = &device.0;
     let queue = &queue.0;
@@ -138,6 +141,43 @@ pub(crate) fn render_desktop(
     }
 
     drop(render_pass);
+
+    //egui
+    {
+        let egui_input = egui::RawInput {
+            // time: Some(time),
+            ..Default::default()
+        };
+
+        let egui_output = egui_ctx.run(egui_input, |ctx| {
+            egui::containers::Window::new("This is a window").show(ctx, |ui| {
+                ui.label("This is a label");
+            });
+        });
+
+        for (id, image_delta) in &egui_output.textures_delta.set {
+            egui_renderer.update_texture(&device, &queue, *id, image_delta);
+        }
+        for id in &egui_output.textures_delta.free {
+            egui_renderer.free_texture(id);
+        }
+
+        let screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
+            size_in_pixels: [surface_frame_view.width, surface_frame_view.height],
+            pixels_per_point: 1.0,
+        };
+
+        let egui_primitives = egui_ctx.tessellate(egui_output.shapes);
+        egui_renderer.update_buffers(&device, &queue, &egui_primitives, &screen_descriptor);
+
+        egui_renderer.execute(
+            &mut command_encoder,
+            &surface_frame_view.view,
+            &egui_primitives,
+            &screen_descriptor,
+            Some(wgpu::Color::TRANSPARENT),
+        );
+    }
 
     queue.submit(std::iter::once(command_encoder.finish()));
 }

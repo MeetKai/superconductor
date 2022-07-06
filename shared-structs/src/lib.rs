@@ -115,11 +115,11 @@ fn mirror_logic_check() {
     let mirror_normal = Vec3::new(0.0, -1.0, 0.0);
     let tree_position = Vec3::new(0.0, 1.0, 0.0);
 
-    dbg!(reflect_in_mirror(
-        tree_position,
-        mirror_position,
-        mirror_normal
-    ));
+    // dbg!(reflect_in_mirror(
+    //     tree_position,
+    //     mirror_position,
+    //     mirror_normal
+    // ));
 
     panic!();
 }

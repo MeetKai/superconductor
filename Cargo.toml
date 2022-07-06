@@ -7,8 +7,8 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy_app = { version = "0.7", default-features=false }
-bevy_ecs = { version = "0.7", default-features=false }
+bevy_app = { version = "0.7", default-features = false }
+bevy_ecs = { version = "0.7", default-features = false }
 log = "0.4.17"
 wasm-bindgen = "0.2.80"
 renderer-core = { path = "renderer-core" }
@@ -22,43 +22,44 @@ parking_lot = "0.12.1"
 winit = "0.26.1"
 reqwest = "0.11.11"
 tokio = "1.19.2"
+egui = "0.18.1"
+egui-wgpu = "0.18.0"
 
 [dependencies.web-sys]
 version = "0.3.58"
 features = [
-    "HtmlButtonElement",
-    "Document",
-    "Navigator",
-    "XrReferenceSpaceType",
-    "XrSessionMode",
-    "Navigator",
-    "XrSystem",
-    "XrSessionInit",
-    "XrWebGlLayer",
-    "XrWebGlLayerInit",
-    "XrRenderStateInit",
-    "XrRenderState",
-    "XrReferenceSpace",
-    "XrViewerPose",
-    "XrView",
-    "RequestInit",
-    "Request",
-    "Response",
+  "HtmlButtonElement",
+  "Document",
+  "Navigator",
+  "XrReferenceSpaceType",
+  "XrSessionMode",
+  "Navigator",
+  "XrFrame",
+  "XrSystem",
+  "XrSessionInit",
+  "XrWebGlLayer",
+  "XrWebGlLayerInit",
+  "XrRenderStateInit",
+  "XrRenderState",
+  "XrReferenceSpace",
+  "XrViewerPose",
+  "XrView",
+  "RequestInit",
+  "Request",
+  "Response",
+  "Window",
+  "WebGlFramebuffer",
 ]
 
 [features]
 wasm = ["renderer-core/wasm"]
 
 [workspace]
-members = [
-  "shared-structs",
-  "gltf-helpers",
-  "renderer-core",
-  ".",
-  "demo",
-]
+members = ["shared-structs", "gltf-helpers", "renderer-core", ".", "demo"]
 
 [patch.crates-io]
 glow = { git = "https://github.com/expenses/glow", branch = "webxr" }
 wgpu = { git = "https://github.com/expenses/wgpu", branch = "webxr-more-extensions" }
 wgpu-hal = { git = "https://github.com/expenses/wgpu", branch = "webxr-more-extensions" }
+egui = { git = "https://github.com/emilk/egui", branch = "master" }
+egui-wgpu = { git = "https://github.com/emilk/egui", branch = "master" }
