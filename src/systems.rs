@@ -8,10 +8,15 @@ use crate::resources::{
     SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, NonSend, Query, Res, ResMut};
-use renderer_core::utils::{Setter, Swappable};
 use renderer_core::{
-    arc_swap::ArcSwap, assets::textures, bytemuck, create_main_bind_group,
-    crevice::std140::AsStd140, ibl::IblTextures, shared_structs, spawn, Texture,
+    arc_swap::ArcSwap,
+    assets::{textures, HttpClient},
+    bytemuck, create_main_bind_group,
+    crevice::std140::AsStd140,
+    ibl::IblTextures,
+    shared_structs, spawn,
+    utils::{Setter, Swappable},
+    Texture,
 };
 use std::sync::Arc;
 
@@ -83,12 +88,13 @@ pub(crate) fn upload_instances(
     queue.0.submit(std::iter::once(command_encoder.finish()));
 }
 
-pub(crate) fn allocate_bind_groups(
+pub(crate) fn allocate_bind_groups<T: HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<textures::Settings>,
+    http_client: Res<T>,
     mut commands: Commands,
 ) {
     let device = &device.0;
@@ -198,15 +204,13 @@ pub(crate) fn allocate_bind_groups(
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
         queue: queue.clone(),
-        http_client: super::DummyHttpClient::default(),
+        http_client: http_client.clone(),
         bind_group_layouts: bind_group_layouts.clone(),
         pipelines: pipelines.clone(),
         settings: texture_settings.clone(),
     };
 
     spawn(async move {
-        use renderer_core::assets::HttpClient;
-
         let lut_url = url::Url::parse("https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Viewer/master/assets/images/lut_ggx.png").unwrap();
 
         // This results in only the skybox being rendered:
@@ -262,7 +266,7 @@ pub(crate) fn allocate_bind_groups(
     commands.insert_resource(InstanceBuffer(instance_buffer));
 }
 
-pub(crate) fn update_ibl_textures(
+pub(crate) fn update_ibl_textures<T: HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
@@ -273,6 +277,7 @@ pub(crate) fn update_ibl_textures(
     linear_sampler: Res<LinearSampler>,
     main_bind_group: Res<MainBindGroup>,
     uniform_buffer: Res<UniformBuffer>,
+    http_client: Res<T>,
 ) {
     let new_ibl_textures = match new_ibl_textures.0.take() {
         Some(new_ibl_textures) => new_ibl_textures,
@@ -292,7 +297,7 @@ pub(crate) fn update_ibl_textures(
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
         queue: queue.clone(),
-        http_client: super::DummyHttpClient::default(),
+        http_client: http_client.clone(),
         bind_group_layouts: bind_group_layouts.clone(),
         pipelines: pipelines.clone(),
         settings: texture_settings.clone(),
@@ -496,7 +501,7 @@ pub(crate) fn update_uniform_buffers(
     );
 }
 
-pub(crate) fn start_loading_models(
+pub(crate) fn start_loading_models<T: HttpClient>(
     query: Query<(Entity, &ModelUrl), Added<ModelUrl>>,
     device: Res<Device>,
     queue: Res<Queue>,
@@ -504,6 +509,7 @@ pub(crate) fn start_loading_models(
     bind_group_layouts: Res<BindGroupLayouts>,
     (index_buffer, vertex_buffers): (Res<IndexBuffer>, Res<VertexBuffers>),
     texture_settings: Res<textures::Settings>,
+    http_client: Res<T>,
     mut model_urls: ResMut<ModelUrls>,
     mut commands: Commands,
 ) {
@@ -531,21 +537,19 @@ pub(crate) fn start_loading_models(
             let bind_group_layouts = bind_group_layouts.0.clone();
             let pipelines = pipelines.0.clone();
 
+            let context = renderer_core::assets::models::Context {
+                device,
+                queue,
+                bind_group_layouts,
+                http_client: http_client.clone(),
+                index_buffer,
+                vertex_buffers,
+                pipelines,
+                texture_settings,
+            };
+
             async move {
-                let result = renderer_core::assets::models::Model::load(
-                    &renderer_core::assets::models::Context {
-                        device,
-                        queue,
-                        bind_group_layouts,
-                        http_client: super::DummyHttpClient::default(),
-                        index_buffer,
-                        vertex_buffers,
-                        pipelines,
-                        texture_settings: texture_settings.clone(),
-                    },
-                    &url,
-                )
-                .await;
+                let result = renderer_core::assets::models::Model::load(&context, &url).await;
 
                 match result {
                     Err(error) => {

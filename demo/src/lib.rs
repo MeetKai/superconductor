@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use superconductor::{
-    bevy_ecs, components, renderer_core,
+    bevy_app, bevy_ecs, components, renderer_core,
     resources::{Camera, EventQueue, NewIblTextures, NewIblTexturesInner, WindowChanges},
     url, winit,
     winit::event::{ElementState, VirtualKeyCode},
@@ -9,16 +9,12 @@ use superconductor::{
 };
 #[wasm_bindgen(start)]
 pub fn main() {
+    console_error_panic_hook::set_once();
+    console_log::init_with_level(log::Level::Info).unwrap();
     wasm_bindgen_futures::spawn_local(run());
 }
 
 pub async fn run() {
-    #[cfg(feature = "webgl")]
-    {
-        console_error_panic_hook::set_once();
-        console_log::init_with_level(log::Level::Info).unwrap();
-    }
-
     #[cfg(feature = "webgl")]
     let mode = select_mode_via_buttons().await;
 
@@ -114,7 +110,9 @@ impl Plugin for SuperconductorPlugin {
         app.add_system(handle_keyboard_input);
         app.add_system(update_camera);
 
-        superconductor::XrPlugin::new(self.mode).build(app);
+        let plugin: superconductor::XrPlugin = superconductor::XrPlugin::new(self.mode);
+
+        plugin.build(app);
 
         app.insert_resource(NewIblTextures(Some(NewIblTexturesInner {
             diffuse_cubemap: url::Url::parse("https://expenses.github.io/mateversum-web/environment_maps/helipad/diffuse_compressed.ktx2").unwrap(),

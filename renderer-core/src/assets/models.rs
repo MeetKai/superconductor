@@ -49,7 +49,7 @@ pub struct Model {
 }
 
 impl Model {
-    pub async fn load<T: HttpClient + Clone + 'static>(
+    pub async fn load<T: HttpClient>(
         context: &Context<T>,
         root_url: &url::Url,
     ) -> anyhow::Result<Model> {
@@ -178,7 +178,7 @@ impl Model {
 
         fn collect_primitives<
             'a,
-            T: HttpClient + Clone + 'static,
+            T: HttpClient,
             I: std::iter::Iterator<Item = &'a StagingPrimitive>,
         >(
             primitives: &mut Vec<Primitive>,
@@ -358,7 +358,7 @@ impl StagingBuffers {
     }
 }
 
-fn spawn_texture_loading_futures<T: HttpClient + Clone + 'static>(
+fn spawn_texture_loading_futures<T: HttpClient>(
     bind_group_setter: Setter<Arc<wgpu::BindGroup>>,
     material_bindings: MaterialBindings,
     material_index: usize,
@@ -501,7 +501,7 @@ struct ImageContext<T> {
     material_bindings: Arc<MaterialBindings>,
 }
 
-async fn load_image_from_gltf_with_followup<T: HttpClient + 'static, F: Fn(Arc<Texture>)>(
+async fn load_image_from_gltf_with_followup<T: HttpClient, F: Fn(Arc<Texture>)>(
     texture: gltf::Texture<'_, ()>,
     srgb: bool,
     context: &ImageContext<T>,
@@ -526,7 +526,7 @@ async fn load_image_from_gltf_with_followup<T: HttpClient + 'static, F: Fn(Arc<T
     }
 }
 
-async fn load_image_from_gltf<T: HttpClient + 'static>(
+async fn load_image_from_gltf<T: HttpClient>(
     texture: gltf::Texture<'_, ()>,
     srgb: bool,
     context: &ImageContext<T>,

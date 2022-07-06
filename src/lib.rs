@@ -18,7 +18,11 @@ pub use renderer_core;
 pub use url;
 pub use winit;
 
-pub use renderer_core::{assets::textures, glam::Vec3, utils::Swappable};
+pub use renderer_core::{
+    assets::{textures, HttpClient},
+    glam::Vec3,
+    utils::Swappable,
+};
 
 use components::Instance;
 use resources::{
@@ -40,17 +44,21 @@ pub enum Stage {
     Rendering,
 }
 
-pub struct XrPlugin {
-    mode: Mode,
+pub struct XrPlugin<T: HttpClient = ReqwestHttpClient> {
+    pub mode: Mode,
+    pub http_client: T,
 }
 
-impl XrPlugin {
+impl<T: HttpClient + Default> XrPlugin<T> {
     pub fn new(mode: Mode) -> Self {
-        Self { mode }
+        Self {
+            mode,
+            http_client: T::default(),
+        }
     }
 }
 
-impl Plugin for XrPlugin {
+impl<T: HttpClient> Plugin for XrPlugin<T> {
     fn build(&self, app: &mut App) {
         app.insert_resource(Camera::default());
         app.insert_resource(EventQueue(Default::default()));
@@ -60,6 +68,7 @@ impl Plugin for XrPlugin {
         });
         app.insert_resource(NewIblTextures(None));
         app.insert_resource(WindowChanges::default());
+        app.insert_resource(self.http_client.clone());
 
         app.add_startup_stage(
             StartupStage::PipelineCreation,
@@ -69,15 +78,15 @@ impl Plugin for XrPlugin {
         app.add_startup_stage_after(
             StartupStage::PipelineCreation,
             StartupStage::BindGroupCreation,
-            SystemStage::single_threaded().with_system(systems::allocate_bind_groups),
+            SystemStage::single_threaded().with_system(systems::allocate_bind_groups::<T>),
         );
 
         app.add_stage(
             Stage::AssetLoading,
             SystemStage::single_threaded()
-                .with_system(systems::start_loading_models)
+                .with_system(systems::start_loading_models::<T>)
                 .with_system(systems::finish_loading_models)
-                .with_system(systems::update_ibl_textures),
+                .with_system(systems::update_ibl_textures::<T>),
         );
 
         let mut buffer_resetting_stage =
@@ -455,7 +464,12 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                             app.world.get_resource_mut::<WindowChanges>()
                         {
                             if let Some(cursor_grab) = window_changes.cursor_grab {
-                                window.set_cursor_grab(cursor_grab);
+                                if let Err(error) = window.set_cursor_grab(cursor_grab) {
+                                    log::error!(
+                                        "Got an error when trying to set the cursor grab: {}",
+                                        error
+                                    );
+                                }
                             }
 
                             if let Some(cursor_visible) = window_changes.cursor_visible {
@@ -481,57 +495,10 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
     }
 }
 
-#[cfg(feature = "webgl")]
-#[derive(Clone)]
-struct SimpleHttpClient;
-
-#[cfg(feature = "webgl")]
-impl renderer_core::assets::HttpClient for SimpleHttpClient {
-    type Future = std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>>>>;
-
-    fn fetch_bytes(&self, url: &url::Url, byte_range: Option<Range<usize>>) -> Self::Future {
-        async fn resolve_promise(
-            promise: js_sys::Promise,
-        ) -> anyhow::Result<wasm_bindgen::JsValue> {
-            wasm_bindgen_futures::JsFuture::from(promise)
-                .await
-                .map_err(|err| anyhow::anyhow!("{:?}", err))
-        }
-
-        let url = url.clone();
-
-        Box::pin(async move {
-            let request_init = construct_request_init(byte_range.clone())?;
-
-            let request = web_sys::Request::new_with_str_and_init(url.as_str(), &request_init)
-                .map_err(|err| anyhow::anyhow!("{:?}", err))?;
-
-            let response: web_sys::Response =
-                resolve_promise(web_sys::window().unwrap().fetch_with_request(&request))
-                    .await?
-                    .into();
-
-            let array_buffer: js_sys::ArrayBuffer = resolve_promise(
-                response
-                    .array_buffer()
-                    .map_err(|err| anyhow::anyhow!("{:?}", err))?,
-            )
-            .await?
-            .into();
-
-            let uint8_array = js_sys::Uint8Array::new(&array_buffer);
-
-            Ok(uint8_array.to_vec())
-        })
-    }
-}
-
 #[derive(Clone, Default)]
-struct DummyHttpClient {
-    inner: reqwest::Client,
-}
+pub struct ReqwestHttpClient(reqwest::Client);
 
-impl renderer_core::assets::HttpClient for DummyHttpClient {
+impl renderer_core::assets::HttpClient for ReqwestHttpClient {
     #[cfg(not(target_arch = "wasm32"))]
     type Future =
         std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>> + Send>>;
@@ -540,49 +507,30 @@ impl renderer_core::assets::HttpClient for DummyHttpClient {
     type Future = std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>>>>;
 
     fn fetch_bytes(&self, url: &url::Url, byte_range: Option<Range<usize>>) -> Self::Future {
+        fn byte_range_string(range: Range<usize>) -> String {
+            format!("bytes={}-{}", range.start, range.end - 1)
+        }
+
         let url = url.clone();
 
-        let mut request_builder = self.inner.get(url.clone());
+        let mut request_builder = self.0.get(url.clone());
 
         if let Some(byte_range) = byte_range {
             request_builder = request_builder.header("Range", byte_range_string(byte_range));
         }
 
         Box::pin(async move {
-            println!("Requesting {}", url);
+            log::debug!("Requesting {}", url);
 
             let response = request_builder.send().await?;
 
-            println!("Got response for {}", url);
+            log::debug!("Got response for {}", url);
 
             let bytes = response.bytes().await?;
 
-            println!("Got bytes for {}: {}", url, bytes.len());
+            log::debug!("Got bytes for {}: {}", url, bytes.len());
 
             Ok(bytes.as_ref().to_vec())
         })
     }
-}
-
-fn byte_range_string(range: Range<usize>) -> String {
-    format!("bytes={}-{}", range.start, range.end - 1)
-}
-
-fn construct_request_init(
-    byte_range: Option<Range<usize>>,
-) -> anyhow::Result<web_sys::RequestInit> {
-    let mut request_init = web_sys::RequestInit::new();
-
-    if let Some(byte_range) = byte_range {
-        let headers = js_sys::Object::new();
-        js_sys::Reflect::set(
-            &headers,
-            &"Range".into(),
-            &byte_range_string(byte_range).into(),
-        )
-        .map_err(|err| anyhow::anyhow!("Js Error: {:?}", err))?;
-        request_init.headers(&headers);
-    }
-
-    Ok(request_init)
 }

@@ -4,7 +4,7 @@ pub mod textures;
 
 use std::ops::Range;
 
-pub trait HttpClient: Send + Sync {
+pub trait HttpClient: Clone + Send + Sync + 'static {
     #[cfg(feature = "webgl")]
     type Future: std::future::Future<Output = anyhow::Result<Vec<u8>>>;
     #[cfg(not(feature = "webgl"))]

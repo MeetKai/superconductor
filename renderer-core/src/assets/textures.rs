@@ -21,7 +21,7 @@ pub struct Context<T> {
     pub settings: Settings,
 }
 
-pub async fn load_ktx2_cubemap<T: HttpClient + Clone + Send + Sync + 'static>(
+pub async fn load_ktx2_cubemap<T: HttpClient>(
     context: Context<T>,
     url: &url::Url,
 ) -> anyhow::Result<Arc<Texture>> {
@@ -330,7 +330,7 @@ impl<'a> ImageSource<'a> {
     }
 }
 
-pub(super) async fn load_image_with_mime_type<T: HttpClient + 'static>(
+pub(super) async fn load_image_with_mime_type<T: HttpClient>(
     source: ImageSource<'_>,
     srgb: bool,
     mime_type: Option<&str>,
