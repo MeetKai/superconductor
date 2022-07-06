@@ -22,5 +22,4 @@ wasm-bindgen-futures = "0.4.31"
 web-sys = "0.3.58"
 
 [features]
-default = ["webgl"]
 webgl = ["superconductor/webgl"]

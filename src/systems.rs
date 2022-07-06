@@ -30,8 +30,8 @@ pub(crate) fn create_bind_group_layouts_and_pipelines(
 
     commands.insert_resource(BindGroupLayouts(Arc::new(bind_group_layouts)));
     commands.insert_resource(Pipelines(Arc::new(pipelines)));
-    commands.insert_resource(IntermediateColorFramebuffer(None));
-    commands.insert_resource(IntermediateDepthFramebuffer(None));
+    commands.insert_resource(IntermediateColorFramebuffer(Default::default()));
+    commands.insert_resource(IntermediateDepthFramebuffer(Default::default()));
     commands.insert_resource(CompositeBindGroup(None));
 }
 
@@ -407,8 +407,8 @@ pub(crate) fn set_desktop_uniform_buffers(
     );
 
     let skybox_uniforms = shared_structs::SkyboxUniforms {
-        left_projection_inverse: projection_view.inverse().into(),
-        right_projection_inverse: projection_view.inverse().into(),
+        left_projection_inverse: perspective_matrix.inverse().into(),
+        right_projection_inverse: perspective_matrix.inverse().into(),
         left_view_inverse: camera.rotation.into(),
         right_view_inverse: camera.rotation.into(),
     };

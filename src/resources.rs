@@ -3,10 +3,15 @@ use renderer_core::glam::{Mat4, Quat, Vec3};
 use renderer_core::utils::Swappable;
 use std::collections::HashMap;
 use std::sync::Arc;
-use winit::event::KeyboardInput;
 
 pub struct Device(pub(crate) Arc<wgpu::Device>);
 pub struct Queue(pub(crate) Arc<wgpu::Queue>);
+
+#[derive(Default)]
+pub struct WindowChanges {
+    pub cursor_grab: Option<bool>,
+    pub cursor_visible: Option<bool>,
+}
 
 pub struct FrameTime(pub f64);
 
@@ -17,7 +22,7 @@ pub struct NewIblTexturesInner {
     pub specular_cubemap: url::Url,
 }
 
-pub struct KeyboardInputQueue(pub Vec<KeyboardInput>);
+pub struct EventQueue(pub Vec<winit::event::Event<'static, ()>>);
 
 pub(crate) struct Pipelines(pub(crate) Arc<renderer_core::Pipelines>);
 pub(crate) struct BindGroupLayouts(pub(crate) Arc<renderer_core::BindGroupLayouts>);
@@ -31,10 +36,55 @@ pub(crate) struct IndexBuffer(pub(crate) Arc<parking_lot::Mutex<renderer_core::I
 pub(crate) struct VertexBuffers(pub(crate) Arc<parking_lot::Mutex<renderer_core::VertexBuffers>>);
 pub(crate) struct InstanceBuffer(pub(crate) renderer_core::InstanceBuffer);
 
-pub(crate) struct IntermediateDepthFramebuffer(pub(crate) Option<renderer_core::Texture>);
-pub(crate) struct IntermediateColorFramebuffer(pub(crate) Option<renderer_core::Texture>);
+pub(crate) struct IntermediateDepthFramebuffer(pub(crate) CachedFramebuffer);
+pub(crate) struct IntermediateColorFramebuffer(pub(crate) CachedFramebuffer);
 pub(crate) struct CompositeBindGroup(pub(crate) Option<wgpu::BindGroup>);
 pub(crate) struct LinearSampler(pub(crate) Arc<wgpu::Sampler>);
+
+#[derive(Default)]
+pub(crate) struct CachedFramebuffer {
+    inner: Option<ResourceWithSize<renderer_core::Texture>>,
+}
+
+impl CachedFramebuffer {
+    pub(crate) fn get(
+        &mut self,
+        device: &wgpu::Device,
+        descriptor: &wgpu::TextureDescriptor,
+    ) -> &renderer_core::Texture {
+        let create_fn = || {
+            let texture = device.create_texture(descriptor);
+
+            let view = texture.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(if descriptor.size.depth_or_array_layers > 1 {
+                    wgpu::TextureViewDimension::D2Array
+                } else {
+                    wgpu::TextureViewDimension::D2
+                }),
+                ..Default::default()
+            });
+
+            ResourceWithSize {
+                resource: renderer_core::Texture { texture, view },
+                size: descriptor.size,
+            }
+        };
+
+        let cached = self.inner.get_or_insert_with(create_fn);
+
+        if descriptor.size != cached.size {
+            *cached = create_fn();
+        }
+
+        &cached.resource
+    }
+}
+
+// A resource that's stored alongside a wgpu extent for cache invalidation purposes.
+struct ResourceWithSize<T> {
+    resource: T,
+    size: wgpu::Extent3d,
+}
 
 pub(crate) struct ModelUrls(pub(crate) HashMap<url::Url, Entity>);
 

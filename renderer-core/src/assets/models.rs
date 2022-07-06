@@ -124,7 +124,7 @@ impl Model {
 
                         StagingPrimitive {
                             buffers: StagingBuffers::default(),
-                            material_settings: dbg!(shared_structs::MaterialSettings {
+                            material_settings: shared_structs::MaterialSettings {
                                 base_color_factor: pbr.base_color_factor().into(),
                                 emissive_factor: material.emissive_factor().into(),
                                 metallic_factor: pbr.metallic_factor(),
@@ -132,7 +132,7 @@ impl Model {
                                 is_unlit: unlit as u32,
                                 #[cfg(not(feature = "webgl"))]
                                 _padding: 0,
-                            }),
+                            },
                             material_index: material.index().unwrap_or(0),
                         }
                     });

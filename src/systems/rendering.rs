@@ -39,8 +39,9 @@ pub(crate) fn render_desktop(
     let vertex_buffers = &vertex_buffers.0.lock();
     let index_buffer = &index_buffer.0.lock();
 
-    let depth_attachment = intermediate_depth_framebuffer.0.get_or_insert_with(|| {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+    let depth_attachment = intermediate_depth_framebuffer.0.get(
+        device,
+        &wgpu::TextureDescriptor {
             label: Some("intermediate depth framebuffer"),
             size: wgpu::Extent3d {
                 width: surface_frame_view.width,
@@ -52,12 +53,8 @@ pub(crate) fn render_desktop(
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Depth24PlusStencil8,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        });
-
-        let view = texture.create_view(&Default::default());
-
-        renderer_core::Texture { texture, view }
-    });
+        },
+    );
 
     model_bind_groups.collect(&mut models);
 
@@ -204,39 +201,28 @@ pub(crate) fn render(
         if pipeline_options.render_direct_to_framebuffer() {
             (None, None)
         } else {
-            let intermediate_color_framebuffer =
-                intermediate_color_framebuffer.0.get_or_insert_with(|| {
-                    let texture = device.create_texture(&wgpu::TextureDescriptor {
-                        label: Some("intermediate color framebuffer"),
-                        size: wgpu::Extent3d {
-                            width: base_layer.framebuffer_width() / num_views,
-                            height: base_layer.framebuffer_height(),
-                            depth_or_array_layers: num_views,
-                        },
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: wgpu::TextureDimension::D2,
-                        // Always true at the moment.
-                        format: if pipeline_options.inline_tonemapping {
-                            wgpu::TextureFormat::Rgba8Unorm
-                        } else {
-                            wgpu::TextureFormat::Rgba16Float
-                        },
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING
-                            | wgpu::TextureUsages::RENDER_ATTACHMENT,
-                    });
-
-                    let view = texture.create_view(&wgpu::TextureViewDescriptor {
-                        dimension: Some(if pipeline_options.multiview.is_none() {
-                            wgpu::TextureViewDimension::D2
-                        } else {
-                            wgpu::TextureViewDimension::D2Array
-                        }),
-                        ..Default::default()
-                    });
-
-                    renderer_core::Texture { texture, view }
-                });
+            let intermediate_color_framebuffer = intermediate_color_framebuffer.0.get(
+                device,
+                &wgpu::TextureDescriptor {
+                    label: Some("intermediate color framebuffer"),
+                    size: wgpu::Extent3d {
+                        width: base_layer.framebuffer_width() / num_views,
+                        height: base_layer.framebuffer_height(),
+                        depth_or_array_layers: num_views,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    // Always true at the moment.
+                    format: if pipeline_options.inline_tonemapping {
+                        wgpu::TextureFormat::Rgba8Unorm
+                    } else {
+                        wgpu::TextureFormat::Rgba16Float
+                    },
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING
+                        | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                },
+            );
 
             let composite_bind_group = composite_bind_group.0.get_or_insert_with(|| {
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -272,8 +258,9 @@ pub(crate) fn render(
             "device framebuffer (depth)",
         ))
     } else {
-        BorrowedOrOwned::Borrowed(intermediate_depth_framebuffer.0.get_or_insert_with(|| {
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
+        BorrowedOrOwned::Borrowed(intermediate_depth_framebuffer.0.get(
+            device,
+            &wgpu::TextureDescriptor {
                 label: Some("intermediate depth framebuffer"),
                 size: wgpu::Extent3d {
                     width: base_layer.framebuffer_width() / num_views,
@@ -286,19 +273,8 @@ pub(crate) fn render(
                 format: wgpu::TextureFormat::Depth24PlusStencil8,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            });
-
-            let view = texture.create_view(&wgpu::TextureViewDescriptor {
-                dimension: Some(if pipeline_options.multiview.is_none() {
-                    wgpu::TextureViewDimension::D2
-                } else {
-                    wgpu::TextureViewDimension::D2Array
-                }),
-                ..Default::default()
-            });
-
-            renderer_core::Texture { texture, view }
-        }))
+            },
+        ))
     };
 
     model_bind_groups.collect(&mut models);

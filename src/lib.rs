@@ -22,7 +22,7 @@ pub use renderer_core::{assets::textures, glam::Vec3, utils::Swappable};
 
 use components::Instance;
 use resources::{
-    Camera, Device, KeyboardInputQueue, ModelUrls, NewIblTextures, Queue, SurfaceFrameView,
+    Camera, Device, EventQueue, ModelUrls, NewIblTextures, Queue, SurfaceFrameView, WindowChanges,
 };
 
 #[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
@@ -53,12 +53,13 @@ impl XrPlugin {
 impl Plugin for XrPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Camera::default());
-        app.insert_resource(KeyboardInputQueue(Default::default()));
+        app.insert_resource(EventQueue(Default::default()));
         app.insert_resource(ModelUrls(Default::default()));
         app.insert_resource(textures::Settings {
             anisotropy_clamp: Some(std::num::NonZeroU8::new(16).unwrap()),
         });
         app.insert_resource(NewIblTextures(None));
+        app.insert_resource(WindowChanges::default());
 
         app.add_startup_stage(
             StartupStage::PipelineCreation,
@@ -397,7 +398,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
         ModeSpecificState::Desktop { window, event_loop } => {
             let size = window.inner_size();
 
-            let config = wgpu::SurfaceConfiguration {
+            let mut config = wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 format: framebuffer_format,
                 width: size.width,
@@ -406,59 +407,75 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
             };
             initialised_state.surface.configure(&device, &config);
 
-            app.world
-                .get_resource_or_insert_with(|| KeyboardInputQueue(Default::default()))
-                .0
-                .clear();
-
-            event_loop.run(move |event, _, control_flow| match event {
-                event::Event::WindowEvent { event, .. } => {
-                    if event == event::WindowEvent::CloseRequested {
-                        *control_flow = ControlFlow::Exit;
-                    }
-
-                    match event {
-                        event::WindowEvent::KeyboardInput { input, .. } => {
-                            app.world
-                                .get_resource_or_insert_with(|| {
-                                    KeyboardInputQueue(Default::default())
-                                })
-                                .0
-                                .push(input);
+            event_loop.run(move |event, _, control_flow| {
+                match &event {
+                    event::Event::WindowEvent { event, .. } => match &event {
+                        event::WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        event::WindowEvent::Resized(new_size) => {
+                            config.width = new_size.width;
+                            config.height = new_size.height;
+                            initialised_state.surface.configure(&device, &config);
                         }
                         _ => {}
+                    },
+                    event::Event::RedrawEventsCleared => {
+                        window.request_redraw();
                     }
-                }
-                event::Event::RedrawEventsCleared => {
-                    window.request_redraw();
-                }
-                event::Event::RedrawRequested(_) => {
-                    let frame = match initialised_state.surface.get_current_texture() {
-                        Ok(frame) => frame,
-                        Err(_) => {
-                            initialised_state.surface.configure(&device, &config);
-                            initialised_state
-                                .surface
-                                .get_current_texture()
-                                .expect("Failed to acquire next surface texture!")
+                    event::Event::RedrawRequested(_) => {
+                        let frame = match initialised_state.surface.get_current_texture() {
+                            Ok(frame) => frame,
+                            Err(_) => {
+                                initialised_state.surface.configure(&device, &config);
+                                initialised_state
+                                    .surface
+                                    .get_current_texture()
+                                    .expect("Failed to acquire next surface texture!")
+                            }
+                        };
+
+                        let view = frame
+                            .texture
+                            .create_view(&wgpu::TextureViewDescriptor::default());
+
+                        app.insert_resource(SurfaceFrameView {
+                            view,
+                            width: config.width,
+                            height: config.height,
+                        });
+
+                        app.schedule.run_once(&mut app.world);
+
+                        // Reset event queue just in case nothing is consuming these.
+                        app.world
+                            .get_resource_or_insert_with(|| EventQueue(Default::default()))
+                            .0
+                            .clear();
+
+                        if let Some(mut window_changes) =
+                            app.world.get_resource_mut::<WindowChanges>()
+                        {
+                            if let Some(cursor_grab) = window_changes.cursor_grab {
+                                window.set_cursor_grab(cursor_grab);
+                            }
+
+                            if let Some(cursor_visible) = window_changes.cursor_visible {
+                                window.set_cursor_visible(cursor_visible);
+                            }
+
+                            *window_changes = Default::default();
                         }
-                    };
 
-                    let view = frame
-                        .texture
-                        .create_view(&wgpu::TextureViewDescriptor::default());
-
-                    app.insert_resource(SurfaceFrameView {
-                        view,
-                        width: size.width,
-                        height: size.height,
-                    });
-
-                    app.schedule.run_once(&mut app.world);
-
-                    frame.present();
+                        frame.present();
+                    }
+                    _ => {}
                 }
-                _ => {}
+
+                if let Some(static_event) = event.to_static() {
+                    app.world
+                        .get_resource_or_insert_with(|| EventQueue(Default::default()))
+                        .0
+                        .push(static_event);
+                }
             })
         }
     }
