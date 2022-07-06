@@ -432,7 +432,7 @@ fn spawn_texture_loading_futures<T: HttpClient>(
             if let Some(metallic_roughness_texture) = pbr.base_color_texture() {
                 load_image_from_gltf_with_followup(
                     metallic_roughness_texture.texture(),
-                    true,
+                    false,
                     &image_context,
                     |texture| {
                         image_context
@@ -481,7 +481,7 @@ fn spawn_texture_loading_futures<T: HttpClient>(
             if let Some(emissive_texture) = material.emissive_texture() {
                 load_image_from_gltf_with_followup(
                     emissive_texture.texture(),
-                    false,
+                    true,
                     &image_context,
                     |texture| {
                         image_context.material_bindings.emission.store(texture);

@@ -115,7 +115,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
                 mip_level_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                format: wgpu::TextureFormat::Rgba16Float,
+                format: wgpu::TextureFormat::Rgba8Unorm,
             },
         )))),
         diffuse_cubemap: ArcSwap::from(Arc::new(Texture::new_cubemap(device.create_texture(
