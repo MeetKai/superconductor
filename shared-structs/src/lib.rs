@@ -91,6 +91,8 @@ impl From<Mat4> for FlatMat4 {
 pub struct MaterialSettings {
     pub base_color_factor: Vec4,
     pub emissive_factor: Vec3,
+    // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
+    // todo: find a nicer way to resolve this.
     #[cfg(all(not(target_arch = "spirv"), not(feature = "webgl")))]
     pub _padding: u32,
     pub metallic_factor: f32,

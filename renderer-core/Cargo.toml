@@ -44,4 +44,4 @@ features = [
 ]
 
 [features]
-webgl = ["shared-structs/webgl"]
+wasm = ["shared-structs/webgl"]

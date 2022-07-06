@@ -22,7 +22,7 @@ pub use pipelines::{PipelineOptions, Pipelines};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 pub fn request_animation_frame(
     session: &web_sys::XrSession,
     f: &Closure<dyn FnMut(f64, web_sys::XrFrame)>,
@@ -32,7 +32,7 @@ pub fn request_animation_frame(
     session.request_animation_frame(f.as_ref().unchecked_ref());
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 pub fn run_rendering_loop<F: FnMut(f64, web_sys::XrFrame) + 'static>(
     session: &web_sys::XrSession,
     mut func: F,
@@ -63,13 +63,13 @@ pub struct ContextCreationOptions {
     pub stencil: bool,
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 pub struct Canvas {
     inner: web_sys::HtmlCanvasElement,
     id: u32,
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 impl Canvas {
     pub fn new_with_id(id: u32) -> Self {
         let canvas: web_sys::HtmlCanvasElement = web_sys::window()
@@ -117,14 +117,14 @@ impl Canvas {
     }
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 impl Default for Canvas {
     fn default() -> Self {
         Self::new_with_id(0)
     }
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 unsafe impl raw_window_handle::HasRawWindowHandle for Canvas {
     fn raw_window_handle(&self) -> raw_window_handle::RawWindowHandle {
         let mut web = raw_window_handle::WebHandle::empty();
@@ -134,7 +134,7 @@ unsafe impl raw_window_handle::HasRawWindowHandle for Canvas {
     }
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 pub fn create_view_from_device_framebuffer(
     device: &wgpu::Device,
     framebuffer: web_sys::WebGlFramebuffer,
@@ -241,12 +241,12 @@ pub fn create_main_bind_group(
     })
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 pub fn spawn<F: std::future::Future<Output = ()> + 'static>(future: F) {
     wasm_bindgen_futures::spawn_local(future);
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(feature = "wasm"))]
 pub fn spawn<F: std::future::Future<Output = ()> + Send + 'static>(future: F)
 where
     <F as std::future::Future>::Output: Send,

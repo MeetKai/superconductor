@@ -96,7 +96,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
             Mode::Desktop => {
                 buffer_resetting_stage.with_system(systems::set_desktop_uniform_buffers)
             }
-            #[cfg(feature = "webgl")]
+            #[cfg(feature = "wasm")]
             _ => buffer_resetting_stage.with_system(systems::update_uniform_buffers),
         };
 
@@ -122,7 +122,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
 
         rendering_stage = match self.mode {
             Mode::Desktop => rendering_stage.with_system(systems::rendering::render_desktop),
-            #[cfg(feature = "webgl")]
+            #[cfg(feature = "wasm")]
             _ => rendering_stage.with_system(systems::rendering::render),
         };
 
@@ -148,15 +148,15 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
-    #[cfg(feature = "webgl")]
+    #[cfg(feature = "wasm")]
     Vr,
-    #[cfg(feature = "webgl")]
+    #[cfg(feature = "wasm")]
     Ar,
     Desktop,
 }
 
 enum ModeSpecificState {
-    #[cfg(feature = "webgl")]
+    #[cfg(feature = "wasm")]
     Xr {
         session: web_sys::XrSession,
         reference_space: web_sys::XrReferenceSpace,
@@ -171,22 +171,21 @@ pub struct InitialisedState {
     mode_specific: ModeSpecificState,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    adapter: wgpu::Adapter,
     surface: wgpu::Surface,
     pipeline_options: renderer_core::PipelineOptions,
 }
 
 pub async fn initialise(mode: Mode) -> InitialisedState {
     match mode {
-        #[cfg(feature = "webgl")]
+        #[cfg(feature = "wasm")]
         Mode::Vr => initialise_xr(web_sys::XrSessionMode::ImmersiveVr).await,
-        #[cfg(feature = "webgl")]
+        #[cfg(feature = "wasm")]
         Mode::Ar => initialise_xr(web_sys::XrSessionMode::ImmersiveAr).await,
         Mode::Desktop => initialise_desktop().await,
     }
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState {
     let canvas = renderer_core::Canvas::default();
     let webgl2_context =
@@ -300,7 +299,6 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         },
         device,
         queue,
-        adapter,
         surface,
         pipeline_options,
     }
@@ -312,7 +310,7 @@ pub async fn initialise_desktop() -> InitialisedState {
 
     let window = builder.build(&event_loop).unwrap();
 
-    #[cfg(feature = "webgl")]
+    #[cfg(feature = "wasm")]
     {
         use winit::platform::web::WindowExtWebSys;
         // On wasm, append the canvas to the document body
@@ -371,7 +369,6 @@ pub async fn initialise_desktop() -> InitialisedState {
             // wgpu handles this for us.
             flip_viewport: false,
         },
-        adapter,
         surface,
     }
 }
@@ -385,7 +382,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
         .insert_resource(initialised_state.pipeline_options);
 
     match initialised_state.mode_specific {
-        #[cfg(feature = "webgl")]
+        #[cfg(feature = "wasm")]
         ModeSpecificState::Xr {
             session,
             reference_space,
@@ -499,11 +496,11 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
 pub struct ReqwestHttpClient(reqwest::Client);
 
 impl renderer_core::assets::HttpClient for ReqwestHttpClient {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(feature = "wasm"))]
     type Future =
         std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>> + Send>>;
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(feature = "wasm")]
     type Future = std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>>>>;
 
     fn fetch_bytes(&self, url: &url::Url, byte_range: Option<Range<usize>>) -> Self::Future {

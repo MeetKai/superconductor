@@ -130,7 +130,9 @@ impl Model {
                                 metallic_factor: pbr.metallic_factor(),
                                 roughness_factor: pbr.roughness_factor(),
                                 is_unlit: unlit as u32,
-                                #[cfg(not(feature = "webgl"))]
+                                // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
+                                // todo: find a nicer way to resolve this.
+                                #[cfg(not(feature = "wasm"))]
                                 _padding: 0,
                             },
                             material_index: material.index().unwrap_or(0),

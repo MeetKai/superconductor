@@ -346,41 +346,33 @@ pub(crate) fn set_desktop_uniform_buffers(
 
     use renderer_core::glam::{Mat4, Vec4};
 
-    #[cfg(feature = "webgl")]
+    // Adapted from the functions used in
+    // https://crates.io/crates/ultraviolet.
+    //
+    // Corresponds to `perspective_vk` if `flip` is `true`,
+    // `perspective_wgpu_dx` otherwise.
+    //
+    // todo: wait, why do we need to do this? I thought that wgpu handled viewport conversion
+    // for us.
     fn create_perspective_matrix(
         vertical_fov: f32,
         aspect_ratio: f32,
         z_near: f32,
         z_far: f32,
+        flip: bool,
     ) -> Mat4 {
         let t = (vertical_fov / 2.0).tan();
-        let sy = 1.0 / t;
+        let mut sy = 1.0 / t;
         let sx = sy / aspect_ratio;
         let nmf = z_near - z_far;
+
+        if flip {
+            sy = -sy;
+        }
 
         Mat4::from_cols(
             Vec4::new(sx, 0.0, 0.0, 0.0),
             Vec4::new(0.0, sy, 0.0, 0.0),
-            Vec4::new(0.0, 0.0, z_far / nmf, -1.0),
-            Vec4::new(0.0, 0.0, z_near * z_far / nmf, 0.0),
-        )
-    }
-
-    #[cfg(not(feature = "webgl"))]
-    fn create_perspective_matrix(
-        vertical_fov: f32,
-        aspect_ratio: f32,
-        z_near: f32,
-        z_far: f32,
-    ) -> Mat4 {
-        let t = (vertical_fov / 2.0).tan();
-        let sy = 1.0 / t;
-        let sx = sy / aspect_ratio;
-        let nmf = z_near - z_far;
-
-        Mat4::from_cols(
-            Vec4::new(sx, 0.0, 0.0, 0.0),
-            Vec4::new(0.0, -sy, 0.0, 0.0),
             Vec4::new(0.0, 0.0, z_far / nmf, -1.0),
             Vec4::new(0.0, 0.0, z_near * z_far / nmf, 0.0),
         )
@@ -391,6 +383,7 @@ pub(crate) fn set_desktop_uniform_buffers(
         surface_frame_view.width as f32 / surface_frame_view.height as f32,
         0.01,
         1000.0,
+        cfg!(not(feature = "wasm")),
     );
 
     let projection_view = perspective_matrix * camera.view_matrix();
@@ -425,7 +418,7 @@ pub(crate) fn set_desktop_uniform_buffers(
     );
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 pub(crate) fn update_uniform_buffers(
     pose: NonSend<web_sys::XrViewerPose>,
     pipeline_options: Res<renderer_core::PipelineOptions>,

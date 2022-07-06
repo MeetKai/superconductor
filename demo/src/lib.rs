@@ -1,3 +1,4 @@
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use superconductor::{
@@ -7,6 +8,8 @@ use superconductor::{
     winit::event::{ElementState, VirtualKeyCode},
     Mode, Vec3,
 };
+
+#[cfg(feature = "wasm")]
 #[wasm_bindgen(start)]
 pub fn main() {
     console_error_panic_hook::set_once();
@@ -15,10 +18,10 @@ pub fn main() {
 }
 
 pub async fn run() {
-    #[cfg(feature = "webgl")]
+    #[cfg(feature = "wasm")]
     let mode = select_mode_via_buttons().await;
 
-    #[cfg(not(feature = "webgl"))]
+    #[cfg(not(feature = "wasm"))]
     let mode = Mode::Desktop;
 
     let initialised_state = superconductor::initialise(mode).await;
@@ -32,8 +35,6 @@ pub async fn run() {
 
 use bevy_app::{App, Plugin};
 use bevy_ecs::prelude::{Component, Query, Res, ResMut, With};
-use futures::FutureExt;
-use wasm_bindgen::JsCast;
 
 pub struct SuperconductorPlugin {
     mode: Mode,
@@ -121,8 +122,10 @@ impl Plugin for SuperconductorPlugin {
     }
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 pub async fn select_mode_via_buttons() -> superconductor::Mode {
+    use futures::FutureExt;
+
     let vr_button = create_button("Start VR");
     let ar_button = create_button("Start AR");
     let desktop_button = create_button("Start Desktop");
@@ -138,7 +141,7 @@ pub async fn select_mode_via_buttons() -> superconductor::Mode {
     }
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 async fn button_click_future(button: &web_sys::HtmlButtonElement) {
     wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, _reject| {
         button.set_onclick(Some(&resolve))
@@ -147,8 +150,10 @@ async fn button_click_future(button: &web_sys::HtmlButtonElement) {
     .unwrap();
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 fn create_button(text: &str) -> web_sys::HtmlButtonElement {
+    use wasm_bindgen::JsCast;
+
     let button: web_sys::HtmlButtonElement = web_sys::window()
         .unwrap()
         .document()

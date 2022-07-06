@@ -17,7 +17,7 @@ impl Instance {
         }
     }
 
-    #[cfg(feature = "webgl")]
+    #[cfg(feature = "wasm")]
     pub fn from_transform(transform: web_sys::XrRigidTransform, scale: f32) -> Self {
         let rotation = transform.orientation();
 
@@ -37,7 +37,7 @@ impl Default for Instance {
     }
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 fn transform_to_position_vec3(transform: &web_sys::XrRigidTransform) -> Vec3 {
     let position = transform.position();
     let position = glam::DVec3::new(position.x(), position.y(), position.z());

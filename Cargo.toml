@@ -47,7 +47,7 @@ features = [
 ]
 
 [features]
-webgl = ["renderer-core/webgl"]
+wasm = ["renderer-core/wasm"]
 
 [workspace]
 members = [

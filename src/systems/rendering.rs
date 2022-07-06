@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::components::{InstanceRange, Model};
 use bevy_ecs::prelude::{Local, NonSend, Query, Res, ResMut};
 use renderer_core::assets::models::PrimitiveRanges;
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 use renderer_core::create_view_from_device_framebuffer;
 use renderer_core::utils::BorrowedOrOwned;
 
@@ -142,7 +142,7 @@ pub(crate) fn render_desktop(
     queue.submit(std::iter::once(command_encoder.finish()));
 }
 
-#[cfg(feature = "webgl")]
+#[cfg(feature = "wasm")]
 pub(crate) fn render(
     frame: NonSend<web_sys::XrFrame>,
     device: Res<Device>,
@@ -224,6 +224,9 @@ pub(crate) fn render(
                 },
             );
 
+            // todo: we cache the colour framebuffer based on the size, creating a new framebuffer
+            // when the size changes. But we don't re-create the bind group which is going to lead
+            // to a crash if we ever try and resize the framebuffer.
             let composite_bind_group = composite_bind_group.0.get_or_insert_with(|| {
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("composite bind group"),
