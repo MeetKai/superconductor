@@ -62,3 +62,4 @@ members = [
 glow = { git = "https://github.com/expenses/glow", branch = "webxr" }
 wgpu = { git = "https://github.com/expenses/wgpu", branch = "webxr-more-extensions" }
 wgpu-hal = { git = "https://github.com/expenses/wgpu", branch = "webxr-more-extensions" }
+naga = { git = "https://github.com/expenses/naga", branch = "rename-hlsl-io-structs" }
