@@ -2520,13 +2520,13 @@ dependencies = [
 [[package]]
 name = "wgpu"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#5f90ba0ac90486a6343c47eb9c89245502064a2c"
+source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#67c0fba93ec0101b6c4ea6ba5733daa559ef94c0"
 dependencies = [
  "arrayvec",
  "js-sys",
  "log",
  "naga",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "raw-window-handle",
  "smallvec",
  "wasm-bindgen",
@@ -2540,7 +2540,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#5f90ba0ac90486a6343c47eb9c89245502064a2c"
+source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#67c0fba93ec0101b6c4ea6ba5733daa559ef94c0"
 dependencies = [
  "arrayvec",
  "bit-vec",
@@ -2551,7 +2551,7 @@ dependencies = [
  "fxhash",
  "log",
  "naga",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "profiling",
  "raw-window-handle",
  "smallvec",
@@ -2564,7 +2564,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#5f90ba0ac90486a6343c47eb9c89245502064a2c"
+source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#67c0fba93ec0101b6c4ea6ba5733daa559ef94c0"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -2587,7 +2587,7 @@ dependencies = [
  "metal",
  "naga",
  "objc",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "profiling",
  "range-alloc 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "raw-window-handle",
@@ -2602,7 +2602,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#5f90ba0ac90486a6343c47eb9c89245502064a2c"
+source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#67c0fba93ec0101b6c4ea6ba5733daa559ef94c0"
 dependencies = [
  "bitflags",
 ]
