@@ -7,7 +7,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use crate::components::{InstanceRange, Model};
-use bevy_ecs::prelude::{Local, NonSend, Query, Res, ResMut};
+use bevy_ecs::prelude::{Local, NonSend, NonSendMut, Query, Res, ResMut};
 use renderer_core::assets::models::PrimitiveRanges;
 #[cfg(feature = "wasm")]
 use renderer_core::create_view_from_device_framebuffer;
@@ -29,8 +29,11 @@ pub(crate) fn render_desktop(
     mut models: Query<(&mut Model, &InstanceRange)>,
     mut model_bind_groups: Local<ModelBindGroups>,
 
-    // egui
-    (mut egui_renderer, egui_ctx): (ResMut<egui_wgpu::renderer::RenderPass>, Res<egui::Context>),
+    //
+    (mut egui_renderer, egui_ctx): (
+        NonSendMut<egui_wgpu::renderer::RenderPass>,
+        Res<egui::Context>,
+    ),
 ) {
     let device = &device.0;
     let queue = &queue.0;
@@ -175,7 +178,7 @@ pub(crate) fn render_desktop(
             &surface_frame_view.view,
             &egui_primitives,
             &screen_descriptor,
-            Some(wgpu::Color::TRANSPARENT),
+            None,
         );
     }
 

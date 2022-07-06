@@ -7,7 +7,7 @@ use crate::resources::{
     ModelUrls, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer,
     SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
-use bevy_ecs::prelude::{Added, Commands, Entity, NonSend, Query, Res, ResMut};
+use bevy_ecs::prelude::{Added, Commands, Entity, NonSend, Query, Res, ResMut, World};
 use renderer_core::{
     arc_swap::ArcSwap,
     assets::{textures, HttpClient},
@@ -23,27 +23,32 @@ use std::sync::Arc;
 pub(crate) mod rendering;
 
 pub(crate) fn create_bind_group_layouts_and_pipelines(
-    device: Res<Device>,
-    pipeline_options: Res<renderer_core::PipelineOptions>,
-    mut commands: Commands,
+    // device: Res<Device>,
+    // pipeline_options: Res<renderer_core::PipelineOptions>,
+    world: &mut World,
 ) {
+    let device = world.get_resource::<Device>().expect("has Device");
     let device = &device.0;
+
+    let pipeline_options = world
+        .get_resource::<renderer_core::PipelineOptions>()
+        .expect("has PipelineOptions");
 
     let bind_group_layouts = renderer_core::BindGroupLayouts::new(device, &pipeline_options);
 
     let pipelines = renderer_core::Pipelines::new(device, &bind_group_layouts, &pipeline_options);
 
-    commands.insert_resource(BindGroupLayouts(Arc::new(bind_group_layouts)));
-    commands.insert_resource(Pipelines(Arc::new(pipelines)));
-    commands.insert_resource(IntermediateColorFramebuffer(Default::default()));
-    commands.insert_resource(IntermediateDepthFramebuffer(Default::default()));
-    commands.insert_resource(CompositeBindGroup(None));
-
     let egui_ctx = egui::Context::default();
-    let mut egui_renderer =
-        egui_wgpu::renderer::RenderPass::new(&device, wgpu::TextureFormat::Rgba8Unorm, 1);
-    commands.insert_resource(egui_ctx);
-    commands.insert_resource(egui_renderer);
+    let egui_renderer =
+        egui_wgpu::renderer::RenderPass::new(&device, wgpu::TextureFormat::Rgba8UnormSrgb, 1);
+
+    world.insert_resource(BindGroupLayouts(Arc::new(bind_group_layouts)));
+    world.insert_resource(Pipelines(Arc::new(pipelines)));
+    world.insert_resource(IntermediateColorFramebuffer(Default::default()));
+    world.insert_resource(IntermediateDepthFramebuffer(Default::default()));
+    world.insert_resource(CompositeBindGroup(None));
+    world.insert_resource(egui_ctx);
+    world.insert_non_send_resource(egui_renderer);
 }
 
 pub(crate) fn clear_instance_buffers(

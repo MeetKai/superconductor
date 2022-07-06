@@ -1,5 +1,5 @@
 use bevy_app::{App, Plugin};
-use bevy_ecs::prelude::SystemStage;
+use bevy_ecs::prelude::*;
 use std::ops::Range;
 use std::sync::Arc;
 use winit::{
@@ -72,8 +72,11 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
 
         app.add_startup_stage(
             StartupStage::PipelineCreation,
-            SystemStage::single_threaded()
-                .with_system(systems::create_bind_group_layouts_and_pipelines),
+            SystemStage::single_threaded().with_system(
+                systems::create_bind_group_layouts_and_pipelines
+                    .exclusive_system()
+                    .at_start(),
+            ),
         );
         app.add_startup_stage_after(
             StartupStage::PipelineCreation,
