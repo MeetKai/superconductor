@@ -339,7 +339,7 @@ pub(crate) fn set_desktop_uniform_buffers(
 ) {
     let queue = &queue.0;
 
-    use renderer_core::glam::{Mat4, Vec3, Vec4};
+    use renderer_core::glam::{Mat4, Vec4};
 
     #[cfg(feature = "webgl")]
     fn create_perspective_matrix(

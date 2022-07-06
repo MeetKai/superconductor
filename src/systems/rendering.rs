@@ -67,14 +67,14 @@ pub(crate) fn render_desktop(
 
     let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("main render pass"),
-        color_attachments: &[wgpu::RenderPassColorAttachment {
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             view: &surface_frame_view.view,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color::RED),
                 store: true,
             },
-        }],
+        })],
         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
             view: &depth_attachment.view,
             depth_ops: Some(wgpu::Operations {
@@ -309,7 +309,7 @@ pub(crate) fn render(
 
     let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("main render pass"),
-        color_attachments: &[wgpu::RenderPassColorAttachment {
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             view: if let Some(intermediate_color_framebuffer) = intermediate_color_framebuffer {
                 &intermediate_color_framebuffer.view
             } else {
@@ -322,9 +322,9 @@ pub(crate) fn render(
                 load: wgpu::LoadOp::Load,
                 store: true,
             },
-        }],
+        })],
         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-            view: &depth_attachment.borrow().view,
+            view: &depth_attachment.get().view,
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Clear(1.0),
                 store: true,
@@ -393,14 +393,14 @@ pub(crate) fn render(
     if let Some(composite_bind_group) = composite_bind_group {
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("composite render pass"),
-            color_attachments: &[wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &framebuffer_colour_attachment.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: true,
                 },
-            }],
+            })],
             depth_stencil_attachment: None,
         });
 

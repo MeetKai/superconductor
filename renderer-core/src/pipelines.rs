@@ -93,7 +93,7 @@ impl Pipelines {
         };
 
         let vertex_state = wgpu::VertexState {
-            module: &device.create_shader_module(&if multiview.is_none() {
+            module: &device.create_shader_module(if multiview.is_none() {
                 wgpu::include_spirv!("../../compiled-shaders/single_view_vertex.spv")
             } else {
                 wgpu::include_spirv!("../../compiled-shaders/vertex.spv")
@@ -117,7 +117,7 @@ impl Pipelines {
         };
 
         let fullscreen_tri_vertex_state = wgpu::VertexState {
-            module: &device.create_shader_module(&wgpu::include_spirv!(
+            module: &device.create_shader_module(wgpu::include_spirv!(
                 "../../compiled-shaders/fullscreen_tri.spv"
             )),
             entry_point: "fullscreen_tri",
@@ -136,13 +136,13 @@ impl Pipelines {
             layout: Some(&tonemap_pipeline_layout),
             vertex: fullscreen_tri_vertex_state.clone(),
             fragment: Some(wgpu::FragmentState {
-                module: &device.create_shader_module(&if multiview.is_none() {
+                module: &device.create_shader_module(if multiview.is_none() {
                     wgpu::include_spirv!("../../compiled-shaders/single_view_tonemap.spv")
                 } else {
                     wgpu::include_spirv!("../../compiled-shaders/tonemap.spv")
                 }),
                 entry_point: &format!("{}tonemap", prefix),
-                targets: &[options.framebuffer_format.into()],
+                targets: &[Some(options.framebuffer_format.into())],
             }),
             primitive: Default::default(),
             depth_stencil: None,
@@ -150,9 +150,8 @@ impl Pipelines {
             multiview: Default::default(),
         });
 
-        let flat_blue_test_fragment_shader = device.create_shader_module(&wgpu::include_spirv!(
-            "../../compiled-shaders/flat_blue.spv"
-        ));
+        let flat_blue_test_fragment_shader = device
+            .create_shader_module(wgpu::include_spirv!("../../compiled-shaders/flat_blue.spv"));
 
         let stencil_write = wgpu::StencilFaceState {
             compare: wgpu::CompareFunction::Always,
@@ -170,11 +169,11 @@ impl Pipelines {
                 fragment: Some(wgpu::FragmentState {
                     module: &flat_blue_test_fragment_shader,
                     entry_point: "flat_blue",
-                    targets: &[wgpu::ColorTargetState {
+                    targets: &[Some(wgpu::ColorTargetState {
                         format: target_format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::empty(),
-                    }],
+                    })],
                 }),
                 primitive: normal_primitive_state,
                 depth_stencil: Some(wgpu::DepthStencilState {
@@ -201,11 +200,11 @@ impl Pipelines {
             fragment: Some(wgpu::FragmentState {
                 module: &flat_blue_test_fragment_shader,
                 entry_point: "flat_blue",
-                targets: &[wgpu::ColorTargetState {
+                targets: &[Some(wgpu::ColorTargetState {
                     format: target_format,
                     blend: None,
                     write_mask: wgpu::ColorWrites::empty(),
-                }],
+                })],
             }),
             primitive: normal_primitive_state,
             depth_stencil: Some(normal_depth_state),
@@ -225,7 +224,7 @@ impl Pipelines {
             });
 
         let mirrored_vertex = wgpu::VertexState {
-            module: &device.create_shader_module(&if multiview.is_none() {
+            module: &device.create_shader_module(if multiview.is_none() {
                 wgpu::include_spirv!("../../compiled-shaders/single_view_vertex_mirrored.spv")
             } else {
                 wgpu::include_spirv!("../../compiled-shaders/vertex_mirrored.spv")
@@ -273,17 +272,17 @@ impl Pipelines {
             });
 
         let fragment_opaque = wgpu::FragmentState {
-            module: &device.create_shader_module(&if multiview.is_none() {
+            module: &device.create_shader_module(if multiview.is_none() {
                 wgpu::include_spirv!("../../compiled-shaders/single_view_fragment.spv")
             } else {
                 wgpu::include_spirv!("../../compiled-shaders/fragment.spv")
             }),
             entry_point: &format!("{}fragment", prefix),
-            targets: &[target_format.into()],
+            targets: &[Some(target_format.into())],
         };
 
         let fragment_alpha_clipped = wgpu::FragmentState {
-            module: &device.create_shader_module(&if multiview.is_none() {
+            module: &device.create_shader_module(if multiview.is_none() {
                 wgpu::include_spirv!(
                     "../../compiled-shaders/single_view_fragment_alpha_clipped.spv"
                 )
@@ -291,7 +290,7 @@ impl Pipelines {
                 wgpu::include_spirv!("../../compiled-shaders/fragment_alpha_clipped.spv")
             }),
             entry_point: &format!("{}fragment_alpha_clipped", prefix),
-            targets: &[target_format.into()],
+            targets: &[Some(target_format.into())],
         };
 
         let bc6h_decompression_pipeline_layout =
@@ -310,9 +309,9 @@ impl Pipelines {
         });
 
         let blit_fragment_shader =
-            device.create_shader_module(&wgpu::include_spirv!("../../compiled-shaders/blit.spv"));
+            device.create_shader_module(wgpu::include_spirv!("../../compiled-shaders/blit.spv"));
 
-        let skybox_fragment_shader = device.create_shader_module(&wgpu::include_spirv!(
+        let skybox_fragment_shader = device.create_shader_module(wgpu::include_spirv!(
             "../../compiled-shaders/fragment_skybox.spv"
         ));
 
@@ -349,15 +348,15 @@ impl Pipelines {
                 layout: Some(&ui_pipeline_layout),
                 vertex: vertex_state.clone(),
                 fragment: Some(wgpu::FragmentState {
-                    module: &device.create_shader_module(&wgpu::include_spirv!(
+                    module: &device.create_shader_module(wgpu::include_spirv!(
                         "../../compiled-shaders/fragment_ui.spv"
                     )),
                     entry_point: "fragment_ui",
-                    targets: &[wgpu::ColorTargetState {
+                    targets: &[Some(wgpu::ColorTargetState {
                         format: target_format,
                         blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                         write_mask: wgpu::ColorWrites::ALL,
-                    }],
+                    })],
                 }),
                 primitive: normal_primitive_state,
                 depth_stencil: Some(normal_depth_state),
@@ -368,7 +367,7 @@ impl Pipelines {
                 label: Some("skybox pipeline"),
                 layout: Some(&skybox_pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: &device.create_shader_module(&if multiview.is_none() {
+                    module: &device.create_shader_module(if multiview.is_none() {
                         wgpu::include_spirv!("../../compiled-shaders/single_view_vertex_skybox.spv")
                     } else {
                         wgpu::include_spirv!("../../compiled-shaders/vertex_skybox.spv")
@@ -379,7 +378,7 @@ impl Pipelines {
                 fragment: Some(wgpu::FragmentState {
                     module: &skybox_fragment_shader,
                     entry_point: "fragment_skybox",
-                    targets: &[target_format.into()],
+                    targets: &[Some(target_format.into())],
                 }),
                 primitive: Default::default(),
                 depth_stencil: Some(wgpu::DepthStencilState {
@@ -396,7 +395,7 @@ impl Pipelines {
                 label: Some("skybox mirrored pipeline"),
                 layout: Some(&skybox_mirrored_pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: &device.create_shader_module(&if multiview.is_none() {
+                    module: &device.create_shader_module(if multiview.is_none() {
                         wgpu::include_spirv!(
                             "../../compiled-shaders/single_view_vertex_skybox_mirrored.spv"
                         )
@@ -409,7 +408,7 @@ impl Pipelines {
                 fragment: Some(wgpu::FragmentState {
                     module: &skybox_fragment_shader,
                     entry_point: "fragment_skybox",
-                    targets: &[target_format.into()],
+                    targets: &[Some(target_format.into())],
                 }),
                 primitive: Default::default(),
                 depth_stencil: Some(wgpu::DepthStencilState {
@@ -427,11 +426,11 @@ impl Pipelines {
                 layout: Some(&bc6h_decompression_pipeline_layout),
                 vertex: fullscreen_tri_vertex_state.clone(),
                 fragment: Some(wgpu::FragmentState {
-                    module: &device.create_shader_module(&wgpu::include_spirv!(
+                    module: &device.create_shader_module(wgpu::include_spirv!(
                         "../../compiled-shaders/bc6.spv"
                     )),
                     entry_point: "main",
-                    targets: &[bc6h_decompression_target.into()],
+                    targets: &[Some(bc6h_decompression_target.into())],
                 }),
                 primitive: Default::default(),
                 depth_stencil: None,
@@ -445,7 +444,7 @@ impl Pipelines {
                 fragment: Some(wgpu::FragmentState {
                     module: &blit_fragment_shader,
                     entry_point: "blit",
-                    targets: &[wgpu::TextureFormat::Rgba8Unorm.into()],
+                    targets: &[Some(wgpu::TextureFormat::Rgba8Unorm.into())],
                 }),
                 primitive: Default::default(),
                 depth_stencil: None,
@@ -459,7 +458,7 @@ impl Pipelines {
                 fragment: Some(wgpu::FragmentState {
                     module: &blit_fragment_shader,
                     entry_point: "blit",
-                    targets: &[wgpu::TextureFormat::Rgba8UnormSrgb.into()],
+                    targets: &[Some(wgpu::TextureFormat::Rgba8UnormSrgb.into())],
                 }),
                 primitive: Default::default(),
                 depth_stencil: None,

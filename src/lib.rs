@@ -3,7 +3,7 @@ use bevy_ecs::prelude::SystemStage;
 use std::ops::Range;
 use std::sync::Arc;
 use winit::{
-    event::{self, WindowEvent},
+    event,
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
@@ -136,7 +136,7 @@ impl Plugin for XrPlugin {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     #[cfg(feature = "webgl")]
     Vr,
@@ -357,7 +357,7 @@ pub async fn initialise_desktop() -> InitialisedState {
         pipeline_options: renderer_core::PipelineOptions {
             multiview: None,
             inline_tonemapping: true,
-            framebuffer_format: surface.get_preferred_format(&adapter).unwrap(),
+            framebuffer_format: surface.get_supported_formats(&adapter)[0],
             // wgpu handles this for us.
             flip_viewport: false,
         },
@@ -397,7 +397,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
         ModeSpecificState::Desktop { window, event_loop } => {
             let size = window.inner_size();
 
-            let mut config = wgpu::SurfaceConfiguration {
+            let config = wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 format: framebuffer_format,
                 width: size.width,
@@ -412,15 +412,23 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                 .clear();
 
             event_loop.run(move |event, _, control_flow| match event {
-                event::Event::WindowEvent { event, .. } => match event {
-                    event::WindowEvent::KeyboardInput { input, .. } => {
-                        app.world
-                            .get_resource_or_insert_with(|| KeyboardInputQueue(Default::default()))
-                            .0
-                            .push(input);
+                event::Event::WindowEvent { event, .. } => {
+                    if event == event::WindowEvent::CloseRequested {
+                        *control_flow = ControlFlow::Exit;
                     }
-                    _ => {}
-                },
+
+                    match event {
+                        event::WindowEvent::KeyboardInput { input, .. } => {
+                            app.world
+                                .get_resource_or_insert_with(|| {
+                                    KeyboardInputQueue(Default::default())
+                                })
+                                .0
+                                .push(input);
+                        }
+                        _ => {}
+                    }
+                }
                 event::Event::RedrawEventsCleared => {
                     window.request_redraw();
                 }
