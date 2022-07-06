@@ -386,7 +386,7 @@ pub fn load_image_crate_image<T>(
             format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
         },
-        &*image,
+        &image,
     ));
 
     if !generate_mipmaps {

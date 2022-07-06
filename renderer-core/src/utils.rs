@@ -9,7 +9,7 @@ pub enum BorrowedOrOwned<'a, T> {
 }
 
 impl<'a, T> BorrowedOrOwned<'a, T> {
-    pub fn borrow(&'a self) -> &'a T {
+    pub fn get(&'a self) -> &'a T {
         match self {
             Self::Owned(value) => value,
             Self::Borrowed(reference) => reference,

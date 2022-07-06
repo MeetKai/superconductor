@@ -322,7 +322,7 @@ pub(crate) fn render(
             },
         })],
         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-            view: &depth_attachment.borrow().view,
+            view: &depth_attachment.get().view,
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Clear(1.0),
                 store: true,
