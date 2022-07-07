@@ -429,7 +429,7 @@ fn spawn_texture_loading_futures<T: HttpClient>(
                 .expect("we checked this earlier");
 
             let pbr = material.pbr_metallic_roughness();
-            if let Some(metallic_roughness_texture) = pbr.base_color_texture() {
+            if let Some(metallic_roughness_texture) = pbr.metallic_roughness_texture() {
                 load_image_from_gltf_with_followup(
                     metallic_roughness_texture.texture(),
                     false,
