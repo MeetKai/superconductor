@@ -1358,7 +1358,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.9.0"
-source = "git+https://github.com/expenses/naga?branch=rename-hlsl-io-structs#8b663b1c407f91661af3e9d066ea45044ebf7528"
+source = "git+https://github.com/expenses/naga?branch=hlsl-unpack2x16float#0293651ba5b51aae3a01d18d35969caee891f510"
 dependencies = [
  "bit-set",
  "bitflags",
