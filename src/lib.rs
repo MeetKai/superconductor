@@ -1,5 +1,8 @@
 use bevy_app::{App, Plugin};
 use bevy_ecs::prelude::*;
+use egui::FontDefinitions;
+use egui_winit_platform::{Platform, PlatformDescriptor};
+use instant::Instant;
 use std::ops::Range;
 use std::sync::Arc;
 use winit::{
@@ -407,6 +410,15 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
         ModeSpecificState::Desktop { window, event_loop } => {
             let size = window.inner_size();
 
+            // We use the egui_winit_platform crate as the platform.
+            let mut platform = Platform::new(PlatformDescriptor {
+                physical_width: size.width as u32,
+                physical_height: size.height as u32,
+                scale_factor: window.scale_factor(),
+                font_definitions: FontDefinitions::default(),
+                style: Default::default(),
+            });
+
             let mut config = wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 format: framebuffer_format,
@@ -416,7 +428,11 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
             };
             initialised_state.surface.configure(&device, &config);
 
+            let start_time = Instant::now();
+
             event_loop.run(move |event, _, control_flow| {
+                platform.handle_event(&event);
+
                 match &event {
                     event::Event::WindowEvent { event, .. } => match &event {
                         event::WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -431,6 +447,22 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                         window.request_redraw();
                     }
                     event::Event::RedrawRequested(_) => {
+                        //egui
+                        platform.update_time(start_time.elapsed().as_secs_f64());
+                        app.insert_resource(platform.context());
+                        platform.begin_frame();
+                        let egui_input = egui::RawInput {
+                            ..Default::default()
+                        };
+                        let ctx = &platform.context();
+                        egui::containers::Window::new("This is a window")
+                            .collapsible(true)
+                            .resizable(true)
+                            .show(ctx, |ui| {
+                                ui.label("This is a label");
+                            });
+                        app.insert_resource(Some(platform.end_frame(Some(&window))));
+
                         let frame = match initialised_state.surface.get_current_texture() {
                             Ok(frame) => frame,
                             Err(_) => {

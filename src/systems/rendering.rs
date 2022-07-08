@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use crate::components::{InstanceRange, Model};
 use bevy_ecs::prelude::{Local, NonSend, NonSendMut, Query, Res, ResMut};
+use egui::{Context, FullOutput, PlatformOutput};
+use egui_winit_platform::Platform;
 use renderer_core::assets::models::PrimitiveRanges;
 #[cfg(feature = "wasm")]
 use renderer_core::create_view_from_device_framebuffer;
@@ -30,9 +32,10 @@ pub(crate) fn render_desktop(
     mut model_bind_groups: Local<ModelBindGroups>,
 
     //
-    (mut egui_renderer, egui_ctx): (
+    (mut egui_renderer, egui_ctx, mut egui_output): (
         NonSendMut<egui_wgpu::renderer::RenderPass>,
-        Res<egui::Context>,
+        Res<Context>,
+        ResMut<Option<FullOutput>>,
     ),
 ) {
     let device = &device.0;
@@ -147,16 +150,7 @@ pub(crate) fn render_desktop(
 
     //egui
     {
-        let egui_input = egui::RawInput {
-            // time: Some(time),
-            ..Default::default()
-        };
-
-        let egui_output = egui_ctx.run(egui_input, |ctx| {
-            egui::containers::Window::new("This is a window").show(ctx, |ui| {
-                ui.label("This is a label");
-            });
-        });
+        let egui_output = egui_output.take().unwrap();
 
         for (id, image_delta) in &egui_output.textures_delta.set {
             egui_renderer.update_texture(&device, &queue, *id, image_delta);

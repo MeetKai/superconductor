@@ -8,6 +8,8 @@ use crate::resources::{
     SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, NonSend, Query, Res, ResMut, World};
+use egui::FontDefinitions;
+use egui_winit_platform::{Platform, PlatformDescriptor};
 use renderer_core::{
     arc_swap::ArcSwap,
     assets::{textures, HttpClient},
@@ -38,7 +40,6 @@ pub(crate) fn create_bind_group_layouts_and_pipelines(
 
     let pipelines = renderer_core::Pipelines::new(device, &bind_group_layouts, &pipeline_options);
 
-    let egui_ctx = egui::Context::default();
     let egui_renderer =
         egui_wgpu::renderer::RenderPass::new(&device, wgpu::TextureFormat::Rgba8UnormSrgb, 1);
 
@@ -47,7 +48,6 @@ pub(crate) fn create_bind_group_layouts_and_pipelines(
     world.insert_resource(IntermediateColorFramebuffer(Default::default()));
     world.insert_resource(IntermediateDepthFramebuffer(Default::default()));
     world.insert_resource(CompositeBindGroup(None));
-    world.insert_resource(egui_ctx);
     world.insert_non_send_resource(egui_renderer);
 }
 

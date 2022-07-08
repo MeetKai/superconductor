@@ -24,6 +24,8 @@ reqwest = "0.11.11"
 tokio = "1.19.2"
 egui = "0.18.1"
 egui-wgpu = "0.18.0"
+egui_winit_platform = "0.15.0"
+instant = { version = "0.1", features = ["wasm-bindgen"] }
 
 [dependencies.web-sys]
 version = "0.3.58"

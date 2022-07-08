@@ -568,7 +568,7 @@ checksum = "9d79e92f72ddc74a13872806c9d29ee81b80b83bc02ba2af63465f88466f8f68"
 dependencies = [
  "bytemuck",
  "crevice-derive",
- "glam 0.20.5",
+ "glam",
  "mint",
 ]
 
@@ -665,7 +665,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2ae35fe7c2f8550eb2e84dd8251cbaba660d167315daff50c800aee4013da32"
 dependencies = [
- "glam 0.21.2",
+ "glam",
 ]
 
 [[package]]
@@ -694,6 +694,16 @@ dependencies = [
  "tracing",
  "type-map",
  "wgpu",
+]
+
+[[package]]
+name = "egui_winit_platform"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b500def4690ce3de8d106184e357c098737d56ed7870be33ccf976688f47168"
+dependencies = [
+ "egui",
+ "winit",
 ]
 
 [[package]]
@@ -939,12 +949,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glam"
-version = "0.21.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "781aa11be58ef14b0cd7326618afcbd9cdb5ba686bdab7193d87cdc322cd7033"
-
-[[package]]
 name = "glow"
 version = "0.11.2"
 source = "git+https://github.com/expenses/glow?branch=webxr#60dbcbb607ca3bc771bf78829cf7efab5e8262df"
@@ -983,7 +987,7 @@ name = "gltf-helpers"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "glam 0.20.5",
+ "glam",
  "gltf",
  "log",
  "ordered-float",
@@ -1919,7 +1923,7 @@ dependencies = [
  "base64",
  "bytemuck",
  "crevice",
- "glam 0.20.5",
+ "glam",
  "glow",
  "gltf",
  "gltf-helpers",
@@ -2079,7 +2083,7 @@ name = "shared-structs"
 version = "0.1.0"
 dependencies = [
  "crevice",
- "glam 0.20.5",
+ "glam",
 ]
 
 [[package]]
@@ -2157,7 +2161,9 @@ dependencies = [
  "bevy_ecs",
  "egui",
  "egui-wgpu",
+ "egui_winit_platform",
  "futures",
+ "instant",
  "js-sys",
  "log",
  "parking_lot 0.12.1",

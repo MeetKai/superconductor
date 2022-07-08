@@ -23,3 +23,6 @@ web-sys = "0.3.58"
 
 [features]
 wasm = ["superconductor/wasm"]
+
+[patch.crates-io]
+glam = "0.20.5"
