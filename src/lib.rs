@@ -16,6 +16,7 @@ pub use anyhow;
 pub use bevy_app;
 pub use bevy_ecs;
 pub use renderer_core;
+pub use renderer_core::glam;
 pub use url;
 pub use wgpu;
 pub use winit;

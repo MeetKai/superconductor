@@ -276,20 +276,12 @@ impl Model {
             ),
         };
 
-        let mut command_encoder =
-            context
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("command encoder"),
-                });
-
         let vertex_buffer_range = context.vertex_buffers.lock().insert(
             &staging_buffers.positions,
             &staging_buffers.normals,
             &staging_buffers.uvs,
             &context.device,
             &context.queue,
-            &mut command_encoder,
         );
 
         // Make sure the indices point to the right vertices.
@@ -301,12 +293,7 @@ impl Model {
             &staging_buffers.indices,
             &context.device,
             &context.queue,
-            &mut command_encoder,
         );
-
-        context
-            .queue
-            .submit(std::iter::once(command_encoder.finish()));
 
         // Make sure the primitive index ranges are absolute from the start of the buffer.
         for primitive in &mut primitives {
