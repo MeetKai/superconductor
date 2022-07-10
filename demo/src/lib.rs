@@ -102,6 +102,7 @@ impl Plugin for SuperconductorPlugin {
         let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()
             .with(dolly::drivers::Position::new(Vec3::new(0.0, 1.75, 0.0)))
             .with(dolly::drivers::YawPitch::new().pitch_degrees(0.0))
+            .with(dolly::drivers::Smooth::new_position_rotation(0.5, 0.5))
             .build();
 
         app.insert_resource(KeyboardState::default());
