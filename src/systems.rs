@@ -229,7 +229,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
         );
 
         match result {
-            Ok(lut_texture) => {
+            Ok((lut_texture, _size)) => {
                 ibl_textures.ggx_lut.store(lut_texture);
 
                 main_bind_group_setter.set(create_main_bind_group(

@@ -12,10 +12,12 @@ pub mod components;
 pub mod resources;
 mod systems;
 
+pub use anyhow;
 pub use bevy_app;
 pub use bevy_ecs;
 pub use renderer_core;
 pub use url;
+pub use wgpu;
 pub use winit;
 
 pub use renderer_core::{
@@ -155,7 +157,7 @@ pub enum Mode {
     Desktop,
 }
 
-enum ModeSpecificState {
+pub enum ModeSpecificState {
     #[cfg(feature = "wasm")]
     Xr {
         session: web_sys::XrSession,
@@ -168,7 +170,7 @@ enum ModeSpecificState {
 }
 
 pub struct InitialisedState {
-    mode_specific: ModeSpecificState,
+    pub mode_specific: ModeSpecificState,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface,
@@ -409,7 +411,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                 format: framebuffer_format,
                 width: size.width,
                 height: size.height,
-                present_mode: wgpu::PresentMode::Fifo,
+                present_mode: wgpu::PresentMode::AutoVsync,
             };
             initialised_state.surface.configure(&device, &config);
 

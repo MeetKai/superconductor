@@ -100,6 +100,20 @@ pub struct MaterialSettings {
     pub is_unlit: u32,
 }
 
+impl MaterialSettings {
+    pub fn default_unlit() -> Self {
+        Self {
+            base_color_factor: Vec4::ONE,
+            emissive_factor: Vec3::ZERO,
+            #[cfg(all(not(target_arch = "spirv"), not(feature = "webgl")))]
+            _padding: 0,
+            metallic_factor: 0.0,
+            roughness_factor: 1.0,
+            is_unlit: true as u32,
+        }
+    }
+}
+
 // https://docs.gl/sl4/reflect
 pub fn reflect(incident: Vec3, normal: Vec3) -> Vec3 {
     incident - 2.0 * normal.dot(incident) * normal

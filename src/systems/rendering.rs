@@ -68,7 +68,7 @@ pub(crate) fn render_desktop(
             view: &surface_frame_view.view,
             resolve_target: None,
             ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::RED),
+                load: wgpu::LoadOp::Load,
                 store: true,
             },
         })],

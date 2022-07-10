@@ -30,18 +30,18 @@ fn load_single_pixel_image(
     ))))
 }
 
-pub(super) struct MaterialBindings {
-    pub(super) albedo: ArcSwap<Texture>,
-    pub(super) normal: ArcSwap<Texture>,
-    pub(super) metallic_roughness: ArcSwap<Texture>,
-    pub(super) emission: ArcSwap<Texture>,
+pub struct MaterialBindings {
+    pub albedo: ArcSwap<Texture>,
+    pub normal: ArcSwap<Texture>,
+    pub metallic_roughness: ArcSwap<Texture>,
+    pub emission: ArcSwap<Texture>,
 
     material_settings: wgpu::Buffer,
     bind_group_layouts: Arc<BindGroupLayouts>,
 }
 
 impl MaterialBindings {
-    pub(super) fn new(
+    pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         bind_group_layouts: Arc<BindGroupLayouts>,
@@ -83,7 +83,7 @@ impl MaterialBindings {
         }
     }
 
-    pub(super) fn create_bind_group(
+    pub fn create_bind_group(
         &self,
         device: &wgpu::Device,
         settings: &textures::Settings,

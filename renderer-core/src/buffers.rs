@@ -125,7 +125,7 @@ impl IndexBuffer {
         }
     }
 
-    pub(crate) fn insert(
+    pub fn insert(
         &mut self,
         indices: &[u32],
         device: &wgpu::Device,
@@ -234,7 +234,7 @@ impl VertexBuffers {
         }
     }
 
-    pub(crate) fn insert(
+    pub fn insert(
         &mut self,
         positions: &[Vec3],
         normals: &[Vec3],

@@ -340,12 +340,16 @@ pub(super) async fn load_image_with_mime_type<T: HttpClient>(
         (Some("image/ktx2"), _) | (_, Some("ktx2")) => {
             Err(anyhow::anyhow!("ktx2 loading not yet implemented"))
         }
-        _ => load_image_crate_image(
-            &source.get_bytes(&context.http_client).await?,
-            srgb,
-            true,
-            context,
-        ),
+        _ => {
+            let (image, _size) = load_image_crate_image(
+                &source.get_bytes(&context.http_client).await?,
+                srgb,
+                true,
+                context,
+            )?;
+
+            Ok(image)
+        }
     }
 }
 
@@ -354,7 +358,7 @@ pub fn load_image_crate_image<T>(
     srgb: bool,
     generate_mipmaps: bool,
     context: &Context<T>,
-) -> anyhow::Result<Arc<Texture>> {
+) -> anyhow::Result<(Arc<Texture>, wgpu::Extent3d)> {
     let image = image::load_from_memory(bytes)?;
     let image = image.to_rgba8();
 
@@ -370,16 +374,18 @@ pub fn load_image_crate_image<T>(
         wgpu::TextureFormat::Rgba8Unorm
     };
 
+    let size = wgpu::Extent3d {
+        width: image.width(),
+        height: image.height(),
+        depth_or_array_layers: 1,
+    };
+
     let texture = Texture::new(create_texture_with_first_mip_data(
         &context.device,
         &context.queue,
         &wgpu::TextureDescriptor {
             label: None,
-            size: wgpu::Extent3d {
-                width: image.width(),
-                height: image.height(),
-                depth_or_array_layers: 1,
-            },
+            size,
             mip_level_count,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -390,7 +396,7 @@ pub fn load_image_crate_image<T>(
     ));
 
     if !generate_mipmaps {
-        return Ok(Arc::new(texture));
+        return Ok((Arc::new(texture), size));
     }
 
     let temp_blit_textures: Vec<_> = (1..mip_level_count)
@@ -508,7 +514,7 @@ pub fn load_image_crate_image<T>(
 
     context.queue.submit(std::iter::once(encoder.finish()));
 
-    Ok(Arc::new(texture))
+    Ok((Arc::new(texture), size))
 }
 
 // Like the following, except without trying to write subsequent mips.

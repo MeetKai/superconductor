@@ -4,8 +4,8 @@ use renderer_core::utils::Swappable;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-pub struct Device(pub(crate) Arc<wgpu::Device>);
-pub struct Queue(pub(crate) Arc<wgpu::Queue>);
+pub struct Device(pub Arc<wgpu::Device>);
+pub struct Queue(pub Arc<wgpu::Queue>);
 
 #[derive(Default)]
 pub struct WindowChanges {
@@ -24,16 +24,16 @@ pub struct NewIblTexturesInner {
 
 pub struct EventQueue(pub Vec<winit::event::Event<'static, ()>>);
 
-pub(crate) struct Pipelines(pub(crate) Arc<renderer_core::Pipelines>);
-pub(crate) struct BindGroupLayouts(pub(crate) Arc<renderer_core::BindGroupLayouts>);
+pub struct Pipelines(pub Arc<renderer_core::Pipelines>);
+pub struct BindGroupLayouts(pub Arc<renderer_core::BindGroupLayouts>);
 
 pub(crate) struct UniformBuffer(pub(crate) Arc<wgpu::Buffer>);
 pub(crate) struct MainBindGroup(pub(crate) Swappable<wgpu::BindGroup>);
 pub(crate) struct SkyboxUniformBuffer(pub(crate) wgpu::Buffer);
 pub(crate) struct SkyboxUniformBindGroup(pub(crate) wgpu::BindGroup);
 
-pub(crate) struct IndexBuffer(pub(crate) Arc<parking_lot::Mutex<renderer_core::IndexBuffer>>);
-pub(crate) struct VertexBuffers(pub(crate) Arc<parking_lot::Mutex<renderer_core::VertexBuffers>>);
+pub struct IndexBuffer(pub Arc<parking_lot::Mutex<renderer_core::IndexBuffer>>);
+pub struct VertexBuffers(pub Arc<parking_lot::Mutex<renderer_core::VertexBuffers>>);
 pub(crate) struct InstanceBuffer(pub(crate) renderer_core::InstanceBuffer);
 
 pub(crate) struct IntermediateDepthFramebuffer(pub(crate) CachedFramebuffer);
@@ -86,7 +86,7 @@ struct ResourceWithSize<T> {
     size: wgpu::Extent3d,
 }
 
-pub(crate) struct ModelUrls(pub(crate) HashMap<url::Url, Entity>);
+pub struct ModelUrls(pub HashMap<url::Url, Entity>);
 
 pub(crate) struct SurfaceFrameView {
     pub(crate) view: wgpu::TextureView,
