@@ -130,13 +130,14 @@ impl IndexBuffer {
         indices: &[u32],
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        command_encoder: &mut wgpu::CommandEncoder,
     ) -> Range<u32> {
         let length = indices.len() as u32;
 
         let range = match self.allocator.allocate_range(length) {
             Ok(range) => range,
             Err(_) => {
-                self.resize(length, device, queue);
+                self.resize(length, device, command_encoder);
                 self.allocator.allocate_range(length).expect("just resized")
             }
         };
@@ -150,11 +151,12 @@ impl IndexBuffer {
         range
     }
 
-    fn resize(&mut self, required_capacity: u32, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("command encoder"),
-        });
-
+    fn resize(
+        &mut self,
+        required_capacity: u32,
+        device: &wgpu::Device,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) {
         let copy_range = self
             .allocator
             .allocated_ranges()
@@ -192,8 +194,6 @@ impl IndexBuffer {
         );
 
         self.buffer = new_buffer;
-
-        queue.submit(std::iter::once(command_encoder.finish()));
     }
 }
 
@@ -241,6 +241,7 @@ impl VertexBuffers {
         uvs: &[Vec2],
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        command_encoder: &mut wgpu::CommandEncoder,
     ) -> Range<u32> {
         let length = positions.len() as u32;
 
@@ -250,7 +251,7 @@ impl VertexBuffers {
         let range = match self.allocator.allocate_range(length) {
             Ok(range) => range,
             Err(_) => {
-                self.resize(length, device, queue);
+                self.resize(length, device, command_encoder);
                 self.allocator.allocate_range(length).expect("just resized")
             }
         };
@@ -276,11 +277,12 @@ impl VertexBuffers {
         range
     }
 
-    fn resize(&mut self, required_capacity: u32, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("command encoder"),
-        });
-
+    fn resize(
+        &mut self,
+        required_capacity: u32,
+        device: &wgpu::Device,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) {
         let copy_range = self
             .allocator
             .allocated_ranges()
@@ -332,7 +334,5 @@ impl VertexBuffers {
         self.position = new_position_buffer;
         self.normal = new_normal_buffer;
         self.uv = new_uv_buffer;
-
-        queue.submit(std::iter::once(command_encoder.finish()));
     }
 }
