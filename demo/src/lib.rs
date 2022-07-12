@@ -273,3 +273,9 @@ fn update_camera(
     camera.position = camera_rig.final_transform.position;
     camera.rotation = camera_rig.final_transform.rotation;
 }
+
+#[no_mangle]
+pub extern "C" fn main_rs() {
+    simple_logging::log_to_stderr(log::LevelFilter::Trace);
+    pollster::block_on(run());  
+}

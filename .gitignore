@@ -2,3 +2,4 @@
 shaders/src/tonemapping.rs
 shaders/target
 demo/web/pkg
+.DS_Store
