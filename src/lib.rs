@@ -495,7 +495,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
 }
 
 #[derive(Clone, Default)]
-pub struct ReqwestHttpClient(reqwest::Client);
+pub struct ReqwestHttpClient(surf::Client);
 
 impl renderer_core::assets::HttpClient for ReqwestHttpClient {
     #[cfg(not(feature = "wasm"))]
@@ -519,17 +519,15 @@ impl renderer_core::assets::HttpClient for ReqwestHttpClient {
         }
 
         Box::pin(async move {
-            log::debug!("Requesting {}", url);
+            log::warn!("Requesting {}", url);
 
-            let response = request_builder.send().await?;
+            let bytes = request_builder.recv_bytes().await.map_err(|err| anyhow::anyhow!("{}", err))?;
 
-            log::debug!("Got response for {}", url);
+            log::warn!("Got response for {}", url);
 
-            let bytes = response.bytes().await?;
+            log::warn!("Got bytes for {}: {}", url, bytes.len());
 
-            log::debug!("Got bytes for {}: {}", url, bytes.len());
-
-            Ok(bytes.as_ref().to_vec())
+            Ok(bytes)
         })
     }
 }

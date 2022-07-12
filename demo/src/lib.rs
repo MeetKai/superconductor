@@ -117,8 +117,8 @@ impl Plugin for SuperconductorPlugin {
         plugin.build(app);
 
         app.insert_resource(NewIblTextures(Some(NewIblTexturesInner {
-            diffuse_cubemap: url::Url::parse("https://expenses.github.io/mateversum-web/environment_maps/helipad/diffuse_compressed.ktx2").unwrap(),
-            specular_cubemap: url::Url::parse("https://expenses.github.io/mateversum-web/environment_maps/helipad/specular_compressed.ktx2").unwrap()
+            diffuse_cubemap: url::Url::parse("http://localhost:8000/assets/cubemaps/helipad_lambertian.ktx2").unwrap(),
+            specular_cubemap: url::Url::parse("http://localhost:8000/assets/cubemaps/helipad_ggx.ktx2").unwrap()
         })));
     }
 }
@@ -276,6 +276,6 @@ fn update_camera(
 
 #[no_mangle]
 pub extern "C" fn main_rs() {
-    simple_logging::log_to_stderr(log::LevelFilter::Trace);
-    pollster::block_on(run());  
+    simple_logging::log_to_stderr(log::LevelFilter::Info);
+    pollster::block_on(run());
 }

@@ -251,5 +251,5 @@ pub fn spawn<F: std::future::Future<Output = ()> + Send + 'static>(future: F)
 where
     <F as std::future::Future>::Output: Send,
 {
-    tokio::spawn(future);
+    async_std::task::spawn(future);
 }
