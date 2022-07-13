@@ -6,7 +6,7 @@ use crate::resources::{
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::components::{InstanceRange, Model};
+use crate::components::{AnimatedModel, InstanceRange, Model};
 use bevy_ecs::prelude::{Local, NonSend, Query, Res, ResMut};
 use renderer_core::assets::models::PrimitiveRanges;
 #[cfg(feature = "wasm")]
@@ -26,8 +26,10 @@ pub(crate) fn render_desktop(
         Res<VertexBuffers>,
         Res<InstanceBuffer>,
     ),
-    mut models: Query<(&mut Model, &InstanceRange)>,
-    mut model_bind_groups: Local<ModelBindGroups>,
+    mut static_models: Query<(&mut Model, &InstanceRange)>,
+    mut animated_models: Query<(&mut AnimatedModel, &InstanceRange)>,
+    mut static_model_bind_groups: Local<ModelBindGroups>,
+    mut animated_model_bind_groups: Local<ModelBindGroups>,
 ) {
     let device = &device.0;
     let queue = &queue.0;
@@ -54,7 +56,8 @@ pub(crate) fn render_desktop(
         },
     );
 
-    model_bind_groups.collect(&mut models);
+    static_model_bind_groups.collect(&mut static_models);
+    animated_model_bind_groups.collect_animated(&mut animated_models);
 
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("command encoder"),
@@ -97,8 +100,15 @@ pub(crate) fn render_desktop(
 
             render_all_primitives(
                 &mut render_pass,
-                &models,
-                &model_bind_groups,
+                &static_models,
+                &static_model_bind_groups,
+                |primitive_ranges| primitive_ranges.opaque.clone(),
+            );
+
+            render_all_animated_primitives(
+                &mut render_pass,
+                &animated_models,
+                &animated_model_bind_groups,
                 |primitive_ranges| primitive_ranges.opaque.clone(),
             );
 
@@ -106,8 +116,8 @@ pub(crate) fn render_desktop(
 
             render_all_primitives(
                 &mut render_pass,
-                &models,
-                &model_bind_groups,
+                &static_models,
+                &static_model_bind_groups,
                 |primitive_ranges| primitive_ranges.opaque_double_sided.clone(),
             );
 
@@ -115,8 +125,8 @@ pub(crate) fn render_desktop(
 
             render_all_primitives(
                 &mut render_pass,
-                &models,
-                &model_bind_groups,
+                &static_models,
+                &static_model_bind_groups,
                 |primitive_ranges| primitive_ranges.alpha_clipped.clone(),
             );
 
@@ -124,8 +134,8 @@ pub(crate) fn render_desktop(
 
             render_all_primitives(
                 &mut render_pass,
-                &models,
-                &model_bind_groups,
+                &static_models,
+                &static_model_bind_groups,
                 |primitive_ranges| primitive_ranges.alpha_clipped_double_sided.clone(),
             );
         }
@@ -425,6 +435,30 @@ impl ModelBindGroups {
         })
     }
 
+    fn collect_animated(&mut self, query: &mut Query<(&mut AnimatedModel, &InstanceRange)>) {
+        self.bind_groups.clear();
+        self.offsets.clear();
+
+        // This is mutable because it involves potentially swapping out the dummy bind groups
+        // for loaded ones.
+        query.for_each_mut(|(mut model, _)| {
+            self.offsets.push(self.bind_groups.len());
+
+            // Todo: we could do a check if the model has any instances here
+            // and not write the bind groups if not, which would mean that we don't have to do a check
+            // however many times we do a `render_all_primitives` call. But that'd be less clear and
+            // I'm not sure if it's worthwhile.
+            self.bind_groups.extend(
+                model
+                    .0
+                    .model
+                    .primitives
+                    .iter_mut()
+                    .map(|primitive| primitive.bind_group.get().clone()),
+            );
+        })
+    }
+
     fn bind_groups_for_model(&self, model_index: usize) -> &[Arc<wgpu::BindGroup>] {
         &self.bind_groups[self.offsets[model_index]..]
     }
@@ -444,6 +478,38 @@ fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
 
             // Get the primitives we're rendering
             let primitives = &model.0.primitives[range.clone()];
+            // And their associated material bind groups
+            let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range];
+
+            for (primitive, bind_group) in primitives.iter().zip(bind_groups) {
+                render_pass.set_bind_group(1, bind_group, &[]);
+
+                render_pass.draw_indexed(
+                    primitive.index_buffer_range.clone(),
+                    0,
+                    instance_range.0.clone(),
+                );
+            }
+        }
+    }
+}
+
+fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
+    render_pass: &mut wgpu::RenderPass<'a>,
+    models: &Query<(&mut AnimatedModel, &InstanceRange)>,
+    model_bind_groups: &'a ModelBindGroups,
+    primitive_range_getter: G,
+) {
+    for (model_index, (model, instance_range)) in models.iter().enumerate() {
+        // Don't issue commands for models with no (visible) instances.
+        if !instance_range.0.is_empty() {
+            let model = &model.0.model;
+
+            // Get the range of primtives we're rendering
+            let range = primitive_range_getter(&model.primitive_ranges);
+
+            // Get the primitives we're rendering
+            let primitives = &model.primitives[range.clone()];
             // And their associated material bind groups
             let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range];
 

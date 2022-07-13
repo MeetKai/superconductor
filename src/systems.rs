@@ -1,5 +1,6 @@
 use crate::components::{
-    Instance, InstanceOf, InstanceRange, Instances, Model, ModelUrl, PendingModel,
+    AnimatedModel, AnimatedModelUrl, Instance, InstanceOf, InstanceRange, Instances, Model,
+    ModelUrl, PendingAnimatedModel, PendingModel,
 };
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, Camera, CompositeBindGroup, Device, IndexBuffer,
@@ -493,7 +494,8 @@ pub(crate) fn update_uniform_buffers(
 }
 
 pub(crate) fn start_loading_models<T: HttpClient>(
-    query: Query<(Entity, &ModelUrl), Added<ModelUrl>>,
+    static_models: Query<(Entity, &ModelUrl), Added<ModelUrl>>,
+    animated_models: Query<(Entity, &AnimatedModelUrl), Added<AnimatedModelUrl>>,
     device: Res<Device>,
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
@@ -506,7 +508,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
     let device = &device.0;
     let queue = &queue.0;
 
-    query.for_each(|(entity, url)| {
+    static_models.for_each(|(entity, url)| {
         let url = url.0.clone();
         let vertex_buffers = vertex_buffers.0.clone();
         let index_buffer = index_buffer.0.clone();
@@ -552,14 +554,75 @@ pub(crate) fn start_loading_models<T: HttpClient>(
                 }
             }
         });
-    })
+    });
+
+    animated_models.for_each(|(entity, url)| {
+        let url = url.0.clone();
+        let vertex_buffers = vertex_buffers.0.clone();
+        let index_buffer = index_buffer.0.clone();
+        let texture_settings = texture_settings.clone();
+
+        let model_setter = Setter(Default::default());
+
+        commands
+            .entity(entity)
+            .insert(PendingAnimatedModel(model_setter.clone()));
+
+        spawn({
+            let device = device.clone();
+            let queue = queue.clone();
+            let bind_group_layouts = bind_group_layouts.0.clone();
+            let pipelines = pipelines.0.clone();
+
+            let context = renderer_core::assets::models::Context {
+                device,
+                queue,
+                bind_group_layouts,
+                http_client: http_client.clone(),
+                index_buffer,
+                vertex_buffers,
+                pipelines,
+                texture_settings,
+            };
+
+            async move {
+                let result =
+                    renderer_core::assets::models::AnimatedModel::load(&context, &url).await;
+
+                match result {
+                    Err(error) => {
+                        log::error!(
+                            "Got an error while trying to load a model from '{}': {}",
+                            url,
+                            error
+                        );
+                    }
+                    Ok(model) => {
+                        model_setter.set(model);
+                    }
+                }
+            }
+        });
+    });
 }
 
-pub(crate) fn finish_loading_models(query: Query<(Entity, &PendingModel)>, mut commands: Commands) {
-    query.for_each(|(entity, pending_model)| {
+pub(crate) fn finish_loading_models(
+    static_models: Query<(Entity, &PendingModel)>,
+    animated_models: Query<(Entity, &PendingAnimatedModel)>,
+    mut commands: Commands,
+) {
+    static_models.for_each(|(entity, pending_model)| {
         if let Some(mut lock) = pending_model.0 .0.try_lock() {
             if let Some(loaded_model) = lock.take() {
                 commands.entity(entity).insert(Model(loaded_model));
+            }
+        }
+    });
+
+    animated_models.for_each(|(entity, pending_model)| {
+        if let Some(mut lock) = pending_model.0 .0.try_lock() {
+            if let Some(loaded_model) = lock.take() {
+                commands.entity(entity).insert(AnimatedModel(loaded_model));
             }
         }
     })

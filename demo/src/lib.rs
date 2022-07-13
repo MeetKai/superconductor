@@ -80,7 +80,7 @@ impl Plugin for SuperconductorPlugin {
         let helmet = app
             .world
             .spawn()
-            .insert(components::ModelUrl(
+            .insert(components::AnimatedModelUrl(
                 url::Url::parse(
                     "http://localhost:8000/assets/models/FlightHelmet/FlightHelmet.gltf",
                 )

@@ -7,6 +7,7 @@ use crate::{
     BindGroupLayouts, Texture,
 };
 use glam::{Vec2, Vec3};
+use gltf_helpers::{animation::Animation, Similarity};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
@@ -41,14 +42,12 @@ fn get_buffer<'a>(
     }
 }
 
-/*
-pub AnimatedModelData {
+pub struct AnimatedModelData {
     pub animations: Vec<Animation>,
     pub depth_first_nodes: Vec<(usize, Option<usize>)>,
     pub inverse_bind_transforms: Vec<Similarity>,
     pub joint_indices_to_node_indices: Vec<usize>,
 }
-*/
 
 pub struct Model {
     pub primitives: Vec<Primitive>,
@@ -61,7 +60,7 @@ impl Model {
     pub async fn load<T: HttpClient>(
         context: &Context<T>,
         root_url: &url::Url,
-    ) -> anyhow::Result<Model> {
+    ) -> anyhow::Result<Self> {
         let gltf: gltf::Gltf<()> =
             gltf::Gltf::from_slice(&context.http_client.fetch_bytes(root_url, None).await?)?;
 
@@ -328,6 +327,21 @@ impl Model {
             primitive_ranges,
             index_buffer_range,
             vertex_buffer_range,
+        })
+    }
+}
+
+pub struct AnimatedModel {
+    pub model: Model,
+}
+
+impl AnimatedModel {
+    pub async fn load<T: HttpClient>(
+        context: &Context<T>,
+        root_url: &url::Url,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            model: Model::load(context, root_url).await?,
         })
     }
 }

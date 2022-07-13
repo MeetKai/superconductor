@@ -16,6 +16,12 @@ pub struct PendingModel(pub Setter<models::Model>);
 pub struct Model(pub models::Model);
 
 #[derive(Component)]
+pub struct PendingAnimatedModel(pub Setter<models::AnimatedModel>);
+
+#[derive(Component)]
+pub struct AnimatedModel(pub models::AnimatedModel);
+
+#[derive(Component)]
 pub struct Instances(pub Vec<renderer_core::Instance>);
 
 #[derive(Component)]
@@ -23,3 +29,6 @@ pub struct InstanceRange(pub Range<u32>);
 
 #[derive(Component)]
 pub struct ModelUrl(pub url::Url);
+
+#[derive(Component)]
+pub struct AnimatedModelUrl(pub url::Url);
