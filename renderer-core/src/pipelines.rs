@@ -80,9 +80,53 @@ impl Pipelines {
                 step_mode: wgpu::VertexStepMode::Vertex,
             },
             wgpu::VertexBufferLayout {
-                array_stride: 8 * 4,
-                attributes: &wgpu::vertex_attr_array![3 => Float32x4, 4 => Float32x4],
+                array_stride: std::mem::size_of::<super::FullInstance>() as u64,
+                attributes: &wgpu::vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Uint32, 6 => Uint32],
                 step_mode: wgpu::VertexStepMode::Instance,
+            },
+        ];
+
+        let animated_model_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("animated model pipeline layout"),
+                bind_group_layouts: &[
+                    &bind_group_layouts.uniform,
+                    &bind_group_layouts.model,
+                    &bind_group_layouts.joints,
+                ],
+                push_constant_ranges: &[],
+            });
+
+        let animated_vertex_buffers = &[
+            wgpu::VertexBufferLayout {
+                array_stride: 3 * 4,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![0 => Float32x3],
+            },
+            wgpu::VertexBufferLayout {
+                array_stride: 3 * 4,
+                attributes: &wgpu::vertex_attr_array![1 => Float32x3],
+                step_mode: wgpu::VertexStepMode::Vertex,
+            },
+            wgpu::VertexBufferLayout {
+                array_stride: 2 * 4,
+                attributes: &wgpu::vertex_attr_array![2 => Float32x2],
+                step_mode: wgpu::VertexStepMode::Vertex,
+            },
+            wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<super::FullInstance>() as u64,
+                attributes: &wgpu::vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Uint32, 6 => Uint32],
+                step_mode: wgpu::VertexStepMode::Instance,
+            },
+            wgpu::VertexBufferLayout {
+                array_stride: 4 * 4,
+                attributes: &wgpu::vertex_attr_array![7 => Uint32x4],
+                step_mode: wgpu::VertexStepMode::Vertex,
+            },
+            wgpu::VertexBufferLayout {
+                array_stride: 4 * 4,
+                attributes: &wgpu::vertex_attr_array![8 => Float32x4],
+                step_mode: wgpu::VertexStepMode::Vertex,
             },
         ];
 
@@ -100,6 +144,16 @@ impl Pipelines {
             }),
             entry_point: &format!("{}vertex", prefix),
             buffers: vertex_buffers,
+        };
+
+        let animated_vertex_state = wgpu::VertexState {
+            module: &device.create_shader_module(if multiview.is_none() {
+                wgpu::include_spirv!("../../compiled-shaders/single_view_animated_vertex.spv")
+            } else {
+                wgpu::include_spirv!("../../compiled-shaders/animated_vertex.spv")
+            }),
+            entry_point: &format!("{}animated_vertex", prefix),
+            buffers: animated_vertex_buffers,
         };
 
         let normal_primitive_state = wgpu::PrimitiveState {
@@ -319,8 +373,10 @@ impl Pipelines {
             pbr: PipelineSet::new(
                 device,
                 &model_pipeline_layout,
+                &animated_model_pipeline_layout,
                 &mirrored_pipeline_layout,
                 vertex_state.clone(),
+                animated_vertex_state.clone(),
                 mirrored_vertex.clone(),
                 fragment_opaque.clone(),
                 fragment_alpha_clipped.clone(),
@@ -331,8 +387,10 @@ impl Pipelines {
             pbr_double_sided: PipelineSet::new(
                 device,
                 &model_pipeline_layout,
+                &animated_model_pipeline_layout,
                 &mirrored_pipeline_layout,
                 vertex_state.clone(),
+                animated_vertex_state.clone(),
                 mirrored_vertex.clone(),
                 fragment_opaque.clone(),
                 fragment_alpha_clipped.clone(),
@@ -471,7 +529,9 @@ impl Pipelines {
 
 pub struct PipelineSet {
     pub opaque: wgpu::RenderPipeline,
+    pub opaque_animated: wgpu::RenderPipeline,
     pub alpha_clipped: wgpu::RenderPipeline,
+    pub alpha_clipped_animated: wgpu::RenderPipeline,
     pub opaque_mirrored: wgpu::RenderPipeline,
     pub alpha_clipped_mirrored: wgpu::RenderPipeline,
 }
@@ -480,8 +540,10 @@ impl PipelineSet {
     fn new(
         device: &wgpu::Device,
         pipeline_layout: &wgpu::PipelineLayout,
+        animated_model_pipeline_layout: &wgpu::PipelineLayout,
         mirrored_pipeline_layout: &wgpu::PipelineLayout,
         normal_vertex: wgpu::VertexState,
+        animated_vertex: wgpu::VertexState,
         mirrored_vertex: wgpu::VertexState,
         opaque_fragment: wgpu::FragmentState,
         alpha_clipped_fragment: wgpu::FragmentState,
@@ -547,16 +609,38 @@ impl PipelineSet {
                 multisample: Default::default(),
                 multiview,
             }),
+            opaque_animated: device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("opaque animated pipeline"),
+                layout: Some(animated_model_pipeline_layout),
+                vertex: animated_vertex.clone(),
+                fragment: Some(opaque_fragment.clone()),
+                primitive: normal_primitive_state,
+                depth_stencil: Some(normal_depth_state.clone()),
+                multisample: Default::default(),
+                multiview,
+            }),
             alpha_clipped: device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("alpha clipped pipeline"),
                 layout: Some(pipeline_layout),
                 vertex: normal_vertex.clone(),
                 fragment: Some(alpha_clipped_fragment.clone()),
                 primitive: normal_primitive_state,
-                depth_stencil: Some(normal_depth_state),
+                depth_stencil: Some(normal_depth_state.clone()),
                 multisample: Default::default(),
                 multiview,
             }),
+            alpha_clipped_animated: device.create_render_pipeline(
+                &wgpu::RenderPipelineDescriptor {
+                    label: Some("alpha clipped animated pipeline"),
+                    layout: Some(animated_model_pipeline_layout),
+                    vertex: animated_vertex.clone(),
+                    fragment: Some(alpha_clipped_fragment.clone()),
+                    primitive: normal_primitive_state,
+                    depth_stencil: Some(normal_depth_state.clone()),
+                    multisample: Default::default(),
+                    multiview,
+                },
+            ),
             opaque_mirrored: device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("opaque mirrored pipeline"),
                 layout: Some(mirrored_pipeline_layout),

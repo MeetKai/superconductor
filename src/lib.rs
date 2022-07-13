@@ -87,11 +87,14 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
             SystemStage::single_threaded()
                 .with_system(systems::start_loading_models::<T>)
                 .with_system(systems::finish_loading_models)
-                .with_system(systems::update_ibl_textures::<T>),
+                .with_system(systems::update_ibl_textures::<T>)
+                .with_system(systems::add_joints_to_instances),
         );
 
-        let mut buffer_resetting_stage =
-            SystemStage::single_threaded().with_system(systems::clear_instance_buffers);
+        let mut buffer_resetting_stage = SystemStage::single_threaded()
+            .with_system(systems::clear_instance_buffers)
+            .with_system(systems::clear_joint_buffers)
+            .with_system(systems::sample_animations);
 
         buffer_resetting_stage = match self.mode {
             Mode::Desktop => {
@@ -110,13 +113,18 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
         app.add_stage_after(
             Stage::BufferResetting,
             Stage::InstanceBuffering,
-            SystemStage::single_threaded().with_system(systems::push_entity_instances),
+            SystemStage::single_threaded()
+                .with_system(systems::push_entity_instances)
+                .with_system(systems::push_joints),
         );
 
         app.add_stage_after(
             Stage::InstanceBuffering,
             Stage::BufferUploading,
-            SystemStage::single_threaded().with_system(systems::upload_instances),
+            SystemStage::single_threaded()
+                .with_system(systems::upload_instances)
+                .with_system(systems::upload_joint_buffers)
+                .with_system(systems::progress_animation_times),
         );
 
         let mut rendering_stage = SystemStage::single_threaded();

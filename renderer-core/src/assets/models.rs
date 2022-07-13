@@ -8,7 +8,7 @@ use crate::{
 };
 use glam::{UVec4, Vec2, Vec3, Vec4};
 use gltf_helpers::{
-    animation::{read_animations, Animation},
+    animation::{read_animations, Animation, AnimationJoints},
     Similarity,
 };
 use std::collections::HashMap;
@@ -151,6 +151,7 @@ pub struct AnimatedModelData {
     pub depth_first_nodes: Vec<(usize, Option<usize>)>,
     pub inverse_bind_transforms: Vec<Similarity>,
     pub joint_indices_to_node_indices: Vec<usize>,
+    pub animation_joints: AnimationJoints,
 }
 
 pub struct Model {
@@ -636,19 +637,19 @@ impl AnimatedModel {
 
         dbg!(&animations.len());
 
-        if gltf.skins().count() > 1 {
+        /*if gltf.skins().count() > 1 {
             return Err(anyhow::anyhow!(
                 "Expected <= 1 skin, got {}",
                 gltf.skins().count()
             ));
-        }
+        }*/
 
         let skin = gltf.skins().next();
-        if let Some(skin) = skin.as_ref() {
+        /*if let Some(skin) = skin.as_ref() {
             if skin.skeleton().is_some() {
                 return Err(anyhow::anyhow!("Expected there not to be a skeleton"));
             }
-        }
+        }*/
 
         let joint_indices_to_node_indices: Vec<_> = if let Some(skin) = skin.as_ref() {
             skin.joints().map(|node| node.index()).collect()
@@ -672,6 +673,10 @@ impl AnimatedModel {
                 .collect()
         };
 
+        let depth_first_nodes: Vec<_> = node_tree.iter_depth_first().collect();
+
+        let animation_joints = AnimationJoints::new(gltf.nodes(), &depth_first_nodes);
+
         Ok(AnimatedModel {
             primitives,
             primitive_ranges,
@@ -679,9 +684,10 @@ impl AnimatedModel {
             vertex_buffer_range,
             animation_data: AnimatedModelData {
                 animations,
-                depth_first_nodes: node_tree.iter_depth_first().collect(),
+                depth_first_nodes,
                 joint_indices_to_node_indices,
                 inverse_bind_transforms,
+                animation_joints,
             },
         })
     }

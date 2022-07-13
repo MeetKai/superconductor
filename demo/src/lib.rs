@@ -94,7 +94,26 @@ impl Plugin for SuperconductorPlugin {
                 Vec3::new(0.0, 1.0, -3.0),
                 0.5,
                 Default::default(),
-            )));
+            )))
+            .insert(components::AnimationState {
+                time: 0.5,
+                animation_index: 1,
+            });
+
+        for i in 0..10 {
+            app.world
+                .spawn()
+                .insert(components::InstanceOf(helmet))
+                .insert(components::Instance(renderer_core::Instance::new(
+                    Vec3::new(1.0 + i as f32, 1.0, -4.0 - i as f32),
+                    0.5 + (i as f32 * 0.05),
+                    Default::default(),
+                )))
+                .insert(components::AnimationState {
+                    time: i as f32 / 10.0,
+                    animation_index: i % 3,
+                });
+        }
 
         let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()
             .with(dolly::drivers::Position::new(Vec3::new(0.0, 1.75, 0.0)))

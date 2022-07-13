@@ -12,6 +12,7 @@ pub use arc_swap;
 pub use bytemuck;
 pub use crevice;
 pub use glam;
+pub use gltf_helpers;
 pub use shared_structs;
 
 pub use bind_group_layouts::BindGroupLayouts;
@@ -19,7 +20,7 @@ pub use buffers::{
     AnimatedVertexBuffers, IndexBuffer, InstanceBuffer, RawAnimatedVertexBuffers, RawVertexBuffers,
     VertexBuffers,
 };
-pub use instance::Instance;
+pub use instance::{FullInstance, Instance};
 pub use pipelines::{PipelineOptions, Pipelines};
 
 #[cfg(feature = "wasm")]

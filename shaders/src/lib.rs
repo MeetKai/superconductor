@@ -5,9 +5,10 @@
     no_std
 )]
 
-use shared_structs::{MaterialSettings, MirrorUniforms, SkyboxUniforms, Uniforms};
+use shared_structs::{JointTransform, MaterialSettings, MirrorUniforms, SkyboxUniforms, Uniforms};
 use spirv_std::{
-    glam::{self, Mat3, Vec2, Vec3, Vec4},
+    arch::IndexUnchecked,
+    glam::{self, Mat3, UVec4, Vec2, Vec3, Vec4},
     num_traits::Float,
     Image, Sampler,
 };
@@ -17,8 +18,8 @@ type SampledImage = Image!(2D, type=f32, sampled);
 mod single_view;
 
 pub use single_view::{
-    fragment as _, fragment_alpha_clipped as _, tonemap as _, vertex as _, vertex_mirrored as _,
-    vertex_skybox as _, vertex_skybox_mirrored as _,
+    animated_vertex as _, fragment as _, fragment_alpha_clipped as _, tonemap as _, vertex as _,
+    vertex_mirrored as _, vertex_skybox as _, vertex_skybox_mirrored as _,
 };
 
 #[spirv(vertex)]
@@ -39,6 +40,51 @@ pub fn vertex(
     let instance_translation = instance_translation_and_scale.truncate();
 
     let position = instance_translation + (instance_rotation * instance_scale * position);
+    *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
+    *out_position = position;
+    *out_normal = instance_rotation * normal;
+    *out_uv = uv;
+
+    if uniforms.flip_viewport != 0 {
+        builtin_pos.y = -builtin_pos.y;
+    }
+}
+
+#[spirv(vertex)]
+pub fn animated_vertex(
+    position: Vec3,
+    normal: Vec3,
+    uv: Vec2,
+    instance_translation_and_scale: Vec4,
+    instance_rotation: glam::Quat,
+    #[spirv(flat)] instance_index: u32,
+    #[spirv(flat)] instance_num_joints: u32,
+    #[spirv(flat)] joint_indices: UVec4,
+    joint_weights: Vec4,
+    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(descriptor_set = 2, binding = 0, uniform)] joint_transforms: &[JointTransform; JointTransform::MAX_COUNT],
+    #[spirv(position)] builtin_pos: &mut Vec4,
+    #[spirv(view_index)] view_index: i32,
+    out_position: &mut Vec3,
+    out_normal: &mut Vec3,
+    out_uv: &mut Vec2,
+) {
+    let instance_scale = instance_translation_and_scale.w;
+    let instance_translation = instance_translation_and_scale.truncate();
+
+    let joint_offset = instance_index * instance_num_joints;
+
+    let skin = unsafe {
+        *joint_transforms.index_unchecked((joint_offset + joint_indices.x) as usize) * joint_weights.x
+            + *joint_transforms.index_unchecked((joint_offset + joint_indices.y) as usize) * joint_weights.y
+            + *joint_transforms.index_unchecked((joint_offset + joint_indices.z) as usize) * joint_weights.z
+            + *joint_transforms.index_unchecked((joint_offset + joint_indices.w) as usize) * joint_weights.w
+    };
+
+    let position = skin * position;
+
+    let position = instance_translation + (instance_rotation * instance_scale * position);
+
     *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
     *out_position = position;
     *out_normal = instance_rotation * normal;

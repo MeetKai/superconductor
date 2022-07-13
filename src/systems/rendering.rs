@@ -7,7 +7,7 @@ use renderer_core::{arc_swap, RawAnimatedVertexBuffers, RawVertexBuffers};
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::components::{AnimatedModel, InstanceRange, Model};
+use crate::components::{AnimatedModel, InstanceRange, JointBuffer, Model};
 use bevy_ecs::prelude::{Local, NonSend, Query, Res, ResMut};
 use renderer_core::assets::models::PrimitiveRanges;
 #[cfg(feature = "wasm")]
@@ -49,7 +49,7 @@ pub(crate) fn render_desktop(
         Res<InstanceBuffer>,
     ),
     mut static_models: Query<(&mut Model, &InstanceRange)>,
-    mut animated_models: Query<(&mut AnimatedModel, &InstanceRange)>,
+    mut animated_models: Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
     mut static_model_bind_groups: Local<ModelBindGroups>,
     mut animated_model_bind_groups: Local<ModelBindGroups>,
 ) {
@@ -128,6 +128,8 @@ pub(crate) fn render_desktop(
 
             bind_animated_vertex_buffers(&mut render_pass, &animated_vertex_buffers);
 
+            render_pass.set_pipeline(&pipelines.pbr.opaque_animated);
+
             render_all_animated_primitives(
                 &mut render_pass,
                 &animated_models,
@@ -148,6 +150,8 @@ pub(crate) fn render_desktop(
 
             bind_animated_vertex_buffers(&mut render_pass, &animated_vertex_buffers);
 
+            render_pass.set_pipeline(&pipelines.pbr_double_sided.opaque_animated);
+
             render_all_animated_primitives(
                 &mut render_pass,
                 &animated_models,
@@ -166,12 +170,36 @@ pub(crate) fn render_desktop(
                 |primitive_ranges| primitive_ranges.alpha_clipped.clone(),
             );
 
+            bind_animated_vertex_buffers(&mut render_pass, &animated_vertex_buffers);
+
+            render_pass.set_pipeline(&pipelines.pbr.alpha_clipped_animated);
+
+            render_all_animated_primitives(
+                &mut render_pass,
+                &animated_models,
+                &animated_model_bind_groups,
+                |primitive_ranges| primitive_ranges.alpha_clipped.clone(),
+            );
+
+            bind_static_vertex_buffers(&mut render_pass, &vertex_buffers);
+
             render_pass.set_pipeline(&pipelines.pbr_double_sided.alpha_clipped);
 
             render_all_primitives(
                 &mut render_pass,
                 &static_models,
                 &static_model_bind_groups,
+                |primitive_ranges| primitive_ranges.alpha_clipped_double_sided.clone(),
+            );
+
+            bind_animated_vertex_buffers(&mut render_pass, &animated_vertex_buffers);
+
+            render_pass.set_pipeline(&pipelines.pbr_double_sided.alpha_clipped_animated);
+
+            render_all_animated_primitives(
+                &mut render_pass,
+                &animated_models,
+                &animated_model_bind_groups,
                 |primitive_ranges| primitive_ranges.alpha_clipped_double_sided.clone(),
             );
         }
@@ -471,13 +499,16 @@ impl ModelBindGroups {
         })
     }
 
-    fn collect_animated(&mut self, query: &mut Query<(&mut AnimatedModel, &InstanceRange)>) {
+    fn collect_animated(
+        &mut self,
+        query: &mut Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
+    ) {
         self.bind_groups.clear();
         self.offsets.clear();
 
         // This is mutable because it involves potentially swapping out the dummy bind groups
         // for loaded ones.
-        query.for_each_mut(|(mut model, _)| {
+        query.for_each_mut(|(mut model, ..)| {
             self.offsets.push(self.bind_groups.len());
 
             // Todo: we could do a check if the model has any instances here
@@ -531,11 +562,11 @@ fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
 
 fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     render_pass: &mut wgpu::RenderPass<'a>,
-    models: &Query<(&mut AnimatedModel, &InstanceRange)>,
+    models: &'a Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
     model_bind_groups: &'a ModelBindGroups,
     primitive_range_getter: G,
 ) {
-    for (model_index, (model, instance_range)) in models.iter().enumerate() {
+    for (model_index, (model, joint_buffer, instance_range)) in models.iter().enumerate() {
         // Don't issue commands for models with no (visible) instances.
         if !instance_range.0.is_empty() {
             // Get the range of primtives we're rendering
@@ -545,6 +576,8 @@ fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
             let primitives = &model.0.primitives[range.clone()];
             // And their associated material bind groups
             let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range];
+
+            render_pass.set_bind_group(2, &joint_buffer.bind_group, &[]);
 
             for (primitive, bind_group) in primitives.iter().zip(bind_groups) {
                 render_pass.set_bind_group(1, bind_group, &[]);
