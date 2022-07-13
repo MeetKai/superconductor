@@ -2,9 +2,9 @@ use crate::components::{
     Instance, InstanceOf, InstanceRange, Instances, Model, ModelUrl, PendingModel,
 };
 use crate::resources::{
-    BindGroupLayouts, Camera, CompositeBindGroup, Device, IndexBuffer, InstanceBuffer,
-    IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LinearSampler, MainBindGroup,
-    ModelUrls, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer,
+    AnimatedModelVertexBuffers, BindGroupLayouts, Camera, CompositeBindGroup, Device, IndexBuffer,
+    InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LinearSampler,
+    MainBindGroup, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer,
     SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, NonSend, Query, Res, ResMut};
@@ -246,24 +246,22 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
         }
     });
 
-    let index_buffer = Arc::new(parking_lot::Mutex::new(renderer_core::IndexBuffer::new(
-        1024, device,
+    commands.insert_resource(IndexBuffer(Arc::new(parking_lot::Mutex::new(
+        renderer_core::IndexBuffer::new(1024, device),
+    ))));
+    commands.insert_resource(VertexBuffers(Arc::new(parking_lot::Mutex::new(
+        renderer_core::VertexBuffers::new(1024, device),
+    ))));
+    commands.insert_resource(AnimatedModelVertexBuffers(Arc::new(
+        parking_lot::Mutex::new(renderer_core::AnimatedModelVertexBuffers::new(1024, device)),
     )));
 
-    let vertex_buffers = Arc::new(parking_lot::Mutex::new(renderer_core::VertexBuffers::new(
-        1024, device,
-    )));
-
-    let instance_buffer = renderer_core::InstanceBuffer::new(
+    commands.insert_resource(InstanceBuffer(renderer_core::InstanceBuffer::new(
         1,
         device,
         wgpu::BufferUsages::VERTEX,
         "instance buffer",
-    );
-
-    commands.insert_resource(IndexBuffer(index_buffer));
-    commands.insert_resource(VertexBuffers(vertex_buffers));
-    commands.insert_resource(InstanceBuffer(instance_buffer));
+    )));
 }
 
 pub(crate) fn update_ibl_textures<T: HttpClient>(
@@ -503,7 +501,6 @@ pub(crate) fn start_loading_models<T: HttpClient>(
     (index_buffer, vertex_buffers): (Res<IndexBuffer>, Res<VertexBuffers>),
     texture_settings: Res<textures::Settings>,
     http_client: Res<T>,
-    mut model_urls: ResMut<ModelUrls>,
     mut commands: Commands,
 ) {
     let device = &device.0;
@@ -520,9 +517,6 @@ pub(crate) fn start_loading_models<T: HttpClient>(
         commands
             .entity(entity)
             .insert(PendingModel(model_setter.clone()));
-
-        // Insert a link back from the url to the entity for lookups.
-        model_urls.0.insert(url.clone(), entity);
 
         spawn({
             let device = device.clone();

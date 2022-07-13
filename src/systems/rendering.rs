@@ -38,6 +38,7 @@ pub(crate) fn render_desktop(
     // because that would panic the main thread otherwise!
     let vertex_buffers = &vertex_buffers.0.lock();
     let index_buffer = &index_buffer.0.lock();
+    let index_buffer = index_buffer.buffer.load();
 
     let depth_attachment = intermediate_depth_framebuffer.0.get(
         device,
@@ -86,7 +87,7 @@ pub(crate) fn render_desktop(
     });
 
     {
-        render_pass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.set_vertex_buffer(0, vertex_buffers.position.slice(..));
         render_pass.set_vertex_buffer(1, vertex_buffers.normal.slice(..));
         render_pass.set_vertex_buffer(2, vertex_buffers.uv.slice(..));

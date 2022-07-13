@@ -15,18 +15,20 @@ pub use glam;
 pub use shared_structs;
 
 pub use bind_group_layouts::BindGroupLayouts;
-pub use buffers::{IndexBuffer, InstanceBuffer, VertexBuffers};
+pub use buffers::{AnimatedModelVertexBuffers, IndexBuffer, InstanceBuffer, VertexBuffers};
 pub use instance::Instance;
 pub use pipelines::{PipelineOptions, Pipelines};
 
+#[cfg(feature = "wasm")]
 use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
 
 #[cfg(feature = "wasm")]
 pub fn request_animation_frame(
     session: &web_sys::XrSession,
     f: &Closure<dyn FnMut(f64, web_sys::XrFrame)>,
 ) {
+    use wasm_bindgen::JsCast;
+
     // This turns the Closure into a js_sys::Function
     // See https://rustwasm.github.io/wasm-bindgen/api/wasm_bindgen/closure/struct.Closure.html#casting-a-closure-to-a-js_sysfunction
     session.request_animation_frame(f.as_ref().unchecked_ref());
@@ -72,6 +74,8 @@ pub struct Canvas {
 #[cfg(feature = "wasm")]
 impl Canvas {
     pub fn new_with_id(id: u32) -> Self {
+        use wasm_bindgen::JsCast;
+
         let canvas: web_sys::HtmlCanvasElement = web_sys::window()
             .unwrap()
             .document()
@@ -101,6 +105,8 @@ impl Canvas {
         &self,
         options: ContextCreationOptions,
     ) -> web_sys::WebGl2RenderingContext {
+        use wasm_bindgen::JsCast;
+
         let mut gl_attribs = std::collections::HashMap::new();
         gl_attribs.insert(String::from("xrCompatible"), true);
         // WebGL silently ignores any stencil writing or testing if this is not set.

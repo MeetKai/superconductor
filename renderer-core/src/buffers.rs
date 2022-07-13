@@ -1,8 +1,9 @@
 use std::mem::size_of;
 use std::ops::Range;
+use std::sync::Arc;
 
 use super::Instance;
-use glam::{Vec2, Vec3};
+use glam::{UVec4, Vec2, Vec3, Vec4};
 
 pub type InstanceBuffer = VecGpuBuffer<Instance>;
 
@@ -334,5 +335,203 @@ impl VertexBuffers {
         self.position = new_position_buffer;
         self.normal = new_normal_buffer;
         self.uv = new_uv_buffer;
+    }
+}
+
+pub struct AnimatedModelVertexBuffers {
+    allocator: range_alloc::RangeAllocator<u32>,
+    pub position: wgpu::Buffer,
+    pub normal: wgpu::Buffer,
+    pub uv: wgpu::Buffer,
+    pub joint_indices: wgpu::Buffer,
+    pub joint_weights: wgpu::Buffer,
+}
+
+impl AnimatedModelVertexBuffers {
+    fn size_in_bytes(size: u32, size_of_field: usize) -> u64 {
+        size as u64 * size_of_field as u64
+    }
+
+    fn create_buffer(
+        device: &wgpu::Device,
+        label: &str,
+        capacity: u32,
+        size_of_field: usize,
+    ) -> wgpu::Buffer {
+        device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(label),
+            size: Self::size_in_bytes(capacity, size_of_field),
+            usage: wgpu::BufferUsages::VERTEX
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        })
+    }
+
+    pub fn new(capacity: u32, device: &wgpu::Device) -> Self {
+        Self {
+            allocator: range_alloc::RangeAllocator::new(0..capacity),
+            position: Self::create_buffer(device, "position buffer", capacity, size_of::<Vec3>()),
+            normal: Self::create_buffer(device, "normal buffer", capacity, size_of::<Vec3>()),
+            uv: Self::create_buffer(device, "normal buffer", capacity, size_of::<Vec2>()),
+            joint_indices: Self::create_buffer(
+                device,
+                "joint indices buffer",
+                capacity,
+                size_of::<UVec4>(),
+            ),
+            joint_weights: Self::create_buffer(
+                device,
+                "joint weights buffer",
+                capacity,
+                size_of::<Vec4>(),
+            ),
+        }
+    }
+
+    pub fn insert(
+        &mut self,
+        positions: &[Vec3],
+        normals: &[Vec3],
+        uvs: &[Vec2],
+        joint_indices: &[UVec4],
+        joint_weights: &[Vec4],
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Range<u32> {
+        let length = positions.len() as u32;
+
+        debug_assert_eq!(positions.len(), normals.len());
+        debug_assert_eq!(positions.len(), uvs.len());
+        debug_assert_eq!(positions.len(), joint_indices.len());
+        debug_assert_eq!(positions.len(), joint_weights.len());
+
+        let range = match self.allocator.allocate_range(length) {
+            Ok(range) => range,
+            Err(_) => {
+                self.resize(length, device, command_encoder);
+                self.allocator.allocate_range(length).expect("just resized")
+            }
+        };
+
+        queue.write_buffer(
+            &self.position,
+            Self::size_in_bytes(range.start, size_of::<Vec3>()),
+            bytemuck::cast_slice(positions),
+        );
+
+        queue.write_buffer(
+            &self.normal,
+            Self::size_in_bytes(range.start, size_of::<Vec3>()),
+            bytemuck::cast_slice(normals),
+        );
+
+        queue.write_buffer(
+            &self.uv,
+            Self::size_in_bytes(range.start, size_of::<Vec2>()),
+            bytemuck::cast_slice(uvs),
+        );
+
+        queue.write_buffer(
+            &self.joint_indices,
+            Self::size_in_bytes(range.start, size_of::<UVec4>()),
+            bytemuck::cast_slice(uvs),
+        );
+
+        queue.write_buffer(
+            &self.joint_weights,
+            Self::size_in_bytes(range.start, size_of::<Vec4>()),
+            bytemuck::cast_slice(uvs),
+        );
+
+        range
+    }
+
+    fn resize(
+        &mut self,
+        required_capacity: u32,
+        device: &wgpu::Device,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) {
+        let copy_range = self
+            .allocator
+            .allocated_ranges()
+            .last()
+            .map(|range| range.end)
+            .unwrap_or(0);
+
+        let old_capacity = self.allocator.initial_range().end;
+
+        let new_capacity = (old_capacity + required_capacity).max(old_capacity * 2);
+
+        log::info!(
+            "Growing vertex buffers from {} to {}",
+            old_capacity,
+            new_capacity
+        );
+
+        self.allocator.grow_to(new_capacity);
+
+        let new_position_buffer =
+            Self::create_buffer(device, "position buffer", new_capacity, size_of::<Vec3>());
+        let new_normal_buffer =
+            Self::create_buffer(device, "normal buffer", new_capacity, size_of::<Vec3>());
+        let new_uv_buffer =
+            Self::create_buffer(device, "uv buffer", new_capacity, size_of::<Vec2>());
+        let new_joint_indices_buffer = Self::create_buffer(
+            device,
+            "joint indices buffer",
+            new_capacity,
+            size_of::<UVec4>(),
+        );
+        let new_joint_weights_buffer = Self::create_buffer(
+            device,
+            "joint weights buffer",
+            new_capacity,
+            size_of::<Vec4>(),
+        );
+
+        command_encoder.copy_buffer_to_buffer(
+            &self.position,
+            0,
+            &new_position_buffer,
+            0,
+            Self::size_in_bytes(copy_range, size_of::<Vec3>()),
+        );
+        command_encoder.copy_buffer_to_buffer(
+            &self.normal,
+            0,
+            &new_normal_buffer,
+            0,
+            Self::size_in_bytes(copy_range, size_of::<Vec3>()),
+        );
+        command_encoder.copy_buffer_to_buffer(
+            &self.uv,
+            0,
+            &new_uv_buffer,
+            0,
+            Self::size_in_bytes(copy_range, size_of::<Vec2>()),
+        );
+        command_encoder.copy_buffer_to_buffer(
+            &self.joint_indices,
+            0,
+            &new_joint_indices_buffer,
+            0,
+            Self::size_in_bytes(copy_range, size_of::<UVec4>()),
+        );
+        command_encoder.copy_buffer_to_buffer(
+            &self.joint_weights,
+            0,
+            &new_joint_weights_buffer,
+            0,
+            Self::size_in_bytes(copy_range, size_of::<Vec4>()),
+        );
+
+        self.position = new_position_buffer;
+        self.normal = new_normal_buffer;
+        self.uv = new_uv_buffer;
+        self.joint_indices = new_joint_indices_buffer;
+        self.joint_weights = new_joint_weights_buffer;
     }
 }

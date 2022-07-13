@@ -32,21 +32,19 @@ impl Similarity {
     }
 
     pub fn new_from_gltf(translation: [f32; 3], rotation: [f32; 4], scale: [f32; 3]) -> Self {
-        assert!(
-            (scale[0] - scale[1]).abs() <= std::f32::EPSILON * 10.0,
-            "{:?}",
-            scale
-        );
-        assert!(
-            (scale[0] - scale[2]).abs() <= std::f32::EPSILON * 10.0,
-            "{:?}",
-            scale
-        );
+        let scale_x_y_approx_eq = (scale[0] - scale[1]).abs() <= std::f32::EPSILON * 10.0;
+        let scale_x_z_approx_eq = (scale[0] - scale[2]).abs() <= std::f32::EPSILON * 10.0;
+
+        let max_scale = scale[0].max(scale[1]).max(scale[2]);
+
+        if !(scale_x_y_approx_eq && scale_x_z_approx_eq) {
+            log::warn!("Node scales are not uniform: {:?}. Using the largest scale of {:?}. This may result in the model looking odd.", scale, max_scale);
+        }
 
         Similarity {
             translation: translation.into(),
             rotation: Quat::from_array(rotation),
-            scale: scale[0],
+            scale: max_scale,
         }
     }
 }

@@ -41,6 +41,15 @@ fn get_buffer<'a>(
     }
 }
 
+/*
+pub AnimatedModelData {
+    pub animations: Vec<Animation>,
+    pub depth_first_nodes: Vec<(usize, Option<usize>)>,
+    pub inverse_bind_transforms: Vec<Similarity>,
+    pub joint_indices_to_node_indices: Vec<usize>,
+}
+*/
+
 pub struct Model {
     pub primitives: Vec<Primitive>,
     pub primitive_ranges: PrimitiveRanges,

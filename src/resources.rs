@@ -1,7 +1,5 @@
-use bevy_ecs::prelude::Entity;
 use renderer_core::glam::{Mat4, Quat, Vec3};
 use renderer_core::utils::Swappable;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 pub struct Device(pub Arc<wgpu::Device>);
@@ -34,6 +32,9 @@ pub(crate) struct SkyboxUniformBindGroup(pub(crate) wgpu::BindGroup);
 
 pub struct IndexBuffer(pub Arc<parking_lot::Mutex<renderer_core::IndexBuffer>>);
 pub struct VertexBuffers(pub Arc<parking_lot::Mutex<renderer_core::VertexBuffers>>);
+pub struct AnimatedModelVertexBuffers(
+    pub Arc<parking_lot::Mutex<renderer_core::AnimatedModelVertexBuffers>>,
+);
 pub(crate) struct InstanceBuffer(pub(crate) renderer_core::InstanceBuffer);
 
 pub(crate) struct IntermediateDepthFramebuffer(pub(crate) CachedFramebuffer);
@@ -85,8 +86,6 @@ struct ResourceWithSize<T> {
     resource: T,
     size: wgpu::Extent3d,
 }
-
-pub struct ModelUrls(pub HashMap<url::Url, Entity>);
 
 pub(crate) struct SurfaceFrameView {
     pub(crate) view: wgpu::TextureView,
