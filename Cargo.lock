@@ -2065,7 +2065,6 @@ dependencies = [
  "futures",
  "js-sys",
  "log",
- "parking_lot 0.12.1",
  "renderer-core",
  "reqwest",
  "tokio",

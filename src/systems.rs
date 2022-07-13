@@ -2,7 +2,7 @@ use crate::components::{
     Instance, InstanceOf, InstanceRange, Instances, Model, ModelUrl, PendingModel,
 };
 use crate::resources::{
-    AnimatedModelVertexBuffers, BindGroupLayouts, Camera, CompositeBindGroup, Device, IndexBuffer,
+    AnimatedVertexBuffers, BindGroupLayouts, Camera, CompositeBindGroup, Device, IndexBuffer,
     InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LinearSampler,
     MainBindGroup, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer,
     SurfaceFrameView, UniformBuffer, VertexBuffers,
@@ -246,14 +246,14 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
         }
     });
 
-    commands.insert_resource(IndexBuffer(Arc::new(parking_lot::Mutex::new(
-        renderer_core::IndexBuffer::new(1024, device),
+    commands.insert_resource(IndexBuffer(Arc::new(renderer_core::IndexBuffer::new(
+        1024, device,
     ))));
-    commands.insert_resource(VertexBuffers(Arc::new(parking_lot::Mutex::new(
-        renderer_core::VertexBuffers::new(1024, device),
+    commands.insert_resource(VertexBuffers(Arc::new(renderer_core::VertexBuffers::new(
+        1024, device,
     ))));
-    commands.insert_resource(AnimatedModelVertexBuffers(Arc::new(
-        parking_lot::Mutex::new(renderer_core::AnimatedModelVertexBuffers::new(1024, device)),
+    commands.insert_resource(AnimatedVertexBuffers(Arc::new(
+        renderer_core::AnimatedVertexBuffers::new(1024, device),
     )));
 
     commands.insert_resource(InstanceBuffer(renderer_core::InstanceBuffer::new(

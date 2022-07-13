@@ -1,4 +1,3 @@
-use parking_lot::Mutex;
 use std::sync::Arc;
 
 // std::borrow::Cow has too many type restrictions to use instead of this.
@@ -17,7 +16,7 @@ impl<'a, T> BorrowedOrOwned<'a, T> {
     }
 }
 
-pub struct Setter<T>(pub Arc<Mutex<Option<T>>>);
+pub struct Setter<T>(pub Arc<parking_lot::Mutex<Option<T>>>);
 
 impl<T> Setter<T> {
     pub fn set(&self, value: T) {

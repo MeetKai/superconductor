@@ -30,11 +30,9 @@ pub(crate) struct MainBindGroup(pub(crate) Swappable<wgpu::BindGroup>);
 pub(crate) struct SkyboxUniformBuffer(pub(crate) wgpu::Buffer);
 pub(crate) struct SkyboxUniformBindGroup(pub(crate) wgpu::BindGroup);
 
-pub struct IndexBuffer(pub Arc<parking_lot::Mutex<renderer_core::IndexBuffer>>);
-pub struct VertexBuffers(pub Arc<parking_lot::Mutex<renderer_core::VertexBuffers>>);
-pub struct AnimatedModelVertexBuffers(
-    pub Arc<parking_lot::Mutex<renderer_core::AnimatedModelVertexBuffers>>,
-);
+pub struct IndexBuffer(pub Arc<renderer_core::IndexBuffer>);
+pub struct VertexBuffers(pub Arc<renderer_core::VertexBuffers>);
+pub struct AnimatedVertexBuffers(pub Arc<renderer_core::AnimatedVertexBuffers>);
 pub(crate) struct InstanceBuffer(pub(crate) renderer_core::InstanceBuffer);
 
 pub(crate) struct IntermediateDepthFramebuffer(pub(crate) CachedFramebuffer);

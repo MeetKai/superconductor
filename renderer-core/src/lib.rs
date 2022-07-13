@@ -15,7 +15,7 @@ pub use glam;
 pub use shared_structs;
 
 pub use bind_group_layouts::BindGroupLayouts;
-pub use buffers::{AnimatedModelVertexBuffers, IndexBuffer, InstanceBuffer, VertexBuffers};
+pub use buffers::{AnimatedVertexBuffers, IndexBuffer, InstanceBuffer, VertexBuffers};
 pub use instance::Instance;
 pub use pipelines::{PipelineOptions, Pipelines};
 
