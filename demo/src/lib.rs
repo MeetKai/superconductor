@@ -81,10 +81,7 @@ impl Plugin for SuperconductorPlugin {
             .world
             .spawn()
             .insert(components::AnimatedModelUrl(
-                url::Url::parse(
-                    "http://localhost:8000/assets/models/FlightHelmet/FlightHelmet.gltf",
-                )
-                .unwrap(),
+                url::Url::parse("http://localhost:8000/assets/models/fire_giant.glb").unwrap(),
             ))
             .insert(components::Instances(Default::default()))
             .insert(components::InstanceRange(Default::default()))
@@ -95,7 +92,7 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::InstanceOf(helmet))
             .insert(components::Instance(renderer_core::Instance::new(
                 Vec3::new(0.0, 1.0, -3.0),
-                2.0,
+                0.5,
                 Default::default(),
             )));
 

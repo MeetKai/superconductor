@@ -500,7 +500,11 @@ pub(crate) fn start_loading_models<T: HttpClient>(
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
-    (index_buffer, vertex_buffers): (Res<IndexBuffer>, Res<VertexBuffers>),
+    (index_buffer, vertex_buffers, animated_vertex_buffers): (
+        Res<IndexBuffer>,
+        Res<VertexBuffers>,
+        Res<AnimatedVertexBuffers>,
+    ),
     texture_settings: Res<textures::Settings>,
     http_client: Res<T>,
     mut commands: Commands,
@@ -511,6 +515,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
     static_models.for_each(|(entity, url)| {
         let url = url.0.clone();
         let vertex_buffers = vertex_buffers.0.clone();
+        let animated_vertex_buffers = animated_vertex_buffers.0.clone();
         let index_buffer = index_buffer.0.clone();
         let texture_settings = texture_settings.clone();
 
@@ -533,6 +538,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
                 http_client: http_client.clone(),
                 index_buffer,
                 vertex_buffers,
+                animated_vertex_buffers,
                 pipelines,
                 texture_settings,
             };
@@ -559,6 +565,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
     animated_models.for_each(|(entity, url)| {
         let url = url.0.clone();
         let vertex_buffers = vertex_buffers.0.clone();
+        let animated_vertex_buffers = animated_vertex_buffers.0.clone();
         let index_buffer = index_buffer.0.clone();
         let texture_settings = texture_settings.clone();
 
@@ -581,6 +588,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
                 http_client: http_client.clone(),
                 index_buffer,
                 vertex_buffers,
+                animated_vertex_buffers,
                 pipelines,
                 texture_settings,
             };

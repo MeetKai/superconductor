@@ -1,8 +1,9 @@
 use crate::resources::{
-    BindGroupLayouts, CompositeBindGroup, Device, IndexBuffer, InstanceBuffer,
-    IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LinearSampler, MainBindGroup,
-    Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
+    AnimatedVertexBuffers, BindGroupLayouts, CompositeBindGroup, Device, IndexBuffer,
+    InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LinearSampler,
+    MainBindGroup, Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
 };
+use renderer_core::{arc_swap, RawAnimatedVertexBuffers, RawVertexBuffers};
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -13,6 +14,26 @@ use renderer_core::assets::models::PrimitiveRanges;
 use renderer_core::create_view_from_device_framebuffer;
 use renderer_core::utils::BorrowedOrOwned;
 
+fn bind_static_vertex_buffers<'a>(
+    render_pass: &mut wgpu::RenderPass<'a>,
+    vertex_buffers: &'a RawVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
+) {
+    render_pass.set_vertex_buffer(0, vertex_buffers.position.slice(..));
+    render_pass.set_vertex_buffer(1, vertex_buffers.normal.slice(..));
+    render_pass.set_vertex_buffer(2, vertex_buffers.uv.slice(..));
+}
+
+fn bind_animated_vertex_buffers<'a>(
+    render_pass: &mut wgpu::RenderPass<'a>,
+    vertex_buffers: &'a RawAnimatedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
+) {
+    render_pass.set_vertex_buffer(0, vertex_buffers.position.slice(..));
+    render_pass.set_vertex_buffer(1, vertex_buffers.normal.slice(..));
+    render_pass.set_vertex_buffer(2, vertex_buffers.uv.slice(..));
+    render_pass.set_vertex_buffer(4, vertex_buffers.joint_indices.slice(..));
+    render_pass.set_vertex_buffer(5, vertex_buffers.joint_weights.slice(..));
+}
+
 pub(crate) fn render_desktop(
     device: Res<Device>,
     queue: Res<Queue>,
@@ -21,9 +42,10 @@ pub(crate) fn render_desktop(
     skybox_uniform_bind_group: Res<SkyboxUniformBindGroup>,
     surface_frame_view: Res<SurfaceFrameView>,
     mut intermediate_depth_framebuffer: ResMut<IntermediateDepthFramebuffer>,
-    (index_buffer, vertex_buffers, instance_buffer): (
+    (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer): (
         Res<IndexBuffer>,
         Res<VertexBuffers>,
+        Res<AnimatedVertexBuffers>,
         Res<InstanceBuffer>,
     ),
     mut static_models: Query<(&mut Model, &InstanceRange)>,
@@ -37,6 +59,7 @@ pub(crate) fn render_desktop(
     let main_bind_group = main_bind_group.0.get();
 
     let vertex_buffers = vertex_buffers.0.buffers.load();
+    let animated_vertex_buffers = animated_vertex_buffers.0.buffers.load();
     let index_buffer = index_buffer.0.buffer.load();
 
     let depth_attachment = intermediate_depth_framebuffer.0.get(
@@ -88,9 +111,7 @@ pub(crate) fn render_desktop(
 
     {
         render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        render_pass.set_vertex_buffer(0, vertex_buffers.position.slice(..));
-        render_pass.set_vertex_buffer(1, vertex_buffers.normal.slice(..));
-        render_pass.set_vertex_buffer(2, vertex_buffers.uv.slice(..));
+        bind_static_vertex_buffers(&mut render_pass, &vertex_buffers);
         render_pass.set_vertex_buffer(3, instance_buffer.0.buffer.slice(..));
 
         render_pass.set_bind_group(0, main_bind_group, &[]);
@@ -105,12 +126,16 @@ pub(crate) fn render_desktop(
                 |primitive_ranges| primitive_ranges.opaque.clone(),
             );
 
+            bind_animated_vertex_buffers(&mut render_pass, &animated_vertex_buffers);
+
             render_all_animated_primitives(
                 &mut render_pass,
                 &animated_models,
                 &animated_model_bind_groups,
                 |primitive_ranges| primitive_ranges.opaque.clone(),
             );
+
+            bind_static_vertex_buffers(&mut render_pass, &vertex_buffers);
 
             render_pass.set_pipeline(&pipelines.pbr_double_sided.opaque);
 
@@ -120,6 +145,17 @@ pub(crate) fn render_desktop(
                 &static_model_bind_groups,
                 |primitive_ranges| primitive_ranges.opaque_double_sided.clone(),
             );
+
+            bind_animated_vertex_buffers(&mut render_pass, &animated_vertex_buffers);
+
+            render_all_animated_primitives(
+                &mut render_pass,
+                &animated_models,
+                &animated_model_bind_groups,
+                |primitive_ranges| primitive_ranges.opaque_double_sided.clone(),
+            );
+
+            bind_static_vertex_buffers(&mut render_pass, &vertex_buffers);
 
             render_pass.set_pipeline(&pipelines.pbr.alpha_clipped);
 
@@ -451,7 +487,6 @@ impl ModelBindGroups {
             self.bind_groups.extend(
                 model
                     .0
-                    .model
                     .primitives
                     .iter_mut()
                     .map(|primitive| primitive.bind_group.get().clone()),
@@ -503,13 +538,11 @@ fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     for (model_index, (model, instance_range)) in models.iter().enumerate() {
         // Don't issue commands for models with no (visible) instances.
         if !instance_range.0.is_empty() {
-            let model = &model.0.model;
-
             // Get the range of primtives we're rendering
-            let range = primitive_range_getter(&model.primitive_ranges);
+            let range = primitive_range_getter(&model.0.primitive_ranges);
 
             // Get the primitives we're rendering
-            let primitives = &model.primitives[range.clone()];
+            let primitives = &model.0.primitives[range.clone()];
             // And their associated material bind groups
             let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range];
 

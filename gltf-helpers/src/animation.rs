@@ -4,10 +4,9 @@ use gltf::animation::Interpolation;
 use std::fmt;
 use std::ops::{Add, Mul};
 
-pub fn read_animations(
-    animations: gltf::iter::Animations,
-    gltf_binary_buffer_blob: &[u8],
-    model_name: &str,
+pub fn read_animations<'a, F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'a [u8]>>(
+    animations: gltf::iter::Animations<'a>,
+    channel_reader: F,
 ) -> Vec<Animation> {
     animations
         .map(|animation| {
@@ -16,16 +15,12 @@ pub fn read_animations(
             let mut scale_channels = Vec::new();
 
             for (channel_index, channel) in animation.channels().enumerate() {
-                let reader = channel.reader(|buffer| {
-                    assert_eq!(buffer.index(), 0);
-                    Some(gltf_binary_buffer_blob)
-                });
+                let reader = channel.reader(channel_reader.clone());
 
                 let inputs = reader.read_inputs().unwrap().collect();
 
                 log::trace!(
-                    "[{}] animation {:?}, channel {} ({:?}) uses {:?} interpolation.",
-                    model_name,
+                    "animation {:?}, channel {} ({:?}) uses {:?} interpolation.",
                     animation.name(),
                     channel_index,
                     channel.target().property(),
@@ -79,11 +74,7 @@ pub fn read_animations(
                         });
                     }
                     property => {
-                        log::warn!(
-                            "[{}] Animation type {:?} is not supported, ignoring.",
-                            model_name,
-                            property
-                        );
+                        log::warn!("Animation type {:?} is not supported, ignoring.", property);
                     }
                 }
             }
