@@ -626,6 +626,12 @@ impl AnimatedModel {
             get_buffer(&gltf, &buffer_map, buffer)
         });
 
+        let num_skins = gltf.skins().count();
+
+        if num_skins > 1 {
+            log::warn!("Got {} skins. Using the first.", num_skins);
+        }
+
         let skin = gltf.skins().next();
 
         let joint_indices_to_node_indices: Vec<_> = if let Some(skin) = skin.as_ref() {
