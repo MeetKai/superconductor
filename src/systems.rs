@@ -101,7 +101,7 @@ pub(crate) fn sample_animations(
                     animation.animate(
                         &mut animation_joints.0,
                         animation_state.time,
-                        &animated_model.0.animation_data.depth_first_nodes,
+                        &animated_model.0.animation_data.reverse_depth_first_nodes,
                     );
                 }
             }

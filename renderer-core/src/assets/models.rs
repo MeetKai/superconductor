@@ -148,7 +148,7 @@ fn collect_animated_primitives<
 
 pub struct AnimatedModelData {
     pub animations: Vec<Animation>,
-    pub depth_first_nodes: Vec<(usize, Option<usize>)>,
+    pub reverse_depth_first_nodes: Vec<(usize, Option<usize>)>,
     pub inverse_bind_transforms: Vec<Similarity>,
     pub joint_indices_to_node_indices: Vec<usize>,
     pub animation_joints: AnimationJoints,
@@ -622,8 +622,6 @@ impl AnimatedModel {
             get_buffer(&gltf, &buffer_map, buffer)
         });
 
-        dbg!(&animations.len());
-
         /*if gltf.skins().count() > 1 {
             return Err(anyhow::anyhow!(
                 "Expected <= 1 skin, got {}",
@@ -660,9 +658,9 @@ impl AnimatedModel {
                 .collect()
         };
 
-        let depth_first_nodes: Vec<_> = node_tree.iter_depth_first().collect();
+        let reverse_depth_first_nodes: Vec<_> = node_tree.iter_reverse_depth_first().collect();
 
-        let animation_joints = AnimationJoints::new(gltf.nodes(), &depth_first_nodes);
+        let animation_joints = AnimationJoints::new(gltf.nodes(), &reverse_depth_first_nodes);
 
         Ok(AnimatedModel {
             primitives,
@@ -671,7 +669,7 @@ impl AnimatedModel {
             vertex_buffer_range,
             animation_data: AnimatedModelData {
                 animations,
-                depth_first_nodes,
+                reverse_depth_first_nodes,
                 joint_indices_to_node_indices,
                 inverse_bind_transforms,
                 animation_joints,

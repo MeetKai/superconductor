@@ -112,7 +112,10 @@ pub struct AnimationJoints {
 }
 
 impl AnimationJoints {
-    pub fn new(nodes: gltf::iter::Nodes, depth_first_nodes: &[(usize, Option<usize>)]) -> Self {
+    pub fn new(
+        nodes: gltf::iter::Nodes,
+        reverse_depth_first_nodes: &[(usize, Option<usize>)],
+    ) -> Self {
         let joint_similarities: Vec<_> = nodes
             .map(|node| {
                 let (translation, rotation, scale) = node.transform().decomposed();
@@ -132,7 +135,7 @@ impl AnimationJoints {
             local_transforms: joint_similarities,
         };
 
-        joints.update(depth_first_nodes);
+        joints.update(reverse_depth_first_nodes);
 
         joints
     }
@@ -150,8 +153,8 @@ impl AnimationJoints {
             })
     }
 
-    pub fn update(&mut self, depth_first_nodes: &[(usize, Option<usize>)]) {
-        for &(index, parent) in depth_first_nodes.iter() {
+    pub fn update(&mut self, reverse_depth_first_nodes: &[(usize, Option<usize>)]) {
+        for &(index, parent) in reverse_depth_first_nodes.iter() {
             if let Some(parent) = parent {
                 let parent_transform = self.global_transforms[parent];
                 self.global_transforms[index] = parent_transform * self.local_transforms[index];
@@ -267,7 +270,7 @@ impl Animation {
         &self,
         animation_joints: &mut AnimationJoints,
         time: f32,
-        depth_first_nodes: &[(usize, Option<usize>)],
+        reverse_depth_first_nodes: &[(usize, Option<usize>)],
     ) {
         self.translation_channels
             .iter()
@@ -290,7 +293,7 @@ impl Animation {
                 animation_joints.local_transforms[node_index].scale = scale;
             });
 
-        animation_joints.update(depth_first_nodes);
+        animation_joints.update(reverse_depth_first_nodes);
     }
 }
 
