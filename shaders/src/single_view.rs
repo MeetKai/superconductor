@@ -28,6 +28,43 @@ pub fn vertex(
     );
 }
 
+#[spirv(vertex)]
+pub fn animated_vertex(
+    position: Vec3,
+    normal: Vec3,
+    uv: Vec2,
+    instance_translation_and_scale: Vec4,
+    instance_rotation: glam::Quat,
+    #[spirv(flat)] joints_offset: u32,
+    #[spirv(flat)] joint_indices: UVec4,
+    joint_weights: Vec4,
+    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(descriptor_set = 2, binding = 0, uniform)]
+    joint_transforms: &[JointTransform; JointTransform::MAX_COUNT],
+    #[spirv(position)] builtin_pos: &mut Vec4,
+    out_position: &mut Vec3,
+    out_normal: &mut Vec3,
+    out_uv: &mut Vec2,
+) {
+    super::animated_vertex(
+        position,
+        normal,
+        uv,
+        instance_translation_and_scale,
+        instance_rotation,
+        joints_offset,
+        joint_indices,
+        joint_weights,
+        uniforms,
+        joint_transforms,
+        builtin_pos,
+        0,
+        out_position,
+        out_normal,
+        out_uv,
+    );
+}
+
 #[spirv(fragment)]
 pub fn fragment(
     position: Vec3,

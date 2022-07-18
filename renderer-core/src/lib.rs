@@ -1,22 +1,25 @@
 mod bind_group_layouts;
 mod buffers;
-mod instance;
 mod pipelines;
 
-pub mod ibl;
-
 pub mod assets;
+pub mod ibl;
+pub mod instance;
 pub mod utils;
 
 pub use arc_swap;
 pub use bytemuck;
 pub use crevice;
 pub use glam;
+pub use gltf_helpers;
 pub use shared_structs;
 
 pub use bind_group_layouts::BindGroupLayouts;
-pub use buffers::{AnimatedVertexBuffers, IndexBuffer, InstanceBuffer, VertexBuffers};
-pub use instance::Instance;
+pub use buffers::{
+    AnimatedVertexBuffers, IndexBuffer, InstanceBuffer, RawAnimatedVertexBuffers, RawVertexBuffers,
+    VertexBuffers,
+};
+pub use instance::{GpuInstance, Instance};
 pub use pipelines::{PipelineOptions, Pipelines};
 
 #[cfg(feature = "wasm")]

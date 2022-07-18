@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use core::ops::{Add, Mul};
 #[cfg(not(target_arch = "spirv"))]
 use crevice::std140::AsStd140;
 use glam::{Mat4, Vec3, Vec4};
@@ -142,4 +143,64 @@ fn mirror_logic_check() {
 pub struct MirrorUniforms {
     pub position: Vec3,
     pub normal: Vec3,
+}
+
+#[cfg_attr(
+    not(target_arch = "spirv"),
+    derive(Debug, bytemuck::Zeroable, bytemuck::Pod)
+)]
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct JointTransform {
+    pub translation_and_scale: Vec4,
+    pub rotation: glam::Quat,
+}
+
+impl JointTransform {
+    pub const MAX_COUNT: usize = 65536 / core::mem::size_of::<Self>();
+
+    pub fn new(translation: Vec3, scale: f32, rotation: glam::Quat) -> Self {
+        Self {
+            translation_and_scale: translation.extend(scale),
+            rotation,
+        }
+    }
+
+    fn translation(&self) -> Vec3 {
+        self.translation_and_scale.truncate()
+    }
+
+    fn scale(&self) -> f32 {
+        self.translation_and_scale.w
+    }
+}
+
+impl Mul<f32> for JointTransform {
+    type Output = Self;
+
+    fn mul(self, scalar: f32) -> Self {
+        Self {
+            translation_and_scale: self.translation_and_scale * scalar,
+            rotation: self.rotation * scalar,
+        }
+    }
+}
+
+impl Mul<Vec3> for JointTransform {
+    type Output = Vec3;
+
+    fn mul(self, vector: Vec3) -> Vec3 {
+        self.translation() + (self.scale() * (self.rotation * vector))
+    }
+}
+
+impl Add<JointTransform> for JointTransform {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self {
+            translation_and_scale: self.translation_and_scale + other.translation_and_scale,
+            rotation: self.rotation + other.rotation,
+        }
+    }
 }

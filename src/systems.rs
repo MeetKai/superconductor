@@ -1,5 +1,6 @@
 use crate::components::{
-    Instance, InstanceOf, InstanceRange, Instances, Model, ModelUrl, PendingModel,
+    AnimatedModel, AnimatedModelUrl, AnimationJoints, AnimationState, Instance, InstanceOf,
+    InstanceRange, Instances, JointBuffer, Model, ModelUrl, PendingAnimatedModel, PendingModel,
 };
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, Camera, CompositeBindGroup, Device, IndexBuffer,
@@ -7,7 +8,7 @@ use crate::resources::{
     MainBindGroup, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer,
     SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
-use bevy_ecs::prelude::{Added, Commands, Entity, NonSend, Query, Res, ResMut};
+use bevy_ecs::prelude::{Added, Commands, Entity, Query, Res, ResMut, Without};
 use renderer_core::{
     arc_swap::ArcSwap,
     assets::{textures, HttpClient},
@@ -16,7 +17,7 @@ use renderer_core::{
     ibl::IblTextures,
     shared_structs, spawn,
     utils::{Setter, Swappable},
-    Texture,
+    GpuInstance, Texture,
 };
 use std::sync::Arc;
 
@@ -49,15 +50,118 @@ pub(crate) fn clear_instance_buffers(
     query.for_each_mut(|mut instances| instances.0.clear());
 }
 
+pub(crate) fn clear_joint_buffers(mut query: Query<&mut JointBuffer>) {
+    query.for_each_mut(|mut joint_buffer| {
+        joint_buffer.staging.clear();
+    })
+}
+
+pub(crate) fn progress_animation_times(
+    mut instance_query: Query<(&InstanceOf, &mut AnimationState)>,
+    model_query: Query<&AnimatedModel>,
+) {
+    instance_query.for_each_mut(|(instance_of, mut animation_state)| {
+        match model_query.get(instance_of.0) {
+            Ok(animated_model) => {
+                animation_state.time = (animation_state.time + 1.0 / 60.0)
+                    % animated_model.0.animation_data.animations[animation_state.animation_index]
+                        .total_time();
+            }
+            Err(error) => {
+                log::warn!("Got an error when progressing animations: {}", error);
+            }
+        }
+    })
+}
+
+pub(crate) fn sample_animations(
+    mut instance_query: Query<(&InstanceOf, &mut AnimationJoints, &AnimationState)>,
+    model_query: Query<&AnimatedModel>,
+) {
+    instance_query.for_each_mut(|(instance_of, mut animation_joints, animation_state)| {
+        match model_query.get(instance_of.0) {
+            Ok(animated_model) => {
+                animated_model.0.animation_data.animations[animation_state.animation_index]
+                    .animate(
+                        &mut animation_joints.0,
+                        animation_state.time,
+                        &animated_model.0.animation_data.depth_first_nodes,
+                    );
+            }
+            Err(error) => {
+                log::warn!("Got an error when sampling animations: {}", error);
+            }
+        }
+    })
+}
+
+pub(crate) fn upload_joint_buffers(query: Query<&JointBuffer>, queue: Res<Queue>) {
+    query.for_each(|joint_buffer| {
+        queue.0.write_buffer(
+            &joint_buffer.buffer,
+            0,
+            bytemuck::cast_slice(&joint_buffer.staging),
+        );
+    })
+}
+
+pub(crate) fn push_joints(
+    instance_query: Query<(&InstanceOf, &AnimationJoints)>,
+    mut model_query: Query<(&AnimatedModel, &mut JointBuffer)>,
+) {
+    instance_query.for_each(|(instance_of, animation_joints)| {
+        match model_query.get_mut(instance_of.0) {
+            Ok((animated_model, mut joint_buffer)) => {
+                'joint_loop: for joint in animation_joints
+                    .0
+                    .iter(
+                        &animated_model
+                            .0
+                            .animation_data
+                            .joint_indices_to_node_indices,
+                        &animated_model.0.animation_data.inverse_bind_transforms,
+                    )
+                    .map(|joint| {
+                        shared_structs::JointTransform::new(
+                            joint.translation,
+                            joint.scale,
+                            joint.rotation,
+                        )
+                    })
+                {
+                    if let Err(error) = joint_buffer.staging.try_push(joint) {
+                        log::warn!("Got an error when pushing joints: {}", error);
+                        break 'joint_loop;
+                    }
+                }
+            }
+            Err(error) => {
+                log::warn!("Got an error when pushing joints: {}", error);
+            }
+        }
+    })
+}
+
 // Here would be a good place to do culling.
 pub(crate) fn push_entity_instances(
     mut instance_query: Query<(&InstanceOf, &Instance)>,
-    mut model_query: Query<&mut Instances>,
+    mut model_query: Query<(&mut Instances, Option<&AnimatedModel>)>,
 ) {
     instance_query.for_each_mut(|(instance_of, instance)| {
         match model_query.get_mut(instance_of.0) {
-            Ok(mut instances) => {
-                instances.0.push(instance.0);
+            Ok((mut instances, animated_model)) => {
+                let instance_index = instances.0.len() as u32;
+                let num_joints = animated_model
+                    .map(|animated_model| animated_model.0.num_joints())
+                    .unwrap_or(0);
+
+                instances.0.push(GpuInstance {
+                    position: instance.0.position,
+                    scale: instance.0.scale,
+                    rotation: instance.0.rotation,
+                    joints_offset: instance_index * num_joints,
+                    _padding: Default::default(),
+                });
             }
             Err(error) => {
                 log::warn!("Got an error when pushing an instance: {}", error);
@@ -264,6 +368,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     )));
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn update_ibl_textures<T: HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
@@ -418,7 +523,7 @@ pub(crate) fn set_desktop_uniform_buffers(
 
 #[cfg(feature = "wasm")]
 pub(crate) fn update_uniform_buffers(
-    pose: NonSend<web_sys::XrViewerPose>,
+    pose: bevy_ecs::prelude::NonSend<web_sys::XrViewerPose>,
     pipeline_options: Res<renderer_core::PipelineOptions>,
     queue: Res<Queue>,
     uniform_buffer: Res<UniformBuffer>,
@@ -492,13 +597,19 @@ pub(crate) fn update_uniform_buffers(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn start_loading_models<T: HttpClient>(
-    query: Query<(Entity, &ModelUrl), Added<ModelUrl>>,
+    static_models: Query<(Entity, &ModelUrl), Added<ModelUrl>>,
+    animated_models: Query<(Entity, &AnimatedModelUrl), Added<AnimatedModelUrl>>,
     device: Res<Device>,
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
-    (index_buffer, vertex_buffers): (Res<IndexBuffer>, Res<VertexBuffers>),
+    (index_buffer, vertex_buffers, animated_vertex_buffers): (
+        Res<IndexBuffer>,
+        Res<VertexBuffers>,
+        Res<AnimatedVertexBuffers>,
+    ),
     texture_settings: Res<textures::Settings>,
     http_client: Res<T>,
     mut commands: Commands,
@@ -506,9 +617,10 @@ pub(crate) fn start_loading_models<T: HttpClient>(
     let device = &device.0;
     let queue = &queue.0;
 
-    query.for_each(|(entity, url)| {
+    static_models.for_each(|(entity, url)| {
         let url = url.0.clone();
         let vertex_buffers = vertex_buffers.0.clone();
+        let animated_vertex_buffers = animated_vertex_buffers.0.clone();
         let index_buffer = index_buffer.0.clone();
         let texture_settings = texture_settings.clone();
 
@@ -531,6 +643,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
                 http_client: http_client.clone(),
                 index_buffer,
                 vertex_buffers,
+                animated_vertex_buffers,
                 pipelines,
                 texture_settings,
             };
@@ -552,15 +665,97 @@ pub(crate) fn start_loading_models<T: HttpClient>(
                 }
             }
         });
-    })
+    });
+
+    animated_models.for_each(|(entity, url)| {
+        let url = url.0.clone();
+        let vertex_buffers = vertex_buffers.0.clone();
+        let animated_vertex_buffers = animated_vertex_buffers.0.clone();
+        let index_buffer = index_buffer.0.clone();
+        let texture_settings = texture_settings.clone();
+
+        let model_setter = Setter(Default::default());
+
+        commands
+            .entity(entity)
+            .insert(PendingAnimatedModel(model_setter.clone()));
+
+        spawn({
+            let device = device.clone();
+            let queue = queue.clone();
+            let bind_group_layouts = bind_group_layouts.0.clone();
+            let pipelines = pipelines.0.clone();
+
+            let context = renderer_core::assets::models::Context {
+                device,
+                queue,
+                bind_group_layouts,
+                http_client: http_client.clone(),
+                index_buffer,
+                vertex_buffers,
+                animated_vertex_buffers,
+                pipelines,
+                texture_settings,
+            };
+
+            async move {
+                let result =
+                    renderer_core::assets::models::AnimatedModel::load(&context, &url).await;
+
+                match result {
+                    Err(error) => {
+                        log::error!(
+                            "Got an error while trying to load a model from '{}': {}",
+                            url,
+                            error
+                        );
+                    }
+                    Ok(model) => {
+                        model_setter.set(model);
+                    }
+                }
+            }
+        });
+    });
 }
 
-pub(crate) fn finish_loading_models(query: Query<(Entity, &PendingModel)>, mut commands: Commands) {
-    query.for_each(|(entity, pending_model)| {
+pub(crate) fn finish_loading_models(
+    static_models: Query<(Entity, &PendingModel)>,
+    animated_models: Query<(Entity, &PendingAnimatedModel)>,
+    device: Res<Device>,
+    bind_group_layouts: Res<BindGroupLayouts>,
+    mut commands: Commands,
+) {
+    static_models.for_each(|(entity, pending_model)| {
         if let Some(mut lock) = pending_model.0 .0.try_lock() {
             if let Some(loaded_model) = lock.take() {
                 commands.entity(entity).insert(Model(loaded_model));
             }
+        }
+    });
+
+    animated_models.for_each(|(entity, pending_model)| {
+        if let Some(mut lock) = pending_model.0 .0.try_lock() {
+            if let Some(loaded_model) = lock.take() {
+                commands
+                    .entity(entity)
+                    .insert(AnimatedModel(loaded_model))
+                    .insert(JointBuffer::new(&device.0, &bind_group_layouts.0));
+            }
+        }
+    })
+}
+
+pub(crate) fn add_joints_to_instances(
+    animated_models: Query<&AnimatedModel>,
+    instances: Query<(Entity, &InstanceOf), Without<AnimationJoints>>,
+    mut commands: Commands,
+) {
+    instances.for_each(|(entity, instance_of)| {
+        if let Ok(animated_model) = animated_models.get(instance_of.0) {
+            commands.entity(entity).insert(AnimationJoints(
+                animated_model.0.animation_data.animation_joints.clone(),
+            ));
         }
     })
 }

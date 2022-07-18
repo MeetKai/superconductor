@@ -2,6 +2,14 @@ use glam::Vec3;
 
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(C)]
+pub struct GpuInstance {
+    pub position: Vec3,
+    pub scale: f32,
+    pub rotation: glam::Quat,
+    pub joints_offset: u32,
+    pub _padding: [u32; 3],
+}
+
 pub struct Instance {
     pub position: Vec3,
     pub scale: f32,

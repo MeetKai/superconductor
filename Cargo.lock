@@ -1985,6 +1985,7 @@ dependencies = [
 name = "shared-structs"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "crevice",
  "glam",
 ]
@@ -2060,6 +2061,7 @@ name = "superconductor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrayvec",
  "bevy_app",
  "bevy_ecs",
  "futures",

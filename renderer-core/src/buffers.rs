@@ -3,10 +3,9 @@ use std::mem::size_of;
 use std::ops::Range;
 use std::sync::Arc;
 
-use super::Instance;
 use glam::{UVec4, Vec2, Vec3, Vec4};
 
-pub type InstanceBuffer = VecGpuBuffer<Instance>;
+pub type InstanceBuffer = VecGpuBuffer<super::GpuInstance>;
 
 pub struct VecGpuBuffer<T: bytemuck::Pod> {
     offset: u32,
@@ -257,7 +256,7 @@ impl VertexBuffers {
                 )),
                 uv: ArcSwap::from(create_buffer(
                     device,
-                    "normal buffer",
+                    "uv buffer",
                     capacity,
                     size_of::<Vec2>(),
                 )),
@@ -454,7 +453,7 @@ impl AnimatedVertexBuffers {
                 )),
                 uv: ArcSwap::from(create_buffer(
                     device,
-                    "normal buffer",
+                    "uv buffer",
                     capacity,
                     size_of::<Vec2>(),
                 )),
@@ -474,6 +473,7 @@ impl AnimatedVertexBuffers {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn insert(
         &self,
         positions: &[Vec3],
