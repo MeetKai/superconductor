@@ -169,7 +169,7 @@ fn animate_vrms(
                 }
                 animation_joints
                     .0
-                    .update(&animated_model.0.animation_data.reverse_depth_first_nodes);
+                    .update(&animated_model.0.animation_data.depth_first_nodes);
             }
             Err(error) => {
                 log::warn!("Got an error when proc animations: {}", error);
