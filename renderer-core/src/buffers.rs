@@ -3,10 +3,9 @@ use std::mem::size_of;
 use std::ops::Range;
 use std::sync::Arc;
 
-use super::FullInstance;
 use glam::{UVec4, Vec2, Vec3, Vec4};
 
-pub type InstanceBuffer = VecGpuBuffer<FullInstance>;
+pub type InstanceBuffer = VecGpuBuffer<super::GpuInstance>;
 
 pub struct VecGpuBuffer<T: bytemuck::Pod> {
     offset: u32,

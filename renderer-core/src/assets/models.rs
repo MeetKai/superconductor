@@ -154,6 +154,36 @@ pub struct AnimatedModelData {
     pub animation_joints: AnimationJoints,
 }
 
+async fn collect_buffers<T: HttpClient>(
+    gltf: &gltf::Gltf,
+    root_url: &url::Url,
+    context: &Context<T>,
+) -> anyhow::Result<HashMap<usize, Vec<u8>>> {
+    let mut buffer_map = HashMap::new();
+
+    for buffer in gltf.buffers() {
+        match buffer.source() {
+            gltf::buffer::Source::Bin => {}
+            gltf::buffer::Source::Uri(uri) => {
+                let url = url::Url::options().base_url(Some(root_url)).parse(uri)?;
+
+                if url.scheme() == "data" {
+                    let (_mime_type, data) = url.path().split_once(',').unwrap();
+                    log::warn!("Loading buffers from embedded base64 is inefficient. Consider moving the buffers into a seperate file.");
+                    buffer_map.insert(buffer.index(), base64::decode(data)?);
+                } else {
+                    buffer_map.insert(
+                        buffer.index(),
+                        context.http_client.fetch_bytes(&url, None).await?,
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(buffer_map)
+}
+
 pub struct Model {
     pub primitives: Vec<Primitive>,
     pub primitive_ranges: PrimitiveRanges,
@@ -169,29 +199,9 @@ impl Model {
         let gltf: gltf::Gltf<()> =
             gltf::Gltf::from_slice(&context.http_client.fetch_bytes(root_url, None).await?)?;
 
-        let mut buffer_map = HashMap::new();
-
         let node_tree = gltf_helpers::NodeTree::new(gltf.nodes());
 
-        for buffer in gltf.buffers() {
-            match buffer.source() {
-                gltf::buffer::Source::Bin => {}
-                gltf::buffer::Source::Uri(uri) => {
-                    let url = url::Url::options().base_url(Some(root_url)).parse(uri)?;
-
-                    if url.scheme() == "data" {
-                        let (_mime_type, data) = url.path().split_once(',').unwrap();
-                        log::warn!("Loading buffers from embedded base64 is inefficient. Consider moving the buffers into a seperate file.");
-                        buffer_map.insert(buffer.index(), base64::decode(data)?);
-                    } else {
-                        buffer_map.insert(
-                            buffer.index(),
-                            context.http_client.fetch_bytes(&url, None).await?,
-                        );
-                    }
-                }
-            }
-        }
+        let buffer_map = collect_buffers(&gltf, root_url, context).await?;
 
         // What we're doing here is essentially collecting all the model primitives that share a meterial together
         // to reduce the number of draw calls.
@@ -402,29 +412,9 @@ impl AnimatedModel {
         let gltf: gltf::Gltf<()> =
             gltf::Gltf::from_slice(&context.http_client.fetch_bytes(root_url, None).await?)?;
 
-        let mut buffer_map = HashMap::new();
-
         let node_tree = gltf_helpers::NodeTree::new(gltf.nodes());
 
-        for buffer in gltf.buffers() {
-            match buffer.source() {
-                gltf::buffer::Source::Bin => {}
-                gltf::buffer::Source::Uri(uri) => {
-                    let url = url::Url::options().base_url(Some(root_url)).parse(uri)?;
-
-                    if url.scheme() == "data" {
-                        let (_mime_type, data) = url.path().split_once(',').unwrap();
-                        log::warn!("Loading buffers from embedded base64 is inefficient. Consider moving the buffers into a seperate file.");
-                        buffer_map.insert(buffer.index(), base64::decode(data)?);
-                    } else {
-                        buffer_map.insert(
-                            buffer.index(),
-                            context.http_client.fetch_bytes(&url, None).await?,
-                        );
-                    }
-                }
-            }
-        }
+        let buffer_map = collect_buffers(&gltf, root_url, context).await?;
 
         // What we're doing here is essentially collecting all the model primitives that share a meterial together
         // to reduce the number of draw calls.
@@ -690,6 +680,10 @@ impl AnimatedModel {
                 animation_joints,
             },
         })
+    }
+
+    pub fn num_joints(&self) -> u32 {
+        self.animation_data.joint_indices_to_node_indices.len() as u32
     }
 }
 

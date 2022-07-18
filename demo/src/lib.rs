@@ -134,13 +134,11 @@ impl Plugin for SuperconductorPlugin {
 
         app.insert_resource(NewIblTextures(Some(NewIblTexturesInner {
             diffuse_cubemap: url::Url::parse(
-                "http://localhost:8000/assets/cubemaps/lodge_lambertian.ktx2",
+                "http://localhost:8000/assets/cubemaps/lodge_diff.ktx2",
             )
             .unwrap(),
-            specular_cubemap: url::Url::parse(
-                "http://localhost:8000/assets/cubemaps/lodge_ggx.ktx2",
-            )
-            .unwrap(),
+            specular_cubemap: url::Url::parse("http://localhost:8000/assets/cubemaps/lodge.ktx2")
+                .unwrap(),
         })));
     }
 }

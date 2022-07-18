@@ -1,11 +1,10 @@
 mod bind_group_layouts;
 mod buffers;
-mod instance;
 mod pipelines;
 
-pub mod ibl;
-
 pub mod assets;
+pub mod ibl;
+pub mod instance;
 pub mod utils;
 
 pub use arc_swap;
@@ -20,7 +19,7 @@ pub use buffers::{
     AnimatedVertexBuffers, IndexBuffer, InstanceBuffer, RawAnimatedVertexBuffers, RawVertexBuffers,
     VertexBuffers,
 };
-pub use instance::{FullInstance, Instance};
+pub use instance::{GpuInstance, Instance};
 pub use pipelines::{PipelineOptions, Pipelines};
 
 #[cfg(feature = "wasm")]

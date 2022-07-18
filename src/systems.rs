@@ -17,7 +17,7 @@ use renderer_core::{
     ibl::IblTextures,
     shared_structs, spawn,
     utils::{Setter, Swappable},
-    FullInstance, Texture,
+    GpuInstance, Texture,
 };
 use std::sync::Arc;
 
@@ -145,19 +145,21 @@ pub(crate) fn push_joints(
 // Here would be a good place to do culling.
 pub(crate) fn push_entity_instances(
     mut instance_query: Query<(&InstanceOf, &Instance)>,
-    mut model_query: Query<&mut Instances>,
+    mut model_query: Query<(&mut Instances, Option<&AnimatedModel>)>,
 ) {
     instance_query.for_each_mut(|(instance_of, instance)| {
         match model_query.get_mut(instance_of.0) {
-            Ok(mut instances) => {
+            Ok((mut instances, animated_model)) => {
                 let instance_index = instances.0.len() as u32;
+                let num_joints = animated_model
+                    .map(|animated_model| animated_model.0.num_joints())
+                    .unwrap_or(0);
 
-                instances.0.push(FullInstance {
+                instances.0.push(GpuInstance {
                     position: instance.0.position,
                     scale: instance.0.scale,
                     rotation: instance.0.rotation,
-                    instance_index,
-                    num_joints: 10,
+                    joints_offset: instance_index * num_joints,
                     _padding: Default::default(),
                 });
             }

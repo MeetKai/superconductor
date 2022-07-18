@@ -23,7 +23,7 @@ pub struct PendingAnimatedModel(pub Setter<models::AnimatedModel>);
 pub struct AnimatedModel(pub models::AnimatedModel);
 
 #[derive(Component)]
-pub struct Instances(pub Vec<renderer_core::FullInstance>);
+pub struct Instances(pub Vec<renderer_core::GpuInstance>);
 
 #[derive(Component)]
 pub struct InstanceRange(pub Range<u32>);

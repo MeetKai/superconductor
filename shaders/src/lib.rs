@@ -57,12 +57,12 @@ pub fn animated_vertex(
     uv: Vec2,
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
-    #[spirv(flat)] instance_index: u32,
-    #[spirv(flat)] instance_num_joints: u32,
+    #[spirv(flat)] joints_offset: u32,
     #[spirv(flat)] joint_indices: UVec4,
     joint_weights: Vec4,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
-    #[spirv(descriptor_set = 2, binding = 0, uniform)] joint_transforms: &[JointTransform; JointTransform::MAX_COUNT],
+    #[spirv(descriptor_set = 2, binding = 0, uniform)]
+    joint_transforms: &[JointTransform; JointTransform::MAX_COUNT],
     #[spirv(position)] builtin_pos: &mut Vec4,
     #[spirv(view_index)] view_index: i32,
     out_position: &mut Vec3,
@@ -72,13 +72,13 @@ pub fn animated_vertex(
     let instance_scale = instance_translation_and_scale.w;
     let instance_translation = instance_translation_and_scale.truncate();
 
-    let joint_offset = instance_index * instance_num_joints;
+    let joint_indices = joint_indices + joints_offset;
 
     let skin = unsafe {
-        *joint_transforms.index_unchecked((joint_offset + joint_indices.x) as usize) * joint_weights.x
-            + *joint_transforms.index_unchecked((joint_offset + joint_indices.y) as usize) * joint_weights.y
-            + *joint_transforms.index_unchecked((joint_offset + joint_indices.z) as usize) * joint_weights.z
-            + *joint_transforms.index_unchecked((joint_offset + joint_indices.w) as usize) * joint_weights.w
+        *joint_transforms.index_unchecked(joint_indices.x as usize) * joint_weights.x
+            + *joint_transforms.index_unchecked(joint_indices.y as usize) * joint_weights.y
+            + *joint_transforms.index_unchecked(joint_indices.z as usize) * joint_weights.z
+            + *joint_transforms.index_unchecked(joint_indices.w as usize) * joint_weights.w
     };
 
     let position = skin * position;
