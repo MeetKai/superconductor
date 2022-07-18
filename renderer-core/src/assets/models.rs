@@ -523,13 +523,10 @@ impl AnimatedModel {
                     }),
                 );
 
-                staging_primitive.buffers.joint_weights.extend(
-                    reader
-                        .read_weights(0)
-                        .unwrap()
-                        .into_f32()
-                        .map(|weights| Vec4::from(weights)),
-                );
+                staging_primitive
+                    .buffers
+                    .joint_weights
+                    .extend(reader.read_weights(0).unwrap().into_f32().map(Vec4::from));
             }
         }
 

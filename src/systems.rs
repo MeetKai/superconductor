@@ -8,7 +8,7 @@ use crate::resources::{
     MainBindGroup, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer,
     SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
-use bevy_ecs::prelude::{Added, Commands, Entity, NonSend, Query, Res, ResMut, Without};
+use bevy_ecs::prelude::{Added, Commands, Entity, Query, Res, ResMut, Without};
 use renderer_core::{
     arc_swap::ArcSwap,
     assets::{textures, HttpClient},
@@ -368,6 +368,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     )));
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn update_ibl_textures<T: HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
@@ -522,7 +523,7 @@ pub(crate) fn set_desktop_uniform_buffers(
 
 #[cfg(feature = "wasm")]
 pub(crate) fn update_uniform_buffers(
-    pose: NonSend<web_sys::XrViewerPose>,
+    pose: bevy_ecs::prelude::NonSend<web_sys::XrViewerPose>,
     pipeline_options: Res<renderer_core::PipelineOptions>,
     queue: Res<Queue>,
     uniform_buffer: Res<UniformBuffer>,
@@ -596,6 +597,7 @@ pub(crate) fn update_uniform_buffers(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn start_loading_models<T: HttpClient>(
     static_models: Query<(Entity, &ModelUrl), Added<ModelUrl>>,
     animated_models: Query<(Entity, &AnimatedModelUrl), Added<AnimatedModelUrl>>,

@@ -537,6 +537,7 @@ pub struct PipelineSet {
 }
 
 impl PipelineSet {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         device: &wgpu::Device,
         pipeline_layout: &wgpu::PipelineLayout,
@@ -636,7 +637,7 @@ impl PipelineSet {
                     vertex: animated_vertex.clone(),
                     fragment: Some(alpha_clipped_fragment.clone()),
                     primitive: normal_primitive_state,
-                    depth_stencil: Some(normal_depth_state.clone()),
+                    depth_stencil: Some(normal_depth_state),
                     multisample: Default::default(),
                     multiview,
                 },
