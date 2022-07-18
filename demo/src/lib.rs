@@ -81,7 +81,7 @@ impl Plugin for SuperconductorPlugin {
             .world
             .spawn()
             .insert(components::AnimatedModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/Darkness_Shibu.vrm").unwrap(),
+                url::Url::parse("http://localhost:8000/assets/models/squid6.glb").unwrap(),
             ))
             .insert(components::Instances(Default::default()))
             .insert(components::InstanceRange(Default::default()))
@@ -95,7 +95,10 @@ impl Plugin for SuperconductorPlugin {
                 0.5,
                 Default::default(),
             )))
-            .insert(VrmInstance);
+            .insert(components::AnimationState {
+                time: 0.5,
+                animation_index: 1,
+            });
 
         for i in 0..10 {
             app.world
@@ -106,7 +109,10 @@ impl Plugin for SuperconductorPlugin {
                     0.5 + (i as f32 * 0.05),
                     Default::default(),
                 )))
-                .insert(VrmInstance);
+                .insert(components::AnimationState {
+                    time: i as f32 / 10.0,
+                    animation_index: i,
+                });
         }
 
         let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()

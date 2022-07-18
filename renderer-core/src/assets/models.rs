@@ -427,7 +427,11 @@ impl AnimatedModel {
             .nodes()
             .filter_map(|node| node.mesh().map(|mesh| (node, mesh)))
         {
-            let transform = node_tree.transform_of(node.index());
+            let transform = if node.skin().is_some() {
+                Similarity::IDENTITY
+            } else {
+                node_tree.transform_of(node.index())
+            };
 
             for primitive in mesh.primitives() {
                 let material = primitive.material();
@@ -622,19 +626,7 @@ impl AnimatedModel {
             get_buffer(&gltf, &buffer_map, buffer)
         });
 
-        /*if gltf.skins().count() > 1 {
-            return Err(anyhow::anyhow!(
-                "Expected <= 1 skin, got {}",
-                gltf.skins().count()
-            ));
-        }*/
-
         let skin = gltf.skins().next();
-        /*if let Some(skin) = skin.as_ref() {
-            if skin.skeleton().is_some() {
-                return Err(anyhow::anyhow!("Expected there not to be a skeleton"));
-            }
-        }*/
 
         let joint_indices_to_node_indices: Vec<_> = if let Some(skin) = skin.as_ref() {
             skin.joints().map(|node| node.index()).collect()

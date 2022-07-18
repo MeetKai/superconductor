@@ -31,7 +31,7 @@ pub fn read_animations<'a, F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'a [u8]>>(
                     gltf::animation::Property::Translation => {
                         let outputs = match reader.read_outputs().unwrap() {
                             gltf::animation::util::ReadOutputs::Translations(translations) => {
-                                translations.map(|translation| translation.into()).collect()
+                                translations.map(Vec3::from).collect()
                             }
                             _ => unreachable!(),
                         };
@@ -46,7 +46,7 @@ pub fn read_animations<'a, F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'a [u8]>>(
                     gltf::animation::Property::Rotation => {
                         let outputs = match reader.read_outputs().unwrap() {
                             gltf::animation::util::ReadOutputs::Rotations(rotations) => {
-                                rotations.into_f32().map(|q| -Quat::from_array(q)).collect()
+                                rotations.into_f32().map(Quat::from_array).collect()
                             }
                             _ => unreachable!(),
                         };
@@ -61,7 +61,7 @@ pub fn read_animations<'a, F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'a [u8]>>(
                     gltf::animation::Property::Scale => {
                         let outputs = match reader.read_outputs().unwrap() {
                             gltf::animation::util::ReadOutputs::Scales(scales) => scales
-                                .map(|scales| (scales[0] + scales[1] + scales[2]) / 3.0)
+                                .map(|scale| scale[0].max(scale[1]).max(scale[2]))
                                 .collect(),
                             _ => unreachable!(),
                         };
@@ -119,14 +119,7 @@ impl AnimationJoints {
         let joint_similarities: Vec<_> = nodes
             .map(|node| {
                 let (translation, rotation, scale) = node.transform().decomposed();
-                let translation = Vec3::from(translation);
-                let rotation = Quat::from_array(rotation);
-                let scale = (scale[0] + scale[1] + scale[2]) / 3.0;
-                Similarity {
-                    translation,
-                    rotation,
-                    scale,
-                }
+                Similarity::new_from_gltf(translation, rotation, scale)
             })
             .collect();
 

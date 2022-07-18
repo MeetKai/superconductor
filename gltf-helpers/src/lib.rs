@@ -47,6 +47,11 @@ impl Similarity {
             scale: max_scale,
         }
     }
+
+    pub fn new_from_gltf_node(node: &gltf::Node) -> Self {
+        let (translation, rotation, scale) = node.transform().decomposed();
+        Self::new_from_gltf(translation, rotation, scale)
+    }
 }
 
 impl Mul<Similarity> for Similarity {
