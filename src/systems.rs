@@ -3,12 +3,12 @@ use crate::components::{
     InstanceRange, Instances, JointBuffer, Model, ModelUrl, PendingAnimatedModel, PendingModel,
 };
 use crate::resources::{
-    AnimatedVertexBuffers, BindGroupLayouts, Camera, CompositeBindGroup, Device, IndexBuffer,
-    InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LinearSampler,
+    AnimatedVertexBuffers, BindGroupLayouts, Camera, ClampSampler, CompositeBindGroup, Device,
+    IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer,
     MainBindGroup, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer,
     SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
-use bevy_ecs::prelude::{Added, Commands, Entity, Query, Res, ResMut, Without};
+use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
     arc_swap::ArcSwap,
     assets::{textures, HttpClient},
@@ -59,16 +59,30 @@ pub(crate) fn clear_joint_buffers(mut query: Query<&mut JointBuffer>) {
 pub(crate) fn progress_animation_times(
     mut instance_query: Query<(&InstanceOf, &mut AnimationState)>,
     model_query: Query<&AnimatedModel>,
+    mut times_error_reported: Local<u32>,
 ) {
     instance_query.for_each_mut(|(instance_of, mut animation_state)| {
         match model_query.get(instance_of.0) {
             Ok(animated_model) => {
-                animation_state.time = (animation_state.time + 1.0 / 60.0)
-                    % animated_model.0.animation_data.animations[animation_state.animation_index]
-                        .total_time();
+                let animations = &animated_model
+                .0
+                .animation_data
+                .animations;
+
+                if let Some(animation) = animations
+                    .get(animation_state.animation_index)
+                {
+                    animation_state.time =
+                        (animation_state.time + 1.0 / 60.0) % animation.total_time();
+                } else {
+                    log::warn!("Got an error when progressing animations: animation index {} is out of range of {} animations", animation_state.animation_index, animations.len());
+                }
             }
             Err(error) => {
-                log::warn!("Got an error when progressing animations: {}", error);
+                if *times_error_reported < 5 {
+                    log::warn!("Got an error when progressing animations: {}", error);
+                    *times_error_reported += 1;
+                }
             }
         }
     })
@@ -81,12 +95,15 @@ pub(crate) fn sample_animations(
     instance_query.for_each_mut(|(instance_of, mut animation_joints, animation_state)| {
         match model_query.get(instance_of.0) {
             Ok(animated_model) => {
-                animated_model.0.animation_data.animations[animation_state.animation_index]
-                    .animate(
+                let animations = &animated_model.0.animation_data.animations;
+
+                if let Some(animation) = animations.get(animation_state.animation_index) {
+                    animation.animate(
                         &mut animation_joints.0,
                         animation_state.time,
                         &animated_model.0.animation_data.depth_first_nodes,
                     );
+                }
             }
             Err(error) => {
                 log::warn!("Got an error when sampling animations: {}", error);
@@ -261,13 +278,12 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
         mapped_at_creation: false,
     }));
 
-    let linear_sampler = Arc::new(device.create_sampler(&wgpu::SamplerDescriptor {
-        address_mode_u: wgpu::AddressMode::Repeat,
-        address_mode_v: wgpu::AddressMode::Repeat,
+    let clamp_sampler = Arc::new(device.create_sampler(&wgpu::SamplerDescriptor {
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::FilterMode::Linear,
-        anisotropy_clamp: Some(std::num::NonZeroU8::new(16).unwrap()), //performance_settings.anisotropy_clamp(),
+        anisotropy_clamp: texture_settings.anisotropy_clamp,
         ..Default::default()
     }));
 
@@ -291,7 +307,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
         device,
         &ibl_textures,
         &uniform_buffer,
-        &linear_sampler,
+        &clamp_sampler,
         bind_group_layouts,
     ));
 
@@ -299,7 +315,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
 
     commands.insert_resource(UniformBuffer(uniform_buffer.clone()));
     commands.insert_resource(MainBindGroup(main_bind_group));
-    commands.insert_resource(LinearSampler(linear_sampler.clone()));
+    commands.insert_resource(ClampSampler(clamp_sampler.clone()));
     commands.insert_resource(ibl_textures.clone());
 
     commands.insert_resource(SkyboxUniformBuffer(skybox_uniform_buffer));
@@ -340,7 +356,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
                     &textures_context.device,
                     &ibl_textures,
                     &uniform_buffer,
-                    &linear_sampler,
+                    &clamp_sampler,
                     &textures_context.bind_group_layouts,
                 ));
             }
@@ -377,7 +393,7 @@ pub(crate) fn update_ibl_textures<T: HttpClient>(
     texture_settings: Res<textures::Settings>,
     mut new_ibl_textures: ResMut<NewIblTextures>,
     ibl_textures: Res<Arc<IblTextures>>,
-    linear_sampler: Res<LinearSampler>,
+    clamp_sampler: Res<ClampSampler>,
     main_bind_group: Res<MainBindGroup>,
     uniform_buffer: Res<UniformBuffer>,
     http_client: Res<T>,
@@ -393,7 +409,7 @@ pub(crate) fn update_ibl_textures<T: HttpClient>(
     let queue = &queue.0;
     let pipelines = &pipelines.0;
     let bind_group_layouts = &bind_group_layouts.0;
-    let linear_sampler = linear_sampler.0.clone();
+    let clamp_sampler = clamp_sampler.0.clone();
     let uniform_buffer = uniform_buffer.0.clone();
     let ibl_textures = ibl_textures.clone();
 
@@ -426,7 +442,7 @@ pub(crate) fn update_ibl_textures<T: HttpClient>(
                     &textures_context.device,
                     &ibl_textures,
                     &uniform_buffer,
-                    &linear_sampler,
+                    &clamp_sampler,
                     &textures_context.bind_group_layouts,
                 ));
             }

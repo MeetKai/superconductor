@@ -156,7 +156,7 @@ pub fn fragment(
     normal: Vec3,
     uv: Vec2,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
-    #[spirv(descriptor_set = 0, binding = 1)] sampler: &Sampler,
+    #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
     #[spirv(descriptor_set = 0, binding = 3)] diffuse_ibl_cubemap: &Image!(cube, type=f32, sampled),
     #[spirv(descriptor_set = 0, binding = 4)] specular_ibl_cubemap: &Image!(cube, type=f32, sampled),
@@ -207,7 +207,7 @@ pub fn fragment(
         material_params.base,
         |normal_dot_view: f32, perceptual_roughness: glam_pbr::PerceptualRoughness| {
             let uv = Vec2::new(normal_dot_view, perceptual_roughness.0);
-            let sample: Vec4 = ibl_lut.sample_by_lod(*sampler, uv, 0.0);
+            let sample: Vec4 = ibl_lut.sample_by_lod(*clamp_sampler, uv, 0.0);
             Vec2::new(sample.x, sample.y)
         },
     );
@@ -218,7 +218,7 @@ pub fn fragment(
         material_params.base,
         lut_values,
         |normal| {
-            let sample: Vec4 = diffuse_ibl_cubemap.sample_by_lod(*sampler, normal, 0.0);
+            let sample: Vec4 = diffuse_ibl_cubemap.sample_by_lod(*clamp_sampler, normal, 0.0);
             sample.truncate()
         },
     );
@@ -230,7 +230,7 @@ pub fn fragment(
         lut_values,
         9,
         |ray, lod| {
-            let sample: Vec4 = specular_ibl_cubemap.sample_by_lod(*sampler, ray, lod);
+            let sample: Vec4 = specular_ibl_cubemap.sample_by_lod(*clamp_sampler, ray, lod);
             sample.truncate()
         },
     );
@@ -246,7 +246,7 @@ pub fn fragment_alpha_clipped(
     normal: Vec3,
     uv: Vec2,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
-    #[spirv(descriptor_set = 0, binding = 1)] sampler: &Sampler,
+    #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
     #[spirv(descriptor_set = 0, binding = 3)] diffuse_ibl_cubemap: &Image!(cube, type=f32, sampled),
     #[spirv(descriptor_set = 0, binding = 4)] specular_ibl_cubemap: &Image!(cube, type=f32, sampled),
@@ -302,7 +302,7 @@ pub fn fragment_alpha_clipped(
         material_params.base,
         |normal_dot_view: f32, perceptual_roughness: glam_pbr::PerceptualRoughness| {
             let uv = Vec2::new(normal_dot_view, perceptual_roughness.0);
-            let sample: Vec4 = ibl_lut.sample_by_lod(*sampler, uv, 0.0);
+            let sample: Vec4 = ibl_lut.sample_by_lod(*clamp_sampler, uv, 0.0);
             Vec2::new(sample.x, sample.y)
         },
     );
@@ -313,7 +313,7 @@ pub fn fragment_alpha_clipped(
         material_params.base,
         lut_values,
         |normal| {
-            let sample: Vec4 = diffuse_ibl_cubemap.sample_by_lod(*sampler, normal, 0.0);
+            let sample: Vec4 = diffuse_ibl_cubemap.sample_by_lod(*clamp_sampler, normal, 0.0);
             sample.truncate()
         },
     );
@@ -325,7 +325,7 @@ pub fn fragment_alpha_clipped(
         lut_values,
         9,
         |ray, lod| {
-            let sample: Vec4 = specular_ibl_cubemap.sample_by_lod(*sampler, ray, lod);
+            let sample: Vec4 = specular_ibl_cubemap.sample_by_lod(*clamp_sampler, ray, lod);
             sample.truncate()
         },
     );

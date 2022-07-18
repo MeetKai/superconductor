@@ -150,7 +150,7 @@ impl AnimationJoints {
             })
     }
 
-    fn update(&mut self, depth_first_nodes: &[(usize, Option<usize>)]) {
+    pub fn update(&mut self, depth_first_nodes: &[(usize, Option<usize>)]) {
         for &(index, parent) in depth_first_nodes.iter() {
             if let Some(parent) = parent {
                 let parent_transform = self.global_transforms[parent];
@@ -159,6 +159,14 @@ impl AnimationJoints {
                 self.global_transforms[index] = self.local_transforms[index];
             }
         }
+    }
+
+    pub fn get_joint_mut(
+        &mut self,
+        index: usize,
+        joint_indices_to_node_indices: &[usize],
+    ) -> &mut Similarity {
+        &mut self.local_transforms[joint_indices_to_node_indices[index]]
     }
 }
 

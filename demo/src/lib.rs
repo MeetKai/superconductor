@@ -81,7 +81,7 @@ impl Plugin for SuperconductorPlugin {
             .world
             .spawn()
             .insert(components::AnimatedModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/fire_giant.glb").unwrap(),
+                url::Url::parse("http://localhost:8000/assets/models/Darkness_Shibu.vrm").unwrap(),
             ))
             .insert(components::Instances(Default::default()))
             .insert(components::InstanceRange(Default::default()))
@@ -95,10 +95,7 @@ impl Plugin for SuperconductorPlugin {
                 0.5,
                 Default::default(),
             )))
-            .insert(components::AnimationState {
-                time: 0.5,
-                animation_index: 1,
-            });
+            .insert(VrmInstance);
 
         for i in 0..10 {
             app.world
@@ -109,10 +106,7 @@ impl Plugin for SuperconductorPlugin {
                     0.5 + (i as f32 * 0.05),
                     Default::default(),
                 )))
-                .insert(components::AnimationState {
-                    time: i as f32 / 10.0,
-                    animation_index: i % 3,
-                });
+                .insert(VrmInstance);
         }
 
         let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()
@@ -127,6 +121,7 @@ impl Plugin for SuperconductorPlugin {
         app.add_system(rotate_entities);
         app.add_system(handle_keyboard_input);
         app.add_system(update_camera);
+        app.add_system(animate_vrms);
 
         let plugin: superconductor::XrPlugin = superconductor::XrPlugin::new(self.mode);
 
@@ -141,6 +136,40 @@ impl Plugin for SuperconductorPlugin {
                 .unwrap(),
         })));
     }
+}
+
+fn animate_vrms(
+    mut instance_query: Query<
+        (&components::InstanceOf, &mut components::AnimationJoints),
+        With<VrmInstance>,
+    >,
+    model_query: Query<&components::AnimatedModel>,
+) {
+    instance_query.for_each_mut(|(instance_of, mut animation_joints)| {
+        match model_query.get(instance_of.0) {
+            Ok(animated_model) => {
+                for i in 0..5 {
+                    animation_joints
+                        .0
+                        .get_joint_mut(
+                            i,
+                            &animated_model
+                                .0
+                                .animation_data
+                                .joint_indices_to_node_indices,
+                        )
+                        .rotation *=
+                        renderer_core::glam::Quat::from_rotation_y(5.0_f32.to_radians());
+                }
+                animation_joints
+                    .0
+                    .update(&animated_model.0.animation_data.depth_first_nodes);
+            }
+            Err(error) => {
+                log::warn!("Got an error when proc animations: {}", error);
+            }
+        }
+    })
 }
 
 #[cfg(feature = "wasm")]
@@ -200,6 +229,9 @@ fn create_button(text: &str) -> web_sys::HtmlButtonElement {
 
 #[derive(Component)]
 struct Spinning;
+
+#[derive(Component)]
+struct VrmInstance;
 
 #[derive(Default)]
 struct KeyboardState {

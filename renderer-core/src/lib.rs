@@ -215,7 +215,7 @@ pub fn create_main_bind_group(
     device: &wgpu::Device,
     ibl_textures: &ibl::IblTextures,
     uniform_buffer: &wgpu::Buffer,
-    sampler: &wgpu::Sampler,
+    clamp_sampler: &wgpu::Sampler,
     bind_group_layouts: &BindGroupLayouts,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -228,7 +228,7 @@ pub fn create_main_bind_group(
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Sampler(sampler),
+                resource: wgpu::BindingResource::Sampler(clamp_sampler),
             },
             wgpu::BindGroupEntry {
                 binding: 2,

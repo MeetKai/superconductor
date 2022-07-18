@@ -142,7 +142,7 @@ pub(crate) fn render(
     mut intermediate_depth_framebuffer: ResMut<resources::IntermediateDepthFramebuffer>,
     mut composite_bind_group: ResMut<resources::CompositeBindGroup>,
     pipeline_options: Res<renderer_core::PipelineOptions>,
-    linear_sampler: Res<resources::LinearSampler>,
+    clamp_sampler: Res<resources::ClampSampler>,
     (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer): (
         Res<IndexBuffer>,
         Res<VertexBuffers>,
@@ -227,7 +227,7 @@ pub(crate) fn render(
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
-                            resource: wgpu::BindingResource::Sampler(&linear_sampler.0),
+                            resource: wgpu::BindingResource::Sampler(&clamp_sampler.0),
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,

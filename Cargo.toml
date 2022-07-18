@@ -62,3 +62,18 @@ members = [
 glow = { git = "https://github.com/expenses/glow", branch = "webxr" }
 wgpu = { git = "https://github.com/expenses/wgpu", branch = "webxr-more-extensions" }
 wgpu-hal = { git = "https://github.com/expenses/wgpu", branch = "webxr-more-extensions" }
+
+[profile.dev]
+debug = true
+
+[profile.dev.package.image]
+opt-level = 3
+
+[profile.dev.package.png]
+opt-level = 3
+
+[profile.dev.package.adler]
+opt-level = 3
+
+[profile.dev.package.miniz_oxide]
+opt-level = 3

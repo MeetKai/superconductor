@@ -38,7 +38,7 @@ pub(crate) struct InstanceBuffer(pub(crate) renderer_core::InstanceBuffer);
 pub(crate) struct IntermediateDepthFramebuffer(pub(crate) CachedFramebuffer);
 pub(crate) struct IntermediateColorFramebuffer(pub(crate) CachedFramebuffer);
 pub(crate) struct CompositeBindGroup(pub(crate) Option<wgpu::BindGroup>);
-pub(crate) struct LinearSampler(pub(crate) Arc<wgpu::Sampler>);
+pub(crate) struct ClampSampler(pub(crate) Arc<wgpu::Sampler>);
 
 #[derive(Default)]
 pub(crate) struct CachedFramebuffer {
