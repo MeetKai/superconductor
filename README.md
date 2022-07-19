@@ -1,5 +1,5 @@
 # Superconductor
-a work-in-progress 3d renderer built on top of `wgpu`
+a work-in-progress 3D renderer built on top of `wgpu`
 
 It primarily targets web browsers via WebGL2, with VR and AR support via WebXR. It also has some basic support for compiling to a native binary.
 
