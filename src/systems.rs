@@ -414,13 +414,13 @@ pub(crate) fn update_ibl_resources<T: HttpClient>(
     };
 
     spawn(async move {
-        match renderer_core::assets::textures::load_ktx2_cubemap(
+        match renderer_core::assets::textures::load_ibl_cubemap(
             textures_context.clone(),
             &new_ibl_cubemap,
         )
         .await
         {
-            Ok((specular_cubemap, Some(sphere_harmonics))) => {
+            Ok((specular_cubemap, sphere_harmonics)) => {
                 ibl_resources.cubemap.store(specular_cubemap);
                 ibl_resources
                     .sphere_harmonics
@@ -434,8 +434,8 @@ pub(crate) fn update_ibl_resources<T: HttpClient>(
                     &textures_context.bind_group_layouts,
                 ));
             }
-            _ => {
-                log::error!("Error file loading cubemaps");
+            Err(error) => {
+                log::error!("Error file loading ibl cubemap: {}", error);
             }
         }
     });
