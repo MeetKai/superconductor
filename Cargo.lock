@@ -1211,7 +1211,7 @@ dependencies = [
 [[package]]
 name = "ktx2"
 version = "0.3.0"
-source = "git+https://github.com/BVE-Reborn/ktx2#a26b32ccd6ac6ac83f7a57eee44dd5c44e382b94"
+source = "git+https://github.com/expenses/ktx2?branch=public-kv-iterator#47f98a7e225d07b47db18564546d13c11d80f52d"
 dependencies = [
  "bitflags",
 ]

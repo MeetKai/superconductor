@@ -28,7 +28,7 @@ pub use renderer_core::{
 
 use components::Instance;
 use resources::{
-    Camera, Device, EventQueue, NewIblTextures, Queue, SurfaceFrameView, WindowChanges,
+    Camera, Device, EventQueue, NewIblCubemap, Queue, SurfaceFrameView, WindowChanges,
 };
 
 #[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
@@ -67,7 +67,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
         app.insert_resource(textures::Settings {
             anisotropy_clamp: Some(std::num::NonZeroU8::new(16).unwrap()),
         });
-        app.insert_resource(NewIblTextures(None));
+        app.insert_resource(NewIblCubemap(None));
         app.insert_resource(WindowChanges::default());
         app.insert_resource(self.http_client.clone());
 
@@ -87,7 +87,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
             SystemStage::single_threaded()
                 .with_system(systems::start_loading_models::<T>)
                 .with_system(systems::finish_loading_models)
-                .with_system(systems::update_ibl_textures::<T>)
+                .with_system(systems::update_ibl_resources::<T>)
                 .with_system(systems::add_joints_to_instances),
         );
 
