@@ -2,6 +2,13 @@ use glam::Vec3;
 
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(C)]
+pub struct LineVertex {
+    pub position: Vec3,
+    pub colour_id: u32,
+}
+
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[repr(C)]
 pub struct GpuInstance {
     pub position: Vec3,
     pub scale: f32,

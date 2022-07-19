@@ -148,7 +148,7 @@ fn collect_animated_primitives<
 
 pub struct AnimatedModelData {
     pub animations: Vec<Animation>,
-    pub depth_first_nodes: Vec<(usize, Option<usize>)>,
+    pub depth_first_nodes: gltf_helpers::DepthFirstNodes,
     pub inverse_bind_transforms: Vec<Similarity>,
     pub joint_indices_to_node_indices: Vec<usize>,
     pub animation_joints: AnimationJoints,
@@ -656,7 +656,7 @@ impl AnimatedModel {
                 .collect()
         };
 
-        let depth_first_nodes: Vec<_> = node_tree.iter_depth_first().collect();
+        let depth_first_nodes = gltf_helpers::DepthFirstNodes::new(gltf.nodes(), &node_tree);
 
         let animation_joints = AnimationJoints::new(gltf.nodes(), &depth_first_nodes);
 

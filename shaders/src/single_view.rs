@@ -218,6 +218,17 @@ pub fn vertex_skybox_mirrored(
     );
 }
 
+#[spirv(vertex)]
+pub fn line_vertex(
+    position: Vec3,
+    #[spirv(flat)] colour_id: u32,
+    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(position)] builtin_pos: &mut Vec4,
+    colour: &mut Vec3,
+) {
+    super::line_vertex(position, colour_id, uniforms, builtin_pos, 0, colour);
+}
+
 #[spirv(fragment)]
 pub fn tonemap(
     uv: Vec2,

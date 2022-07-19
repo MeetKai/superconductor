@@ -8,7 +8,7 @@
 use shared_structs::{JointTransform, MaterialSettings, MirrorUniforms, SkyboxUniforms, Uniforms};
 use spirv_std::{
     arch::IndexUnchecked,
-    glam::{self, Mat3, UVec4, Vec2, Vec3, Vec4},
+    glam::{self, const_vec3, Mat3, UVec4, Vec2, Vec3, Vec4},
     num_traits::Float,
     Image, Sampler,
 };
@@ -18,8 +18,9 @@ type SampledImage = Image!(2D, type=f32, sampled);
 mod single_view;
 
 pub use single_view::{
-    animated_vertex as _, fragment as _, fragment_alpha_clipped as _, tonemap as _, vertex as _,
-    vertex_mirrored as _, vertex_skybox as _, vertex_skybox_mirrored as _,
+    animated_vertex as _, fragment as _, fragment_alpha_clipped as _, line_vertex as _,
+    tonemap as _, vertex as _, vertex_mirrored as _, vertex_skybox as _,
+    vertex_skybox_mirrored as _,
 };
 
 #[spirv(vertex)]
@@ -72,16 +73,27 @@ pub fn animated_vertex(
     let instance_scale = instance_translation_and_scale.w;
     let instance_translation = instance_translation_and_scale.truncate();
 
-    let joint_indices = joint_indices + joints_offset;
+    let global_joint_indices = joint_indices + joints_offset;
+    let joint_weights =
+        joint_weights / (joint_weights.x + joint_weights.y + joint_weights.z + joint_weights.w);
 
-    let skin = unsafe {
-        *joint_transforms.index_unchecked(joint_indices.x as usize) * joint_weights.x
-            + *joint_transforms.index_unchecked(joint_indices.y as usize) * joint_weights.y
-            + *joint_transforms.index_unchecked(joint_indices.z as usize) * joint_weights.z
-            + *joint_transforms.index_unchecked(joint_indices.w as usize) * joint_weights.w
+    // Calculate the skinned position and normal by multiplying them by the joint transforms and perfoming a weighted average.
+
+    #[rustfmt::skip]
+    let position = unsafe {
+        (*joint_transforms.index_unchecked(global_joint_indices.x as usize) * position * joint_weights.x)
+            + (*joint_transforms.index_unchecked(global_joint_indices.y as usize) * position * joint_weights.y)
+            + (*joint_transforms.index_unchecked(global_joint_indices.z as usize) * position * joint_weights.z)
+            + (*joint_transforms.index_unchecked(global_joint_indices.w as usize) * position * joint_weights.w)
     };
 
-    let position = skin * position;
+    #[rustfmt::skip]
+    let normal = unsafe {
+        (joint_transforms.index_unchecked(global_joint_indices.x as usize).rotation * normal * joint_weights.x)
+            + (joint_transforms.index_unchecked(global_joint_indices.y as usize).rotation * normal * joint_weights.y)
+            + (joint_transforms.index_unchecked(global_joint_indices.z as usize).rotation * normal * joint_weights.z)
+            + (joint_transforms.index_unchecked(global_joint_indices.w as usize).rotation * normal * joint_weights.w)
+    };
 
     let position = instance_translation + (instance_rotation * instance_scale * position);
 
@@ -594,4 +606,49 @@ pub fn fragment_skybox(
     let sample: Vec4 = specular_ibl_cubemap.sample_by_lod(*sampler, ray, 0.0);
 
     *output = potentially_tonemap(sample.truncate(), uniforms).extend(1.0);
+}
+
+#[spirv(vertex)]
+pub fn line_vertex(
+    position: Vec3,
+    #[spirv(flat)] colour_id: u32,
+    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(position)] builtin_pos: &mut Vec4,
+    #[spirv(view_index)] view_index: i32,
+    colour: &mut Vec3,
+) {
+    *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
+    *colour = debug_colour_for_id(colour_id);
+
+    if uniforms.flip_viewport != 0 {
+        builtin_pos.y = -builtin_pos.y;
+    }
+}
+
+#[spirv(fragment)]
+pub fn flat_colour(colour: Vec3, output: &mut Vec4) {
+    *output = colour.extend(1.0);
+}
+
+const DEBUG_COLOURS: [Vec3; 16] = [
+    const_vec3!([0.0, 0.0, 0.0]),         // black
+    const_vec3!([0.0, 0.0, 0.1647]),      // darkest blue
+    const_vec3!([0.0, 0.0, 0.3647]),      // darker blue
+    const_vec3!([0.0, 0.0, 0.6647]),      // dark blue
+    const_vec3!([0.0, 0.0, 0.9647]),      // blue
+    const_vec3!([0.0, 0.9255, 0.9255]),   // cyan
+    const_vec3!([0.0, 0.5647, 0.0]),      // dark green
+    const_vec3!([0.0, 0.7843, 0.0]),      // green
+    const_vec3!([1.0, 1.0, 0.0]),         // yellow
+    const_vec3!([0.90588, 0.75294, 0.0]), // yellow-orange
+    const_vec3!([1.0, 0.5647, 0.0]),      // orange
+    const_vec3!([1.0, 0.0, 0.0]),         // bright red
+    const_vec3!([0.8392, 0.0, 0.0]),      // red
+    const_vec3!([1.0, 0.0, 1.0]),         // magenta
+    const_vec3!([0.6, 0.3333, 0.7882]),   // purple
+    const_vec3!([1.0, 1.0, 1.0]),         // white
+];
+
+fn debug_colour_for_id(id: u32) -> Vec3 {
+    unsafe { *DEBUG_COLOURS.index_unchecked(id as usize % DEBUG_COLOURS.len()) }
 }
