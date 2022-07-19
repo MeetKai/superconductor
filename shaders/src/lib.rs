@@ -77,6 +77,9 @@ pub fn animated_vertex(
     let joint_weights =
         joint_weights / (joint_weights.x + joint_weights.y + joint_weights.z + joint_weights.w);
 
+    // todo: Ideally we'd do the averaging-out maths here on the joint transform similarities directly
+    // instead of matrices, but this broke things when I last tried it.
+    #[rustfmt::skip]
     let skin = unsafe {
         (joint_transforms.index_unchecked(global_joint_indices.x as usize).as_mat4() * joint_weights.x)
             + (joint_transforms.index_unchecked(global_joint_indices.y as usize).as_mat4() * joint_weights.y)
