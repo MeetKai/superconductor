@@ -48,7 +48,36 @@ impl SuperconductorPlugin {
 
 impl Plugin for SuperconductorPlugin {
     fn build(&self, app: &mut App) {
-        let avatar = app
+        let model = app
+            .world
+            .spawn()
+            .insert(components::ModelUrl(
+                url::Url::parse("http://localhost:8000/assets/models/ferris/ferris.gltf").unwrap(),
+            ))
+            .insert(components::Instances(Default::default()))
+            .insert(components::InstanceRange(Default::default()))
+            .id();
+
+        app.world
+            .spawn()
+            .insert(components::InstanceOf(model))
+            .insert(components::Instance(renderer_core::Instance::new(
+                Vec3::new(1.0, 1.0, -2.0),
+                1.0,
+                Default::default(),
+            )))
+            .insert(Spinning);
+
+        app.world
+            .spawn()
+            .insert(components::InstanceOf(model))
+            .insert(components::Instance(renderer_core::Instance::new(
+                Vec3::new(-1.0, 1.0, -2.0),
+                1.0,
+                Default::default(),
+            )));
+
+        let helmet = app
             .world
             .spawn()
             .insert(components::AnimatedModelUrl(
@@ -58,94 +87,31 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::InstanceRange(Default::default()))
             .id();
 
-        let anime = app
-            .world
+        app.world
             .spawn()
-            .insert(components::AnimatedModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/Darkness_Shibu.vrm").unwrap(),
-            ))
-            .insert(components::Instances(Default::default()))
-            .insert(components::InstanceRange(Default::default()))
-            .id();
-
-        let giant = app
-            .world
-            .spawn()
-            .insert(components::AnimatedModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/fire_giant.glb").unwrap(),
-            ))
-            .insert(components::Instances(Default::default()))
-            .insert(components::InstanceRange(Default::default()))
-            .id();
-
-        let cesium_man = app
-            .world
-            .spawn()
-            .insert(components::AnimatedModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/CesiumMan.glb").unwrap(),
-            ))
-            .insert(components::Instances(Default::default()))
-            .insert(components::InstanceRange(Default::default()))
-            .id();
+            .insert(components::InstanceOf(helmet))
+            .insert(components::Instance(renderer_core::Instance::new(
+                Vec3::new(0.0, 1.0, -3.0),
+                0.5,
+                Default::default(),
+            )))
+            .insert(components::AnimationState {
+                time: 0.5,
+                animation_index: 1,
+            });
 
         for i in 0..10 {
             app.world
                 .spawn()
-                .insert(components::InstanceOf(avatar))
+                .insert(components::InstanceOf(helmet))
                 .insert(components::Instance(renderer_core::Instance::new(
-                    Vec3::new(1.0 + i as f32, 1.0, -4.0),
-                    0.5,
+                    Vec3::new(1.0 + i as f32, 1.0, -4.0 - i as f32),
+                    0.5 + (i as f32 * 0.05),
                     Default::default(),
                 )))
                 .insert(components::AnimationState {
                     time: i as f32 / 10.0,
                     animation_index: i,
-                });
-
-            app.world
-                .spawn()
-                .insert(components::InstanceOf(anime))
-                .insert(components::Instance(renderer_core::Instance::new(
-                    Vec3::new(1.0 + i as f32, 1.0, -2.0),
-                    0.5,
-                    Default::default(),
-                )))
-                .insert(VrmInstance);
-
-            app.world
-                .spawn()
-                .insert(components::InstanceOf(giant))
-                .insert(components::Instance(renderer_core::Instance::new(
-                    Vec3::new(1.0 + i as f32, 1.0, 0.0),
-                    0.5,
-                    Default::default(),
-                )))
-                .insert(components::AnimationState {
-                    time: i as f32 / 10.0,
-                    animation_index: i % 3,
-                });
-
-            app.world
-                .spawn()
-                .insert(components::InstanceOf(giant))
-                .insert(components::Instance(renderer_core::Instance::new(
-                    Vec3::new(1.0 + i as f32, 1.0, 2.0),
-                    0.5,
-                    Default::default(),
-                )))
-                .insert(VrmInstance);
-
-            app.world
-                .spawn()
-                .insert(components::InstanceOf(cesium_man))
-                .insert(components::Instance(renderer_core::Instance::new(
-                    Vec3::new(1.0 + i as f32, 1.0, 4.0),
-                    0.5,
-                    Default::default(),
-                )))
-                .insert(components::AnimationState {
-                    time: i as f32 / 10.0,
-                    animation_index: 0,
                 });
         }
 
