@@ -5,7 +5,7 @@ use crate::components::{
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, Camera, ClampSampler, CompositeBindGroup, Device,
     IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer,
-    LineBuffer, MainBindGroup, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup,
+    LineBuffer, MainBindGroup, NewIblCubemap, Pipelines, Queue, SkyboxUniformBindGroup,
     SkyboxUniformBuffer, SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
@@ -285,9 +285,9 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     let bind_group_layouts = &bind_group_layouts.0;
 
     let ibl_textures = Arc::new(IblTextures {
-        ggx_lut: ArcSwap::from(Arc::new(Texture::new(device.create_texture(
+        lut: ArcSwap::from(Arc::new(Texture::new(device.create_texture(
             &wgpu::TextureDescriptor {
-                label: Some("dummy IBL LUT"),
+                label: Some("dummy ibl lut"),
                 size: wgpu::Extent3d {
                     width: 1,
                     height: 1,
@@ -300,9 +300,9 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
                 format: wgpu::TextureFormat::Rgba8Unorm,
             },
         )))),
-        diffuse_cubemap: ArcSwap::from(Arc::new(Texture::new_cubemap(device.create_texture(
+        cubemap: ArcSwap::from(Arc::new(Texture::new_cubemap(device.create_texture(
             &wgpu::TextureDescriptor {
-                label: Some("dummy diffuse cubemap"),
+                label: Some("dummy ibl cubemap"),
                 size: wgpu::Extent3d {
                     width: 1,
                     height: 1,
@@ -315,21 +315,12 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
                 format: wgpu::TextureFormat::Rgba16Float,
             },
         )))),
-        specular_cubemap: ArcSwap::from(Arc::new(Texture::new_cubemap(device.create_texture(
-            &wgpu::TextureDescriptor {
-                label: Some("dummy specular cubemap"),
-                size: wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 6,
-                },
-                sample_count: 1,
-                mip_level_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                format: wgpu::TextureFormat::Rgba16Float,
-            },
-        )))),
+        sphere_harmonics: ArcSwap::from(Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("dummy sphere harmonics buffer"),
+            size: 144,
+            usage: wgpu::BufferUsages::UNIFORM,
+            mapped_at_creation: false,
+        }))),
     });
 
     let uniform_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
@@ -411,7 +402,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
 
         match result {
             Ok((lut_texture, _size)) => {
-                ibl_textures.ggx_lut.store(lut_texture);
+                ibl_textures.lut.store(lut_texture);
 
                 main_bind_group_setter.set(create_main_bind_group(
                     &textures_context.device,
@@ -462,15 +453,15 @@ pub(crate) fn update_ibl_textures<T: HttpClient>(
     pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<textures::Settings>,
-    mut new_ibl_textures: ResMut<NewIblTextures>,
+    mut new_ibl_cubemap: ResMut<NewIblCubemap>,
     ibl_textures: Res<Arc<IblTextures>>,
     clamp_sampler: Res<ClampSampler>,
     main_bind_group: Res<MainBindGroup>,
     uniform_buffer: Res<UniformBuffer>,
     http_client: Res<T>,
 ) {
-    let new_ibl_textures = match new_ibl_textures.0.take() {
-        Some(new_ibl_textures) => new_ibl_textures,
+    let new_ibl_cubemap = match new_ibl_cubemap.0.take() {
+        Some(new_ibl_cubemap) => new_ibl_cubemap,
         None => return,
     };
 
@@ -494,20 +485,17 @@ pub(crate) fn update_ibl_textures<T: HttpClient>(
     };
 
     spawn(async move {
-        let diffuse_fut = renderer_core::assets::textures::load_ktx2_cubemap(
+        match renderer_core::assets::textures::load_ktx2_cubemap(
             textures_context.clone(),
-            &new_ibl_textures.diffuse_cubemap,
-        );
-
-        let specular_fut = renderer_core::assets::textures::load_ktx2_cubemap(
-            textures_context.clone(),
-            &new_ibl_textures.specular_cubemap,
-        );
-
-        match futures::future::join(diffuse_fut, specular_fut).await {
-            (Ok(diffuse_cubemap), Ok(specular_cubemap)) => {
-                ibl_textures.diffuse_cubemap.store(diffuse_cubemap);
-                ibl_textures.specular_cubemap.store(specular_cubemap);
+            &new_ibl_cubemap,
+        )
+        .await
+        {
+            Ok((specular_cubemap, Some(sphere_harmonics))) => {
+                ibl_textures.cubemap.store(specular_cubemap);
+                ibl_textures
+                    .sphere_harmonics
+                    .store(Arc::new(sphere_harmonics));
 
                 main_bind_group_setter.set(create_main_bind_group(
                     &textures_context.device,

@@ -432,7 +432,7 @@ impl Pipelines {
                     })],
                 }),
                 primitive: normal_primitive_state,
-                depth_stencil: Some(normal_depth_state.clone()),
+                depth_stencil: Some(normal_depth_state),
                 multisample: Default::default(),
                 multiview,
             }),

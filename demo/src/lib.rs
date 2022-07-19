@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use superconductor::{
     bevy_app, bevy_ecs, components, renderer_core,
-    resources::{Camera, EventQueue, NewIblTextures, NewIblTexturesInner, WindowChanges},
+    resources::{Camera, EventQueue, NewIblCubemap, WindowChanges},
     url, winit,
     winit::event::{ElementState, VirtualKeyCode},
     Mode, Vec3,
@@ -133,14 +133,9 @@ impl Plugin for SuperconductorPlugin {
 
         plugin.build(app);
 
-        app.insert_resource(NewIblTextures(Some(NewIblTexturesInner {
-            diffuse_cubemap: url::Url::parse(
-                "http://localhost:8000/assets/cubemaps/lodge_diff.ktx2",
-            )
-            .unwrap(),
-            specular_cubemap: url::Url::parse("http://localhost:8000/assets/cubemaps/lodge.ktx2")
-                .unwrap(),
-        })));
+        app.insert_resource(NewIblCubemap(Some(
+            url::Url::parse("http://localhost:8000/assets/cubemaps/lodge.ktx2").unwrap(),
+        )));
     }
 }
 
