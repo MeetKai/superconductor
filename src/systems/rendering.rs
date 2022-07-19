@@ -1,8 +1,10 @@
 use crate::resources::{
-    self, AnimatedVertexBuffers, Device, IndexBuffer, InstanceBuffer, MainBindGroup, Pipelines,
-    Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
+    self, AnimatedVertexBuffers, Device, IndexBuffer, InstanceBuffer, LineBuffer, MainBindGroup,
+    Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
 };
-use renderer_core::{arc_swap, RawAnimatedVertexBuffers, RawVertexBuffers};
+use renderer_core::{
+    arc_swap, LineVertex, RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
+};
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -41,11 +43,12 @@ pub(crate) fn render_desktop(
     skybox_uniform_bind_group: Res<SkyboxUniformBindGroup>,
     surface_frame_view: Res<SurfaceFrameView>,
     mut intermediate_depth_framebuffer: ResMut<resources::IntermediateDepthFramebuffer>,
-    (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer): (
+    (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer, line_buffer): (
         Res<IndexBuffer>,
         Res<VertexBuffers>,
         Res<AnimatedVertexBuffers>,
         Res<InstanceBuffer>,
+        Res<LineBuffer>,
     ),
     mut static_models: Query<(&mut Model, &InstanceRange)>,
     mut animated_models: Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
@@ -121,6 +124,7 @@ pub(crate) fn render_desktop(
         &animated_models,
         &static_model_bind_groups,
         &animated_model_bind_groups,
+        &line_buffer.buffer,
     );
 
     drop(render_pass);
@@ -143,11 +147,12 @@ pub(crate) fn render(
     mut composite_bind_group: ResMut<resources::CompositeBindGroup>,
     pipeline_options: Res<renderer_core::PipelineOptions>,
     clamp_sampler: Res<resources::ClampSampler>,
-    (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer): (
+    (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer, line_buffer): (
         Res<IndexBuffer>,
         Res<VertexBuffers>,
         Res<AnimatedVertexBuffers>,
         Res<InstanceBuffer>,
+        Res<LineBuffer>,
     ),
     mut static_models: Query<(&mut Model, &InstanceRange)>,
     mut animated_models: Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
@@ -322,6 +327,7 @@ pub(crate) fn render(
         &animated_models,
         &static_model_bind_groups,
         &animated_model_bind_groups,
+        &line_buffer.buffer,
     );
 
     drop(render_pass);
@@ -367,6 +373,7 @@ fn render_everything<'a>(
     animated_models: &'a Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
     static_model_bind_groups: &'a ModelBindGroups,
     animated_model_bind_groups: &'a ModelBindGroups,
+    line_buffer: &'a VecGpuBuffer<LineVertex>,
 ) {
     render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
     bind_static_vertex_buffers(render_pass, vertex_buffers);
@@ -459,6 +466,10 @@ fn render_everything<'a>(
         animated_model_bind_groups,
         |primitive_ranges| primitive_ranges.alpha_clipped_double_sided.clone(),
     );
+
+    render_pass.set_pipeline(&pipelines.line);
+    render_pass.set_vertex_buffer(0, line_buffer.buffer.slice(..));
+    render_pass.draw(0..line_buffer.len(), 0..1);
 
     render_pass.set_pipeline(&pipelines.skybox);
     render_pass.set_bind_group(1, skybox_uniform_bind_group, &[]);

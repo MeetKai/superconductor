@@ -94,7 +94,8 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
         let mut buffer_resetting_stage = SystemStage::single_threaded()
             .with_system(systems::clear_instance_buffers)
             .with_system(systems::clear_joint_buffers)
-            .with_system(systems::sample_animations);
+            .with_system(systems::sample_animations)
+            .with_system(systems::clear_line_buffer);
 
         buffer_resetting_stage = match self.mode {
             Mode::Desktop => {
@@ -124,7 +125,8 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
             SystemStage::single_threaded()
                 .with_system(systems::upload_instances)
                 .with_system(systems::upload_joint_buffers)
-                .with_system(systems::progress_animation_times),
+                .with_system(systems::progress_animation_times)
+                .with_system(systems::upload_lines),
         );
 
         let mut rendering_stage = SystemStage::single_threaded();

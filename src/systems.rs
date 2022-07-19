@@ -5,8 +5,8 @@ use crate::components::{
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, Camera, ClampSampler, CompositeBindGroup, Device,
     IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer,
-    MainBindGroup, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer,
-    SurfaceFrameView, UniformBuffer, VertexBuffers,
+    LineBuffer, MainBindGroup, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup,
+    SkyboxUniformBuffer, SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
@@ -54,6 +54,11 @@ pub(crate) fn clear_joint_buffers(mut query: Query<&mut JointBuffer>) {
     query.for_each_mut(|mut joint_buffer| {
         joint_buffer.staging.clear();
     })
+}
+
+pub(crate) fn clear_line_buffer(mut line_buffer: ResMut<LineBuffer>) {
+    line_buffer.staging.clear();
+    line_buffer.buffer.clear();
 }
 
 pub(crate) fn progress_animation_times(
@@ -123,10 +128,11 @@ pub(crate) fn upload_joint_buffers(query: Query<&JointBuffer>, queue: Res<Queue>
 }
 
 pub(crate) fn push_joints(
-    instance_query: Query<(&InstanceOf, &AnimationJoints)>,
+    instance_query: Query<(&InstanceOf, &AnimationJoints, &Instance)>,
     mut model_query: Query<(&AnimatedModel, &mut JointBuffer)>,
+    mut line_buffer: ResMut<LineBuffer>,
 ) {
-    instance_query.for_each(|(instance_of, animation_joints)| {
+    instance_query.for_each(|(instance_of, animation_joints, instance)| {
         match model_query.get_mut(instance_of.0) {
             Ok((animated_model, mut joint_buffer)) => {
                 'joint_loop: for joint in animation_joints
@@ -151,12 +157,33 @@ pub(crate) fn push_joints(
                         break 'joint_loop;
                     }
                 }
+
+                for (id, (start, end)) in animation_joints
+                    .0
+                    .iter_lines(&animated_model.0.animation_data.depth_first_nodes)
+                    .enumerate()
+                {
+                    let start =
+                        instance.0.position + (instance.0.rotation * instance.0.scale * start);
+                    let end = instance.0.position + (instance.0.rotation * instance.0.scale * end);
+
+                    line_buffer.staging.extend_from_slice(&[
+                        renderer_core::LineVertex {
+                            position: start,
+                            colour_id: id as u32,
+                        },
+                        renderer_core::LineVertex {
+                            position: end,
+                            colour_id: id as u32,
+                        },
+                    ]);
+                }
             }
             Err(error) => {
                 log::warn!("Got an error when pushing joints: {}", error);
             }
         }
-    })
+    });
 }
 
 // Here would be a good place to do culling.
@@ -205,6 +232,23 @@ pub(crate) fn upload_instances(
                 .0
                 .push(&instances.0, &device.0, &queue.0, &mut command_encoder);
     });
+
+    queue.0.submit(std::iter::once(command_encoder.finish()));
+}
+
+pub(crate) fn upload_lines(
+    device: Res<Device>,
+    queue: Res<Queue>,
+    mut line_buffer: ResMut<LineBuffer>,
+) {
+    let mut command_encoder = device
+        .0
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("command encoder"),
+        });
+
+    let LineBuffer { staging, buffer } = &mut *line_buffer;
+    buffer.push(staging, &device.0, &queue.0, &mut command_encoder);
 
     queue.0.submit(std::iter::once(command_encoder.finish()));
 }
@@ -331,7 +375,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     };
 
     spawn(async move {
-        let lut_url = url::Url::parse("https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Viewer/master/assets/images/lut_ggx.png").unwrap();
+        let lut_url = url::Url::parse("http://localhost:8000/assets/lut_ggx.png").unwrap();
 
         // This results in only the skybox being rendered:
         //let bytes = &include_bytes!("../../lut_ggx.png")[..];
@@ -376,12 +420,22 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
         renderer_core::AnimatedVertexBuffers::new(1024, device),
     )));
 
-    commands.insert_resource(InstanceBuffer(renderer_core::InstanceBuffer::new(
+    commands.insert_resource(InstanceBuffer(renderer_core::VecGpuBuffer::new(
         1,
         device,
         wgpu::BufferUsages::VERTEX,
         "instance buffer",
     )));
+
+    commands.insert_resource(LineBuffer {
+        buffer: renderer_core::VecGpuBuffer::new(
+            1,
+            device,
+            wgpu::BufferUsages::VERTEX,
+            "line buffer",
+        ),
+        staging: Vec::new(),
+    });
 }
 
 #[allow(clippy::too_many_arguments)]

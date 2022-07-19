@@ -16,10 +16,10 @@ pub use shared_structs;
 
 pub use bind_group_layouts::BindGroupLayouts;
 pub use buffers::{
-    AnimatedVertexBuffers, IndexBuffer, InstanceBuffer, RawAnimatedVertexBuffers, RawVertexBuffers,
+    AnimatedVertexBuffers, IndexBuffer, RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
     VertexBuffers,
 };
-pub use instance::{GpuInstance, Instance};
+pub use instance::{GpuInstance, Instance, LineVertex};
 pub use pipelines::{PipelineOptions, Pipelines};
 
 #[cfg(feature = "wasm")]

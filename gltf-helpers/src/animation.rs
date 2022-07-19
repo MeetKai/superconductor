@@ -1,4 +1,4 @@
-use crate::Similarity;
+use crate::{DepthFirstNodes, Similarity};
 use glam::{Quat, Vec3};
 use gltf::animation::Interpolation;
 use std::fmt;
@@ -112,8 +112,8 @@ pub struct AnimationJoints {
 }
 
 impl AnimationJoints {
-    pub fn new(nodes: gltf::iter::Nodes, depth_first_nodes: &[(usize, Option<usize>)]) -> Self {
-        let joint_similarities: Vec<_> = nodes
+    pub fn new(nodes: gltf::iter::Nodes, depth_first_nodes: &DepthFirstNodes) -> Self {
+        let node_transforms: Vec<_> = nodes
             .map(|node| {
                 let (translation, rotation, scale) = node.transform().decomposed();
                 Similarity::new_from_gltf(translation, rotation, scale)
@@ -121,8 +121,8 @@ impl AnimationJoints {
             .collect();
 
         let mut joints = Self {
-            global_transforms: joint_similarities.clone(),
-            local_transforms: joint_similarities,
+            global_transforms: node_transforms.clone(),
+            local_transforms: node_transforms,
         };
 
         joints.update(depth_first_nodes);
@@ -143,15 +143,28 @@ impl AnimationJoints {
             })
     }
 
-    pub fn update(&mut self, depth_first_nodes: &[(usize, Option<usize>)]) {
-        for &(index, parent) in depth_first_nodes.iter() {
-            if let Some(parent) = parent {
-                let parent_transform = self.global_transforms[parent];
-                self.global_transforms[index] = parent_transform * self.local_transforms[index];
-            } else {
-                self.global_transforms[index] = self.local_transforms[index];
-            }
+    pub fn update(&mut self, depth_first_nodes: &DepthFirstNodes) {
+        for &index in &depth_first_nodes.roots {
+            self.global_transforms[index] = self.local_transforms[index];
         }
+
+        for child in &depth_first_nodes.children {
+            let parent_transform = self.global_transforms[child.parent];
+            self.global_transforms[child.index] =
+                parent_transform * self.local_transforms[child.index];
+        }
+    }
+
+    pub fn iter_lines<'a>(
+        &'a self,
+        depth_first_nodes: &'a DepthFirstNodes,
+    ) -> impl Iterator<Item = (Vec3, Vec3)> + 'a {
+        depth_first_nodes.children.iter().map(|child| {
+            (
+                self.global_transforms[child.parent].translation,
+                self.global_transforms[child.index].translation,
+            )
+        })
     }
 
     pub fn get_joint_mut(
@@ -260,7 +273,7 @@ impl Animation {
         &self,
         animation_joints: &mut AnimationJoints,
         time: f32,
-        depth_first_nodes: &[(usize, Option<usize>)],
+        depth_first_nodes: &DepthFirstNodes,
     ) {
         self.translation_channels
             .iter()

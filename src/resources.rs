@@ -1,5 +1,8 @@
-use renderer_core::glam::{Mat4, Quat, Vec3};
 use renderer_core::utils::Swappable;
+use renderer_core::{
+    glam::{Mat4, Quat, Vec3},
+    GpuInstance, LineVertex,
+};
 use std::sync::Arc;
 
 pub struct Device(pub Arc<wgpu::Device>);
@@ -33,7 +36,12 @@ pub(crate) struct SkyboxUniformBindGroup(pub(crate) wgpu::BindGroup);
 pub struct IndexBuffer(pub Arc<renderer_core::IndexBuffer>);
 pub struct VertexBuffers(pub Arc<renderer_core::VertexBuffers>);
 pub struct AnimatedVertexBuffers(pub Arc<renderer_core::AnimatedVertexBuffers>);
-pub(crate) struct InstanceBuffer(pub(crate) renderer_core::InstanceBuffer);
+pub(crate) struct InstanceBuffer(pub(crate) renderer_core::VecGpuBuffer<GpuInstance>);
+
+pub(crate) struct LineBuffer {
+    pub(crate) staging: Vec<LineVertex>,
+    pub(crate) buffer: renderer_core::VecGpuBuffer<LineVertex>,
+}
 
 pub(crate) struct IntermediateDepthFramebuffer(pub(crate) CachedFramebuffer);
 pub(crate) struct IntermediateColorFramebuffer(pub(crate) CachedFramebuffer);

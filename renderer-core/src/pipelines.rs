@@ -27,6 +27,7 @@ pub struct Pipelines {
     pub bc6h_decompression: wgpu::RenderPipeline,
     pub blit: wgpu::RenderPipeline,
     pub srgb_blit: wgpu::RenderPipeline,
+    pub line: wgpu::RenderPipeline,
 }
 
 impl Pipelines {
@@ -129,6 +130,12 @@ impl Pipelines {
                 step_mode: wgpu::VertexStepMode::Vertex,
             },
         ];
+
+        let line_vertex_buffers = &[wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<super::LineVertex>() as u64,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Uint32],
+        }];
 
         let prefix = if multiview.is_none() {
             "single_view::"
@@ -301,6 +308,14 @@ impl Pipelines {
             stencil: wgpu::StencilState::default(),
         };
 
+        let always_depth_stencil_state = wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth24PlusStencil8,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Always,
+            bias: wgpu::DepthBiasState::default(),
+            stencil: wgpu::StencilState::default(),
+        };
+
         let ui_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("ui pipeline layout"),
             bind_group_layouts: &[&bind_group_layouts.uniform, &bind_group_layouts.ui_texture],
@@ -417,7 +432,7 @@ impl Pipelines {
                     })],
                 }),
                 primitive: normal_primitive_state,
-                depth_stencil: Some(normal_depth_state),
+                depth_stencil: Some(normal_depth_state.clone()),
                 multisample: Default::default(),
                 multiview,
             }),
@@ -522,6 +537,33 @@ impl Pipelines {
                 depth_stencil: None,
                 multisample: Default::default(),
                 multiview: Default::default(),
+            }),
+            line: device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("line pipeline"),
+                layout: Some(&uniform_only_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &device.create_shader_module(if multiview.is_none() {
+                        wgpu::include_spirv!("../../compiled-shaders/single_view_line_vertex.spv")
+                    } else {
+                        wgpu::include_spirv!("../../compiled-shaders/line_vertex.spv")
+                    }),
+                    entry_point: &format!("{}line_vertex", prefix),
+                    buffers: line_vertex_buffers,
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &device.create_shader_module(wgpu::include_spirv!(
+                        "../../compiled-shaders/flat_colour.spv"
+                    )),
+                    entry_point: "flat_colour",
+                    targets: &[Some(target_format.into())],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::LineList,
+                    ..Default::default()
+                },
+                depth_stencil: Some(always_depth_stencil_state),
+                multisample: Default::default(),
+                multiview,
             }),
         }
     }

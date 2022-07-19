@@ -5,8 +5,6 @@ use std::sync::Arc;
 
 use glam::{UVec4, Vec2, Vec3, Vec4};
 
-pub type InstanceBuffer = VecGpuBuffer<super::GpuInstance>;
-
 pub struct VecGpuBuffer<T: bytemuck::Pod> {
     offset: u32,
     capacity: u32,
@@ -99,6 +97,10 @@ impl<T: bytemuck::Pod> VecGpuBuffer<T> {
 
         self.buffer = new_buffer;
         self.capacity = new_capacity;
+    }
+
+    pub fn len(&self) -> u32 {
+        self.offset
     }
 }
 

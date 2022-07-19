@@ -123,3 +123,48 @@ impl NodeTree {
             })
     }
 }
+
+#[derive(Debug)]
+pub struct DepthFirstNodes {
+    roots: Vec<usize>,
+    children: Vec<Child>,
+}
+
+impl DepthFirstNodes {
+    pub fn new(nodes: gltf::iter::Nodes, node_tree: &NodeTree) -> Self {
+        let roots: Vec<_> = node_tree
+            .inner
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (_, parent))| {
+                if *parent == usize::max_value() {
+                    Some(index)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut children = Vec::new();
+        let mut stack = roots.clone();
+
+        while let Some(parent) = stack.pop() {
+            for child in nodes.clone().nth(parent).unwrap().children() {
+                children.push(Child {
+                    index: child.index(),
+                    parent: parent,
+                });
+
+                stack.push(child.index());
+            }
+        }
+
+        Self { roots, children }
+    }
+}
+
+#[derive(Debug)]
+struct Child {
+    index: usize,
+    parent: usize,
+}
