@@ -24,7 +24,7 @@ pub struct Context<T> {
 pub async fn load_ktx2_cubemap<T: HttpClient>(
     context: Context<T>,
     url: &url::Url,
-) -> anyhow::Result<Arc<Texture>> {
+) -> anyhow::Result<(Arc<Texture>, Option<wgpu::Buffer>)> {
     let mut header_bytes = [0; ktx2::Header::LENGTH];
 
     let fetched_header = context
@@ -56,6 +56,36 @@ pub async fn load_ktx2_cubemap<T: HttpClient>(
             header.supercompression_scheme
         ));
     }
+
+    let key_value_data = context
+        .http_client
+        .fetch_bytes(
+            url,
+            Some(
+                header.index.kvd_byte_offset as usize
+                    ..header.index.kvd_byte_offset as usize + header.index.kvd_byte_length as usize,
+            ),
+        )
+        .await?;
+
+    let sphere_harmonics = ktx2::KeyValueDataIterator::new(&key_value_data)
+        .find(|&(key, _)| key == "sphere_harmonics")
+        .map(|(_, value)| {
+            // Pad the float32x3 colours to float32x4 by writing to a zeroed buffer.
+            let mut bytes = [0; 144];
+
+            for (i, chunk) in value.chunks(12).take(9).enumerate() {
+                bytes[i * 16..(i * 16) + 12].copy_from_slice(chunk);
+            }
+
+            context
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("sphere harmonics"),
+                    contents: &bytes,
+                    usage: wgpu::BufferUsages::UNIFORM,
+                })
+        });
 
     let mut level_indices = Vec::with_capacity(header.level_count as usize);
 
@@ -271,7 +301,7 @@ pub async fn load_ktx2_cubemap<T: HttpClient>(
         }
     });
 
-    Ok(texture)
+    Ok((texture, sphere_harmonics))
 }
 
 fn write_bytes_to_texture(

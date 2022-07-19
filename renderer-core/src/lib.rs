@@ -232,19 +232,15 @@ pub fn create_main_bind_group(
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: wgpu::BindingResource::TextureView(&ibl_textures.ggx_lut.load().view),
+                resource: wgpu::BindingResource::TextureView(&ibl_textures.lut.load().view),
             },
             wgpu::BindGroupEntry {
                 binding: 3,
-                resource: wgpu::BindingResource::TextureView(
-                    &ibl_textures.diffuse_cubemap.load().view,
-                ),
+                resource: wgpu::BindingResource::TextureView(&ibl_textures.cubemap.load().view),
             },
             wgpu::BindGroupEntry {
                 binding: 4,
-                resource: wgpu::BindingResource::TextureView(
-                    &ibl_textures.specular_cubemap.load().view,
-                ),
+                resource: ibl_textures.sphere_harmonics.load().as_entire_binding(),
             },
         ],
     })

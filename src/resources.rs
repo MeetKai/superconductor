@@ -13,12 +13,7 @@ pub struct WindowChanges {
 
 pub struct FrameTime(pub f64);
 
-pub struct NewIblTextures(pub Option<NewIblTexturesInner>);
-
-pub struct NewIblTexturesInner {
-    pub diffuse_cubemap: url::Url,
-    pub specular_cubemap: url::Url,
-}
+pub struct NewIblCubemap(pub Option<url::Url>);
 
 pub struct EventQueue(pub Vec<winit::event::Event<'static, ()>>);
 

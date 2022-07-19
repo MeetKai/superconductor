@@ -15,6 +15,8 @@ use spirv_std::{
 
 type SampledImage = Image!(2D, type=f32, sampled);
 
+pub type SphereHarmonics = [Vec3; 9];
+
 mod single_view;
 
 pub use single_view::{
@@ -158,8 +160,8 @@ pub fn fragment(
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 3)] diffuse_ibl_cubemap: &Image!(cube, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 4)] specular_ibl_cubemap: &Image!(cube, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 3)] ibl_cubemap: &Image!(cube, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 4, uniform)] sphere_harmonics: &SphereHarmonics,
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -217,10 +219,7 @@ pub fn fragment(
         view,
         material_params.base,
         lut_values,
-        |normal| {
-            let sample: Vec4 = diffuse_ibl_cubemap.sample_by_lod(*clamp_sampler, normal, 0.0);
-            sample.truncate()
-        },
+        |normal| unsafe { sample_sphere_harmonics(sphere_harmonics, normal) },
     );
 
     let specular_output = glam_pbr::get_ibl_radiance_ggx(
@@ -230,7 +229,7 @@ pub fn fragment(
         lut_values,
         9,
         |ray, lod| {
-            let sample: Vec4 = specular_ibl_cubemap.sample_by_lod(*clamp_sampler, ray, lod);
+            let sample: Vec4 = ibl_cubemap.sample_by_lod(*clamp_sampler, ray, lod);
             sample.truncate()
         },
     );
@@ -248,8 +247,8 @@ pub fn fragment_alpha_clipped(
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 3)] diffuse_ibl_cubemap: &Image!(cube, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 4)] specular_ibl_cubemap: &Image!(cube, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 3)] ibl_cubemap: &Image!(cube, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 4, uniform)] sphere_harmonics: &SphereHarmonics,
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -312,10 +311,7 @@ pub fn fragment_alpha_clipped(
         view,
         material_params.base,
         lut_values,
-        |normal| {
-            let sample: Vec4 = diffuse_ibl_cubemap.sample_by_lod(*clamp_sampler, normal, 0.0);
-            sample.truncate()
-        },
+        |normal| unsafe { sample_sphere_harmonics(sphere_harmonics, normal) },
     );
 
     let specular_output = glam_pbr::get_ibl_radiance_ggx(
@@ -325,7 +321,7 @@ pub fn fragment_alpha_clipped(
         lut_values,
         9,
         |ray, lod| {
-            let sample: Vec4 = specular_ibl_cubemap.sample_by_lod(*clamp_sampler, ray, lod);
+            let sample: Vec4 = ibl_cubemap.sample_by_lod(*clamp_sampler, ray, lod);
             sample.truncate()
         },
     );
@@ -588,10 +584,28 @@ pub fn fragment_skybox(
     ray: Vec3,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 4)] specular_ibl_cubemap: &Image!(cube, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 3)] ibl_cubemap: &Image!(cube, type=f32, sampled),
     output: &mut Vec4,
 ) {
-    let sample: Vec4 = specular_ibl_cubemap.sample_by_lod(*sampler, ray, 0.0);
+    let sample: Vec4 = ibl_cubemap.sample_by_lod(*sampler, ray, 0.0);
 
     *output = potentially_tonemap(sample.truncate(), uniforms).extend(1.0);
+}
+
+unsafe fn sample_sphere_harmonics(sphere_harmonics: &SphereHarmonics, normal: Vec3) -> Vec3 {
+    let index = |i: usize| *sphere_harmonics.index_unchecked(i);
+
+    let x = normal.x;
+    let y = normal.y;
+    let z = normal.z;
+
+    index(0)
+        + index(1) * (y)
+        + index(2) * (z)
+        + index(3) * (x)
+        + index(4) * (y * x)
+        + index(5) * (y * z)
+        + index(6) * (3.0 * z * z - 1.0)
+        + index(7) * (z * x)
+        + index(8) * (x * x - y * y)
 }
