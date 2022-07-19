@@ -213,7 +213,7 @@ impl Texture {
 
 pub fn create_main_bind_group(
     device: &wgpu::Device,
-    ibl_textures: &ibl::IblTextures,
+    ibl_resources: &ibl::IblResources,
     uniform_buffer: &wgpu::Buffer,
     clamp_sampler: &wgpu::Sampler,
     bind_group_layouts: &BindGroupLayouts,
@@ -232,15 +232,15 @@ pub fn create_main_bind_group(
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: wgpu::BindingResource::TextureView(&ibl_textures.lut.load().view),
+                resource: wgpu::BindingResource::TextureView(&ibl_resources.lut.load().view),
             },
             wgpu::BindGroupEntry {
                 binding: 3,
-                resource: wgpu::BindingResource::TextureView(&ibl_textures.cubemap.load().view),
+                resource: wgpu::BindingResource::TextureView(&ibl_resources.cubemap.load().view),
             },
             wgpu::BindGroupEntry {
                 binding: 4,
-                resource: ibl_textures.sphere_harmonics.load().as_entire_binding(),
+                resource: ibl_resources.sphere_harmonics.load().as_entire_binding(),
             },
         ],
     })

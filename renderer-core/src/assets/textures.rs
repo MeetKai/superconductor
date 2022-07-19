@@ -71,7 +71,8 @@ pub async fn load_ktx2_cubemap<T: HttpClient>(
     let sphere_harmonics = ktx2::KeyValueDataIterator::new(&key_value_data)
         .find(|&(key, _)| key == "sphere_harmonics")
         .map(|(_, value)| {
-            // Pad the float32x3 colours to float32x4 by writing to a zeroed buffer.
+            // Pad the 9 float32x3 colours to float32x4 by writing to a zeroed buffer.
+            // 144 = 4 * 4 * 9.
             let mut bytes = [0; 144];
 
             for (i, chunk) in value.chunks(12).take(9).enumerate() {
