@@ -87,7 +87,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
             SystemStage::single_threaded()
                 .with_system(systems::start_loading_models::<T>)
                 .with_system(systems::finish_loading_models)
-                .with_system(systems::update_ibl_textures::<T>)
+                .with_system(systems::update_ibl_resources::<T>)
                 .with_system(systems::add_joints_to_instances),
         );
 

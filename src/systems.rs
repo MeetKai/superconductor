@@ -14,7 +14,7 @@ use renderer_core::{
     assets::{textures, HttpClient},
     bytemuck, create_main_bind_group,
     crevice::std140::AsStd140,
-    ibl::IblTextures,
+    ibl::IblResources,
     shared_structs, spawn,
     utils::{Setter, Swappable},
     GpuInstance, Texture,
@@ -284,7 +284,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     let pipelines = &pipelines.0;
     let bind_group_layouts = &bind_group_layouts.0;
 
-    let ibl_textures = Arc::new(IblTextures {
+    let ibl_resources = Arc::new(IblResources {
         lut: ArcSwap::from(Arc::new(Texture::new(device.create_texture(
             &wgpu::TextureDescriptor {
                 label: Some("dummy ibl lut"),
@@ -357,7 +357,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
 
     let main_bind_group = Swappable::new(create_main_bind_group(
         device,
-        &ibl_textures,
+        &ibl_resources,
         &uniform_buffer,
         &clamp_sampler,
         bind_group_layouts,
@@ -368,7 +368,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     commands.insert_resource(UniformBuffer(uniform_buffer.clone()));
     commands.insert_resource(MainBindGroup(main_bind_group));
     commands.insert_resource(ClampSampler(clamp_sampler.clone()));
-    commands.insert_resource(ibl_textures.clone());
+    commands.insert_resource(ibl_resources.clone());
 
     commands.insert_resource(SkyboxUniformBuffer(skybox_uniform_buffer));
     commands.insert_resource(SkyboxUniformBindGroup(skybox_uniform_bind_group));
@@ -402,11 +402,11 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
 
         match result {
             Ok((lut_texture, _size)) => {
-                ibl_textures.lut.store(lut_texture);
+                ibl_resources.lut.store(lut_texture);
 
                 main_bind_group_setter.set(create_main_bind_group(
                     &textures_context.device,
-                    &ibl_textures,
+                    &ibl_resources,
                     &uniform_buffer,
                     &clamp_sampler,
                     &textures_context.bind_group_layouts,
@@ -447,14 +447,14 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn update_ibl_textures<T: HttpClient>(
+pub(crate) fn update_ibl_resources<T: HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<textures::Settings>,
     mut new_ibl_cubemap: ResMut<NewIblCubemap>,
-    ibl_textures: Res<Arc<IblTextures>>,
+    ibl_resources: Res<Arc<IblResources>>,
     clamp_sampler: Res<ClampSampler>,
     main_bind_group: Res<MainBindGroup>,
     uniform_buffer: Res<UniformBuffer>,
@@ -473,7 +473,7 @@ pub(crate) fn update_ibl_textures<T: HttpClient>(
     let bind_group_layouts = &bind_group_layouts.0;
     let clamp_sampler = clamp_sampler.0.clone();
     let uniform_buffer = uniform_buffer.0.clone();
-    let ibl_textures = ibl_textures.clone();
+    let ibl_resources = ibl_resources.clone();
 
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
@@ -492,14 +492,14 @@ pub(crate) fn update_ibl_textures<T: HttpClient>(
         .await
         {
             Ok((specular_cubemap, Some(sphere_harmonics))) => {
-                ibl_textures.cubemap.store(specular_cubemap);
-                ibl_textures
+                ibl_resources.cubemap.store(specular_cubemap);
+                ibl_resources
                     .sphere_harmonics
                     .store(Arc::new(sphere_harmonics));
 
                 main_bind_group_setter.set(create_main_bind_group(
                     &textures_context.device,
-                    &ibl_textures,
+                    &ibl_resources,
                     &uniform_buffer,
                     &clamp_sampler,
                     &textures_context.bind_group_layouts,
