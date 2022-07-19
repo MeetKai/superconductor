@@ -78,13 +78,13 @@ pub fn animated_vertex(
         joint_weights / (joint_weights.x + joint_weights.y + joint_weights.z + joint_weights.w);
 
     let skin = unsafe {
-        (*joint_transforms.index_unchecked(global_joint_indices.x as usize) * joint_weights.x)
-            + (*joint_transforms.index_unchecked(global_joint_indices.y as usize) * joint_weights.y)
-            + (*joint_transforms.index_unchecked(global_joint_indices.z as usize) * joint_weights.z)
-            + (*joint_transforms.index_unchecked(global_joint_indices.w as usize) * joint_weights.w)
+        (joint_transforms.index_unchecked(global_joint_indices.x as usize).as_mat4() * joint_weights.x)
+            + (joint_transforms.index_unchecked(global_joint_indices.y as usize).as_mat4() * joint_weights.y)
+            + (joint_transforms.index_unchecked(global_joint_indices.z as usize).as_mat4() * joint_weights.z)
+            + (joint_transforms.index_unchecked(global_joint_indices.w as usize).as_mat4() * joint_weights.w)
     };
 
-    let position = skin * position;
+    let position = (skin * position.extend(1.0)).truncate();
 
     let position = instance_translation + (instance_rotation * instance_scale * position);
 
