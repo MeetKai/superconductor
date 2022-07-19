@@ -467,9 +467,11 @@ fn render_everything<'a>(
         |primitive_ranges| primitive_ranges.alpha_clipped_double_sided.clone(),
     );
 
-    render_pass.set_pipeline(&pipelines.line);
-    render_pass.set_vertex_buffer(0, line_buffer.buffer.slice(..));
-    render_pass.draw(0..line_buffer.len(), 0..1);
+    if line_buffer.len() > 0 {
+        render_pass.set_pipeline(&pipelines.line);
+        render_pass.set_vertex_buffer(0, line_buffer.buffer.slice(..));
+        render_pass.draw(0..line_buffer.len(), 0..1);
+    }
 
     render_pass.set_pipeline(&pipelines.skybox);
     render_pass.set_bind_group(1, skybox_uniform_bind_group, &[]);

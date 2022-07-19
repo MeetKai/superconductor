@@ -111,12 +111,15 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
             buffer_resetting_stage,
         );
 
+        #[rustfmt::skip]
         app.add_stage_after(
             Stage::BufferResetting,
             Stage::InstanceBuffering,
             SystemStage::single_threaded()
                 .with_system(systems::push_entity_instances)
-                .with_system(systems::push_joints),
+                .with_system(systems::push_joints)
+                // For debugging joints
+                //.with_system(systems::push_debug_joints_to_lines_buffer)
         );
 
         app.add_stage_after(

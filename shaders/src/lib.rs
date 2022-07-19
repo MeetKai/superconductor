@@ -77,17 +77,23 @@ pub fn animated_vertex(
     let joint_weights =
         joint_weights / (joint_weights.x + joint_weights.y + joint_weights.z + joint_weights.w);
 
-    // todo: Ideally we'd do the averaging-out maths here on the joint transform similarities directly
-    // instead of matrices, but this broke things when I last tried it.
+    // Calculate the skinned position and normal by multiplying them by the joint transforms and perfoming a weighted average.
+
     #[rustfmt::skip]
-    let skin = unsafe {
-        (joint_transforms.index_unchecked(global_joint_indices.x as usize).as_mat4() * joint_weights.x)
-            + (joint_transforms.index_unchecked(global_joint_indices.y as usize).as_mat4() * joint_weights.y)
-            + (joint_transforms.index_unchecked(global_joint_indices.z as usize).as_mat4() * joint_weights.z)
-            + (joint_transforms.index_unchecked(global_joint_indices.w as usize).as_mat4() * joint_weights.w)
+    let position = unsafe {
+        (*joint_transforms.index_unchecked(global_joint_indices.x as usize) * position * joint_weights.x)
+            + (*joint_transforms.index_unchecked(global_joint_indices.y as usize) * position * joint_weights.y)
+            + (*joint_transforms.index_unchecked(global_joint_indices.z as usize) * position * joint_weights.z)
+            + (*joint_transforms.index_unchecked(global_joint_indices.w as usize) * position * joint_weights.w)
     };
 
-    let position = (skin * position.extend(1.0)).truncate();
+    #[rustfmt::skip]
+    let normal = unsafe {
+        (joint_transforms.index_unchecked(global_joint_indices.x as usize).rotation * normal * joint_weights.x)
+            + (joint_transforms.index_unchecked(global_joint_indices.y as usize).rotation * normal * joint_weights.y)
+            + (joint_transforms.index_unchecked(global_joint_indices.z as usize).rotation * normal * joint_weights.z)
+            + (joint_transforms.index_unchecked(global_joint_indices.w as usize).rotation * normal * joint_weights.w)
+    };
 
     let position = instance_translation + (instance_rotation * instance_scale * position);
 

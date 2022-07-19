@@ -128,11 +128,10 @@ pub(crate) fn upload_joint_buffers(query: Query<&JointBuffer>, queue: Res<Queue>
 }
 
 pub(crate) fn push_joints(
-    instance_query: Query<(&InstanceOf, &AnimationJoints, &Instance)>,
+    instance_query: Query<(&InstanceOf, &AnimationJoints)>,
     mut model_query: Query<(&AnimatedModel, &mut JointBuffer)>,
-    mut line_buffer: ResMut<LineBuffer>,
 ) {
-    instance_query.for_each(|(instance_of, animation_joints, instance)| {
+    instance_query.for_each(|(instance_of, animation_joints)| {
         match model_query.get_mut(instance_of.0) {
             Ok((animated_model, mut joint_buffer)) => {
                 'joint_loop: for joint in animation_joints
@@ -157,7 +156,22 @@ pub(crate) fn push_joints(
                         break 'joint_loop;
                     }
                 }
+            }
+            Err(error) => {
+                log::warn!("Got an error when pushing joints: {}", error);
+            }
+        }
+    })
+}
 
+pub(crate) fn push_debug_joints_to_lines_buffer(
+    instance_query: Query<(&InstanceOf, &AnimationJoints, &Instance)>,
+    mut model_query: Query<&AnimatedModel>,
+    mut line_buffer: ResMut<LineBuffer>,
+) {
+    instance_query.for_each(|(instance_of, animation_joints, instance)| {
+        match model_query.get_mut(instance_of.0) {
+            Ok(animated_model) => {
                 for (id, (start, end)) in animation_joints
                     .0
                     .iter_lines(&animated_model.0.animation_data.depth_first_nodes)
@@ -180,10 +194,13 @@ pub(crate) fn push_joints(
                 }
             }
             Err(error) => {
-                log::warn!("Got an error when pushing joints: {}", error);
+                log::warn!(
+                    "Got an error when pushing joints to the lines buffer for debugging: {}",
+                    error
+                );
             }
         }
-    });
+    })
 }
 
 // Here would be a good place to do culling.

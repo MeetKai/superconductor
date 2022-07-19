@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use core::ops::Mul;
 #[cfg(not(target_arch = "spirv"))]
 use crevice::std140::AsStd140;
 use glam::{Mat4, Vec3, Vec4};
@@ -165,11 +166,19 @@ impl JointTransform {
         }
     }
 
-    pub fn as_mat4(&self) -> glam::Mat4 {
-        glam::Mat4::from_scale_rotation_translation(
-            Vec3::splat(self.translation_and_scale.w),
-            self.rotation,
-            self.translation_and_scale.truncate(),
-        )
+    fn translation(&self) -> Vec3 {
+        self.translation_and_scale.truncate()
+    }
+
+    fn scale(&self) -> f32 {
+        self.translation_and_scale.w
+    }
+}
+
+impl Mul<Vec3> for JointTransform {
+    type Output = Vec3;
+
+    fn mul(self, vector: Vec3) -> Vec3 {
+        self.translation() + (self.scale() * (self.rotation * vector))
     }
 }
