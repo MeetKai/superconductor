@@ -12,6 +12,7 @@ pub struct Queue(pub Arc<wgpu::Queue>);
 pub struct WindowChanges {
     pub cursor_grab: Option<bool>,
     pub cursor_visible: Option<bool>,
+    pub fullscreen: Option<bool>,
 }
 
 pub struct FrameTime(pub f64);

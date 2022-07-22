@@ -487,6 +487,16 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                                 window.set_cursor_visible(cursor_visible);
                             }
 
+                            if let Some(fullscreen) = window_changes.fullscreen {
+                                window.set_fullscreen(if fullscreen {
+                                    Some(winit::window::Fullscreen::Borderless(Some(
+                                        window.current_monitor().unwrap(),
+                                    )))
+                                } else {
+                                    None
+                                })
+                            }
+
                             *window_changes = Default::default();
                         }
 

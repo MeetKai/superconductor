@@ -34,7 +34,7 @@ pub async fn run() {
 }
 
 use bevy_app::{App, Plugin};
-use bevy_ecs::prelude::{Component, Query, Res, ResMut, With};
+use bevy_ecs::prelude::{Component, Local, Query, Res, ResMut, With};
 
 pub struct SuperconductorPlugin {
     mode: Mode,
@@ -241,6 +241,7 @@ struct KeyboardState {
     left: bool,
     backwards: bool,
     cursor_grab: bool,
+    control: bool,
 }
 
 fn rotate_entities(mut query: Query<&mut components::Instance, With<Spinning>>) {
@@ -254,6 +255,7 @@ fn handle_keyboard_input(
     mut keyboard_state: ResMut<KeyboardState>,
     mut camera_rig: ResMut<dolly::rig::CameraRig>,
     mut window_changes: ResMut<WindowChanges>,
+    mut fullscreen: Local<bool>,
 ) {
     for event in events.0.drain(..) {
         match event {
@@ -279,6 +281,16 @@ fn handle_keyboard_input(
                                 keyboard_state.cursor_grab = !keyboard_state.cursor_grab;
                                 window_changes.cursor_grab = Some(keyboard_state.cursor_grab);
                                 window_changes.cursor_visible = Some(!keyboard_state.cursor_grab);
+                            }
+                        }
+                        Some(VirtualKeyCode::LControl | VirtualKeyCode::RControl) => {
+                            keyboard_state.control = pressed
+                        }
+                        Some(VirtualKeyCode::F) => {
+                            if pressed && keyboard_state.control {
+                                *fullscreen = !*fullscreen;
+
+                                window_changes.fullscreen = Some(*fullscreen);
                             }
                         }
                         _ => {}
