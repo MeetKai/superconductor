@@ -5,8 +5,8 @@ use crate::components::{
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, Camera, ClampSampler, CompositeBindGroup, Device,
     IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer,
-    LineBuffer, MainBindGroup, NewIblCubemap, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer,
-    SurfaceFrameView, UniformBuffer, VertexBuffers,
+    LineBuffer, MainBindGroup, NewIblCubemap, Pipelines, Queue, SkyboxUniformBindGroup,
+    SkyboxUniformBuffer, SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{

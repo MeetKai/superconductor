@@ -479,15 +479,7 @@ impl AnimatedModel {
                         }
                     });
 
-                staging_primitive.buffers.indices.extend(
-                    reader
-                        .read_indices()
-                        .unwrap()
-                        .into_u32()
-                        .map(|index| staging_primitive.buffers.positions.len() as u32 + index),
-                );
-
-                let start_positions = staging_primitive.buffers.positions.len();
+                let vertices_offset = staging_primitive.buffers.positions.len();
 
                 staging_primitive.buffers.positions.extend(
                     reader
@@ -496,7 +488,21 @@ impl AnimatedModel {
                         .map(|pos| transform * Vec3::from(pos)),
                 );
 
-                let num_positions = staging_primitive.buffers.positions.len() - start_positions;
+                let num_vertices = staging_primitive.buffers.positions.len() - vertices_offset;
+
+                if let Some(indices) = reader.read_indices() {
+                    staging_primitive.buffers.indices.extend(
+                        indices
+                            .into_u32()
+                            .map(|index| vertices_offset as u32 + index),
+                    );
+                } else {
+                    log::warn!("No indices specified, using a seperate index per-vertex.");
+
+                    staging_primitive.buffers.indices.extend(
+                        vertices_offset as u32 .. vertices_offset as u32 + num_vertices as u32
+                    );
+                }
 
                 match reader.read_normals() {
                     Some(normals) => staging_primitive
@@ -506,7 +512,7 @@ impl AnimatedModel {
                     None => staging_primitive
                         .buffers
                         .normals
-                        .extend(std::iter::repeat(Vec3::ZERO).take(num_positions)),
+                        .extend(std::iter::repeat(Vec3::ZERO).take(num_vertices)),
                 }
                 staging_primitive.buffers.uvs.extend(
                     reader
