@@ -563,7 +563,7 @@ pub(crate) fn set_desktop_uniform_buffers(
     let perspective_matrix = create_perspective_matrix(
         59.0_f32.to_radians(),
         surface_frame_view.width as f32 / surface_frame_view.height as f32,
-        0.01,
+        0.001,
         1000.0,
         cfg!(not(feature = "wasm")),
     );

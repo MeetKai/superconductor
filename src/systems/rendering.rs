@@ -387,7 +387,7 @@ fn render_everything<'a>(
         render_pass,
         static_models,
         static_model_bind_groups,
-        |primitive_ranges| primitive_ranges.opaque.clone(),
+        |primitive_ranges| primitive_ranges.regular.opaque.clone(),
     );
 
     bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
@@ -398,7 +398,7 @@ fn render_everything<'a>(
         render_pass,
         animated_models,
         animated_model_bind_groups,
-        |primitive_ranges| primitive_ranges.opaque.clone(),
+        |primitive_ranges| primitive_ranges.regular.opaque.clone(),
     );
 
     bind_static_vertex_buffers(render_pass, vertex_buffers);
@@ -409,7 +409,7 @@ fn render_everything<'a>(
         render_pass,
         static_models,
         static_model_bind_groups,
-        |primitive_ranges| primitive_ranges.opaque_double_sided.clone(),
+        |primitive_ranges| primitive_ranges.double_sided.opaque.clone(),
     );
 
     bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
@@ -420,7 +420,7 @@ fn render_everything<'a>(
         render_pass,
         animated_models,
         animated_model_bind_groups,
-        |primitive_ranges| primitive_ranges.opaque_double_sided.clone(),
+        |primitive_ranges| primitive_ranges.double_sided.opaque.clone(),
     );
 
     bind_static_vertex_buffers(render_pass, vertex_buffers);
@@ -431,7 +431,7 @@ fn render_everything<'a>(
         render_pass,
         static_models,
         static_model_bind_groups,
-        |primitive_ranges| primitive_ranges.alpha_clipped.clone(),
+        |primitive_ranges| primitive_ranges.regular.alpha_clipped.clone(),
     );
 
     bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
@@ -442,7 +442,7 @@ fn render_everything<'a>(
         render_pass,
         animated_models,
         animated_model_bind_groups,
-        |primitive_ranges| primitive_ranges.alpha_clipped.clone(),
+        |primitive_ranges| primitive_ranges.regular.alpha_clipped.clone(),
     );
 
     bind_static_vertex_buffers(render_pass, vertex_buffers);
@@ -453,7 +453,7 @@ fn render_everything<'a>(
         render_pass,
         static_models,
         static_model_bind_groups,
-        |primitive_ranges| primitive_ranges.alpha_clipped_double_sided.clone(),
+        |primitive_ranges| primitive_ranges.double_sided.alpha_clipped.clone(),
     );
 
     bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
@@ -464,7 +464,7 @@ fn render_everything<'a>(
         render_pass,
         animated_models,
         animated_model_bind_groups,
-        |primitive_ranges| primitive_ranges.alpha_clipped_double_sided.clone(),
+        |primitive_ranges| primitive_ranges.double_sided.alpha_clipped.clone(),
     );
 
     if line_buffer.len() > 0 {

@@ -248,7 +248,7 @@ pub fn fragment(
 
     let combined_output = diffuse_output + specular_output + material_params.emission;
 
-    *output = potentially_tonemap(combined_output, uniforms).extend(1.0);
+    *output = potentially_tonemap(combined_output, uniforms).extend(material_params.alpha);
 }
 
 #[spirv(fragment)]
@@ -340,7 +340,7 @@ pub fn fragment_alpha_clipped(
 
     let combined_output = diffuse_output + specular_output + material_params.emission;
 
-    *output = potentially_tonemap(combined_output, uniforms).extend(1.0);
+    *output = potentially_tonemap(combined_output, uniforms).extend(material_params.alpha);
 }
 
 #[spirv(fragment)]

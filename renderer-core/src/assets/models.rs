@@ -29,11 +29,15 @@ pub struct Context<T> {
 }
 
 #[derive(Default, Debug)]
-pub struct PrimitiveRanges {
+pub struct PrimitiveRangeSet {
     pub opaque: Range<usize>,
     pub alpha_clipped: Range<usize>,
-    pub opaque_double_sided: Range<usize>,
-    pub alpha_clipped_double_sided: Range<usize>,
+}
+
+#[derive(Default, Debug)]
+pub struct PrimitiveRanges {
+    pub regular: PrimitiveRangeSet,
+    pub double_sided: PrimitiveRangeSet,
 }
 
 fn get_buffer<'a>(
@@ -64,46 +68,50 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
     let mut staging_buffers = B::default();
 
     let primitive_ranges = PrimitiveRanges {
-        opaque: collect_primitives(
-            &mut primitives,
-            &mut staging_buffers,
-            opaque_primitives.values(),
-            context,
-            gltf.clone(),
-            buffer_map.clone(),
-            root_url,
-            &collect,
-        ),
-        alpha_clipped: collect_primitives(
-            &mut primitives,
-            &mut staging_buffers,
-            alpha_clipped_primitives.values(),
-            context,
-            gltf.clone(),
-            buffer_map.clone(),
-            root_url,
-            &collect,
-        ),
-        opaque_double_sided: collect_primitives(
-            &mut primitives,
-            &mut staging_buffers,
-            opaque_double_sided_primitives.values(),
-            context,
-            gltf.clone(),
-            buffer_map.clone(),
-            root_url,
-            &collect,
-        ),
-        alpha_clipped_double_sided: collect_primitives(
-            &mut primitives,
-            &mut staging_buffers,
-            alpha_clipped_double_sided_primitives.values(),
-            context,
-            gltf,
-            buffer_map,
-            root_url,
-            &collect,
-        ),
+        regular: PrimitiveRangeSet {
+            opaque: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                opaque_primitives.values(),
+                context,
+                gltf.clone(),
+                buffer_map.clone(),
+                root_url,
+                &collect,
+            ),
+            alpha_clipped: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                alpha_clipped_primitives.values(),
+                context,
+                gltf.clone(),
+                buffer_map.clone(),
+                root_url,
+                &collect,
+            ),
+        },
+        double_sided: PrimitiveRangeSet {
+            opaque: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                opaque_double_sided_primitives.values(),
+                context,
+                gltf.clone(),
+                buffer_map.clone(),
+                root_url,
+                &collect,
+            ),
+            alpha_clipped: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                alpha_clipped_double_sided_primitives.values(),
+                context,
+                gltf,
+                buffer_map,
+                root_url,
+                &collect,
+            ),
+        },
     };
 
     (primitive_ranges, primitives, staging_buffers)
@@ -255,9 +263,9 @@ impl Model {
                     (AlphaMode::Blend, double_sided) => {
                         log::warn!("Alpha-blended materials aren't supported");
                         if double_sided {
-                            &mut opaque_double_sided_primitives
+                            &mut alpha_clipped_double_sided_primitives
                         } else {
-                            &mut opaque_primitives
+                            &mut alpha_clipped_primitives
                         }
                     }
                 };
@@ -409,9 +417,9 @@ impl AnimatedModel {
                     (AlphaMode::Blend, double_sided) => {
                         log::warn!("Alpha-blended materials aren't supported");
                         if double_sided {
-                            &mut opaque_double_sided_primitives
+                            &mut alpha_clipped_double_sided_primitives
                         } else {
-                            &mut opaque_primitives
+                            &mut alpha_clipped_primitives
                         }
                     }
                 };
