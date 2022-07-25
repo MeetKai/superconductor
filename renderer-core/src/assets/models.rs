@@ -266,7 +266,8 @@ impl Model {
                             buffers: StagingBuffers::default(),
                             material_settings: shared_structs::MaterialSettings {
                                 base_color_factor: pbr.base_color_factor().into(),
-                                emissive_factor: material.emissive_factor().into(),
+                                emissive_factor: Vec3::from(material.emissive_factor())
+                                    * material.emissive_strength().unwrap_or(1.0),
                                 metallic_factor: pbr.metallic_factor(),
                                 roughness_factor: pbr.roughness_factor(),
                                 is_unlit: unlit as u32,
@@ -380,12 +381,6 @@ impl AnimatedModel {
             .nodes()
             .filter_map(|node| node.mesh().map(|mesh| (node, mesh)))
         {
-            let transform = if node.skin().is_some() {
-                Similarity::IDENTITY
-            } else {
-                node_tree.transform_of(node.index())
-            };
-
             for primitive in mesh.primitives() {
                 let material = primitive.material();
 
@@ -419,7 +414,8 @@ impl AnimatedModel {
                             buffers: AnimatedStagingBuffers::default(),
                             material_settings: shared_structs::MaterialSettings {
                                 base_color_factor: pbr.base_color_factor().into(),
-                                emissive_factor: material.emissive_factor().into(),
+                                emissive_factor: Vec3::from(material.emissive_factor())
+                                    * material.emissive_strength().unwrap_or(1.0),
                                 metallic_factor: pbr.metallic_factor(),
                                 roughness_factor: pbr.roughness_factor(),
                                 is_unlit: unlit as u32,
@@ -432,26 +428,40 @@ impl AnimatedModel {
                         }
                     });
 
-                staging_primitive
+                let num_vertices = staging_primitive
                     .buffers
                     .base
-                    .extend_from_reader(&reader, transform);
+                    .extend_from_reader(&reader, Similarity::IDENTITY);
 
-                staging_primitive.buffers.joint_indices.extend(
-                    reader.read_joints(0).unwrap().into_u16().map(|indices| {
-                        UVec4::new(
-                            indices[0] as u32,
-                            indices[1] as u32,
-                            indices[2] as u32,
-                            indices[3] as u32,
-                        )
-                    }),
-                );
+                if let Some(joints) = reader.read_joints(0) {
+                    staging_primitive
+                        .buffers
+                        .joint_indices
+                        .extend(joints.into_u16().map(|indices| {
+                            UVec4::new(
+                                indices[0] as u32,
+                                indices[1] as u32,
+                                indices[2] as u32,
+                                indices[3] as u32,
+                            )
+                        }));
+                } else {
+                    staging_primitive.buffers.joint_indices.extend(
+                        std::iter::repeat(UVec4::splat(node.index() as u32)).take(num_vertices),
+                    );
+                }
 
-                staging_primitive
-                    .buffers
-                    .joint_weights
-                    .extend(reader.read_weights(0).unwrap().into_f32().map(Vec4::from));
+                if let Some(joint_weights) = reader.read_weights(0) {
+                    staging_primitive
+                        .buffers
+                        .joint_weights
+                        .extend(joint_weights.into_f32().map(Vec4::from));
+                } else {
+                    staging_primitive
+                        .buffers
+                        .joint_weights
+                        .extend(std::iter::repeat(Vec4::X).take(num_vertices))
+                }
             }
         }
 
@@ -542,7 +552,16 @@ impl AnimatedModel {
                 .collect()
         } else {
             gltf.nodes()
-                .map(|node| node_tree.transform_of(node.index()).inverse())
+                .map(|node| {
+                    let mut transform = node_tree.transform_of(node.index());
+                    // If the bind transform has a scale of 0.0 then the inverse of that is going
+                    // to INF and broken. Not sure how to handle this case so just set the scale
+                    // to 1.0.
+                    if transform.scale == 0.0 {
+                        transform.scale = 1.0;
+                    }
+                    transform.inverse()
+                })
                 .collect()
         };
 
@@ -610,7 +629,7 @@ impl StagingBuffers {
         &mut self,
         reader: &gltf::mesh::Reader<'a, 'a, F, ()>,
         transform: Similarity,
-    ) {
+    ) -> usize {
         let vertices_offset = self.positions.len();
 
         self.positions.extend(
@@ -651,6 +670,8 @@ impl StagingBuffers {
                 .into_f32()
                 .map(glam::Vec2::from),
         );
+
+        num_vertices
     }
 }
 
