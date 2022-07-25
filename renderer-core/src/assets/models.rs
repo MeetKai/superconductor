@@ -7,6 +7,7 @@ use crate::{
     BindGroupLayouts, Texture,
 };
 use glam::{UVec4, Vec2, Vec3, Vec4};
+use gltf::material::AlphaMode;
 use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
     Similarity,
@@ -41,7 +42,7 @@ fn get_buffer<'a>(
     buffer: gltf::Buffer,
 ) -> Option<&'a [u8]> {
     match buffer.source() {
-        gltf::buffer::Source::Bin => Some(gltf.blob.as_ref().unwrap()),
+        gltf::buffer::Source::Bin => gltf.blob.as_ref().map(|blob| &blob[..]),
         gltf::buffer::Source::Uri(_) => buffer_map.get(&buffer.index()).map(|vec| &vec[..]),
     }
 }
@@ -185,7 +186,10 @@ async fn collect_buffers<T: HttpClient>(
                 let url = url::Url::options().base_url(Some(root_url)).parse(uri)?;
 
                 if url.scheme() == "data" {
-                    let (_mime_type, data) = url.path().split_once(',').unwrap();
+                    let (_mime_type, data) = url
+                        .path()
+                        .split_once(',')
+                        .ok_or_else(|| anyhow::anyhow!("Failed to get data uri split"))?;
                     log::warn!("Loading buffers from embedded base64 is inefficient. Consider moving the buffers into a seperate file.");
                     buffer_map.insert(buffer.index(), base64::decode(data)?);
                 } else {
@@ -244,12 +248,18 @@ impl Model {
                 // https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html#double-sided
 
                 let primitive_map = match (material.alpha_mode(), material.double_sided()) {
-                    (gltf::material::AlphaMode::Opaque, false) => &mut opaque_primitives,
-                    (_, false) => &mut alpha_clipped_primitives,
-                    (gltf::material::AlphaMode::Opaque, true) => {
-                        &mut opaque_double_sided_primitives
+                    (AlphaMode::Opaque, false) => &mut opaque_primitives,
+                    (AlphaMode::Mask, false) => &mut alpha_clipped_primitives,
+                    (AlphaMode::Opaque, true) => &mut opaque_double_sided_primitives,
+                    (AlphaMode::Mask, true) => &mut alpha_clipped_double_sided_primitives,
+                    (AlphaMode::Blend, double_sided) => {
+                        log::warn!("Alpha-blended materials aren't supported");
+                        if double_sided {
+                            &mut opaque_double_sided_primitives
+                        } else {
+                            &mut opaque_primitives
+                        }
                     }
-                    (_, true) => &mut alpha_clipped_double_sided_primitives,
                 };
 
                 let reader = primitive.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer));
@@ -282,7 +292,7 @@ impl Model {
 
                 staging_primitive
                     .buffers
-                    .extend_from_reader(&reader, transform);
+                    .extend_from_reader(&reader, transform)?;
             }
         }
 
@@ -392,12 +402,18 @@ impl AnimatedModel {
                 // https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html#double-sided
 
                 let primitive_map = match (material.alpha_mode(), material.double_sided()) {
-                    (gltf::material::AlphaMode::Opaque, false) => &mut opaque_primitives,
-                    (_, false) => &mut alpha_clipped_primitives,
-                    (gltf::material::AlphaMode::Opaque, true) => {
-                        &mut opaque_double_sided_primitives
+                    (AlphaMode::Opaque, false) => &mut opaque_primitives,
+                    (AlphaMode::Mask, false) => &mut alpha_clipped_primitives,
+                    (AlphaMode::Opaque, true) => &mut opaque_double_sided_primitives,
+                    (AlphaMode::Mask, true) => &mut alpha_clipped_double_sided_primitives,
+                    (AlphaMode::Blend, double_sided) => {
+                        log::warn!("Alpha-blended materials aren't supported");
+                        if double_sided {
+                            &mut opaque_double_sided_primitives
+                        } else {
+                            &mut opaque_primitives
+                        }
                     }
-                    (_, true) => &mut alpha_clipped_double_sided_primitives,
                 };
 
                 let reader = primitive.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer));
@@ -431,37 +447,37 @@ impl AnimatedModel {
                 let num_vertices = staging_primitive
                     .buffers
                     .base
-                    .extend_from_reader(&reader, Similarity::IDENTITY);
+                    .extend_from_reader(&reader, Similarity::IDENTITY)?;
 
-                if let Some(joints) = reader.read_joints(0) {
-                    staging_primitive
-                        .buffers
-                        .joint_indices
-                        .extend(joints.into_u16().map(|indices| {
-                            UVec4::new(
-                                indices[0] as u32,
-                                indices[1] as u32,
-                                indices[2] as u32,
-                                indices[3] as u32,
-                            )
-                        }));
-                } else {
-                    staging_primitive.buffers.joint_indices.extend(
+                match reader.read_joints(0) {
+                    Some(joints) => {
+                        staging_primitive
+                            .buffers
+                            .joint_indices
+                            .extend(joints.into_u16().map(|indices| {
+                                UVec4::new(
+                                    indices[0] as u32,
+                                    indices[1] as u32,
+                                    indices[2] as u32,
+                                    indices[3] as u32,
+                                )
+                            }))
+                    }
+                    None => staging_primitive.buffers.joint_indices.extend(
                         std::iter::repeat(UVec4::splat(node.index() as u32)).take(num_vertices),
-                    );
+                    ),
                 }
 
-                if let Some(joint_weights) = reader.read_weights(0) {
-                    staging_primitive
+                match reader.read_weights(0) {
+                    Some(joint_weights) => staging_primitive
                         .buffers
                         .joint_weights
-                        .extend(joint_weights.into_f32().map(Vec4::from));
-                } else {
-                    staging_primitive
+                        .extend(joint_weights.into_f32().map(Vec4::from)),
+                    None => staging_primitive
                         .buffers
                         .joint_weights
-                        .extend(std::iter::repeat(Vec4::X).take(num_vertices))
-                }
+                        .extend(std::iter::repeat(Vec4::X).take(num_vertices)),
+                };
             }
         }
 
@@ -534,14 +550,14 @@ impl AnimatedModel {
 
         let skin = gltf.skins().next();
 
-        let joint_indices_to_node_indices: Vec<_> = if let Some(skin) = skin.as_ref() {
-            skin.joints().map(|node| node.index()).collect()
-        } else {
-            gltf.nodes().map(|node| node.index()).collect()
+        let joint_indices_to_node_indices: Vec<_> = match skin.as_ref() {
+            Some(skin) => skin.joints().map(|node| node.index()).collect(),
+            None => gltf.nodes().map(|node| node.index()).collect(),
         };
 
-        let inverse_bind_transforms: Vec<Similarity> = if let Some(skin) = skin.as_ref() {
-            skin.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer))
+        let inverse_bind_transforms: Vec<Similarity> = match skin.as_ref() {
+            Some(skin) => skin
+                .reader(|buffer| get_buffer(&gltf, &buffer_map, buffer))
                 .read_inverse_bind_matrices()
                 .expect("Missing inverse bind matrices")
                 .map(|matrix| {
@@ -549,10 +565,8 @@ impl AnimatedModel {
                         gltf::scene::Transform::Matrix { matrix }.decomposed();
                     Similarity::new_from_gltf(translation, rotation, scale)
                 })
-                .collect()
-        } else {
-            // Not entirely sure if this is correct.
-            gltf.nodes().map(|_| Similarity::IDENTITY).collect()
+                .collect(),
+            None => gltf.nodes().map(|_| Similarity::IDENTITY).collect(),
         };
 
         let depth_first_nodes = gltf_helpers::DepthFirstNodes::new(gltf.nodes(), &node_tree);
@@ -619,30 +633,31 @@ impl StagingBuffers {
         &mut self,
         reader: &gltf::mesh::Reader<'a, 'a, F, ()>,
         transform: Similarity,
-    ) -> usize {
+    ) -> anyhow::Result<usize> {
         let vertices_offset = self.positions.len();
 
         self.positions.extend(
             reader
                 .read_positions()
-                .unwrap()
+                .ok_or_else(|| anyhow::anyhow!("Primitive doesn't specifiy vertex positions."))?
                 .map(|pos| transform * Vec3::from(pos)),
         );
 
         let num_vertices = self.positions.len() - vertices_offset;
 
-        if let Some(indices) = reader.read_indices() {
-            self.indices.extend(
+        match reader.read_indices() {
+            Some(indices) => self.indices.extend(
                 indices
                     .into_u32()
                     .map(|index| vertices_offset as u32 + index),
-            );
-        } else {
-            log::warn!("No indices specified, using a seperate index per-vertex.");
+            ),
+            None => {
+                log::warn!("No indices specified, using inefficient per-vertex indices.");
 
-            self.indices
-                .extend(vertices_offset as u32..vertices_offset as u32 + num_vertices as u32);
-        }
+                self.indices
+                    .extend(vertices_offset as u32..vertices_offset as u32 + num_vertices as u32);
+            }
+        };
 
         match reader.read_normals() {
             Some(normals) => self
@@ -653,15 +668,14 @@ impl StagingBuffers {
                 .extend(std::iter::repeat(Vec3::ZERO).take(num_vertices)),
         }
 
-        self.uvs.extend(
-            reader
-                .read_tex_coords(0)
-                .unwrap()
-                .into_f32()
-                .map(glam::Vec2::from),
-        );
+        match reader.read_tex_coords(0) {
+            Some(uvs) => self.uvs.extend(uvs.into_f32().map(glam::Vec2::from)),
+            None => self
+                .uvs
+                .extend(std::iter::repeat(glam::Vec2::ZERO).take(num_vertices)),
+        }
 
-        num_vertices
+        Ok(num_vertices)
     }
 }
 
@@ -856,7 +870,8 @@ async fn load_image_from_gltf<T: HttpClient>(
 ) -> anyhow::Result<Arc<Texture>> {
     match texture.source().source() {
         gltf::image::Source::View { mime_type, view } => {
-            let buffer = get_buffer(&context.gltf, &context.buffer_map, view.buffer()).unwrap();
+            let buffer = get_buffer(&context.gltf, &context.buffer_map, view.buffer())
+                .ok_or_else(|| anyhow::anyhow!("Failed to get buffer"))?;
 
             let bytes = &buffer[view.offset()..view.offset() + view.length()];
 
