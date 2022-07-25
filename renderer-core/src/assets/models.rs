@@ -551,18 +551,8 @@ impl AnimatedModel {
                 })
                 .collect()
         } else {
-            gltf.nodes()
-                .map(|node| {
-                    let mut transform = node_tree.transform_of(node.index());
-                    // If the bind transform has a scale of 0.0 then the inverse of that is going
-                    // to INF and broken. Not sure how to handle this case so just set the scale
-                    // to 1.0.
-                    if transform.scale == 0.0 {
-                        transform.scale = 1.0;
-                    }
-                    transform.inverse()
-                })
-                .collect()
+            // Not entirely sure if this is correct.
+            gltf.nodes().map(|_| Similarity::IDENTITY).collect()
         };
 
         let depth_first_nodes = gltf_helpers::DepthFirstNodes::new(gltf.nodes(), &node_tree);
