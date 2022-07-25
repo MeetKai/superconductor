@@ -315,12 +315,12 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
                 format: wgpu::TextureFormat::Rgba16Float,
             },
         )))),
-        sphere_harmonics: ArcSwap::from(Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("dummy sphere harmonics buffer"),
+        sphere_harmonics: device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("sphere harmonics buffer"),
             size: 144,
-            usage: wgpu::BufferUsages::UNIFORM,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        }))),
+        }),
     });
 
     let uniform_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
@@ -484,6 +484,8 @@ pub(crate) fn update_ibl_resources<T: HttpClient>(
         settings: texture_settings.clone(),
     };
 
+    let queue = queue.clone();
+
     spawn(async move {
         match renderer_core::assets::textures::load_ibl_cubemap(
             textures_context.clone(),
@@ -491,11 +493,13 @@ pub(crate) fn update_ibl_resources<T: HttpClient>(
         )
         .await
         {
-            Ok((specular_cubemap, sphere_harmonics)) => {
-                ibl_resources.cubemap.store(specular_cubemap);
-                ibl_resources
-                    .sphere_harmonics
-                    .store(Arc::new(sphere_harmonics));
+            Ok(ibl_data) => {
+                ibl_resources.cubemap.store(ibl_data.texture);
+                queue.write_buffer(
+                    &ibl_resources.sphere_harmonics,
+                    0,
+                    &ibl_data.padded_sphere_harmonics_bytes,
+                );
 
                 main_bind_group_setter.set(create_main_bind_group(
                     &textures_context.device,

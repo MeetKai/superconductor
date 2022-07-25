@@ -240,7 +240,7 @@ pub fn create_main_bind_group(
             },
             wgpu::BindGroupEntry {
                 binding: 4,
-                resource: ibl_resources.sphere_harmonics.load().as_entire_binding(),
+                resource: ibl_resources.sphere_harmonics.as_entire_binding(),
             },
         ],
     })
