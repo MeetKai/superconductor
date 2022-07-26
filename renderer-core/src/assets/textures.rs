@@ -21,10 +21,16 @@ pub struct Context<T> {
     pub settings: Settings,
 }
 
-pub async fn load_ktx2_cubemap<T: HttpClient>(
+pub struct IblData {
+    pub texture: Arc<Texture>,
+    pub padded_sphere_harmonics_bytes: [u8; 144],
+    pub num_levels: u32,
+}
+
+pub async fn load_ibl_cubemap<T: HttpClient>(
     context: Context<T>,
     url: &url::Url,
-) -> anyhow::Result<Arc<Texture>> {
+) -> anyhow::Result<IblData> {
     let mut header_bytes = [0; ktx2::Header::LENGTH];
 
     let fetched_header = context
@@ -55,6 +61,36 @@ pub async fn load_ktx2_cubemap<T: HttpClient>(
             "Got an unsupported supercompression scheme: {:?}",
             header.supercompression_scheme
         ));
+    }
+
+    let key_value_data = context
+        .http_client
+        .fetch_bytes(
+            url,
+            Some(
+                header.index.kvd_byte_offset as usize
+                    ..header.index.kvd_byte_offset as usize + header.index.kvd_byte_length as usize,
+            ),
+        )
+        .await?;
+
+    let sphere_harmonics_bytes = match ktx2::KeyValueDataIterator::new(&key_value_data)
+        .find(|&(key, _)| key == "sphere_harmonics")
+    {
+        Some((_, value)) => value,
+        None => {
+            return Err(anyhow::anyhow!(
+                "Missing `sphere_harmonics` in the key-value section"
+            ))
+        }
+    };
+
+    // Pad the 9 float32x3 colours to float32x4 by writing to a zeroed buffer.
+    // 144 = 4 * 4 * 9.
+    let mut padded_sphere_harmonics_bytes = [0; 144];
+
+    for (i, chunk) in sphere_harmonics_bytes.chunks(12).take(9).enumerate() {
+        padded_sphere_harmonics_bytes[i * 16..(i * 16) + 12].copy_from_slice(chunk);
     }
 
     let mut level_indices = Vec::with_capacity(header.level_count as usize);
@@ -271,7 +307,11 @@ pub async fn load_ktx2_cubemap<T: HttpClient>(
         }
     });
 
-    Ok(texture)
+    Ok(IblData {
+        texture,
+        num_levels: header.level_count,
+        padded_sphere_harmonics_bytes,
+    })
 }
 
 fn write_bytes_to_texture(

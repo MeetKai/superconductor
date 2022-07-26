@@ -1,12 +1,14 @@
 use super::materials::MaterialBindings;
 use super::textures::{self, load_image_with_mime_type, ImageSource};
 use super::HttpClient;
+use crate::permutations;
 use crate::{
     spawn,
     utils::{Setter, Swappable},
     BindGroupLayouts, Texture,
 };
 use glam::{UVec4, Vec2, Vec3, Vec4};
+use gltf::material::AlphaMode;
 use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
     Similarity,
@@ -27,13 +29,7 @@ pub struct Context<T> {
     pub texture_settings: textures::Settings,
 }
 
-#[derive(Default, Debug)]
-pub struct PrimitiveRanges {
-    pub opaque: Range<usize>,
-    pub alpha_clipped: Range<usize>,
-    pub opaque_double_sided: Range<usize>,
-    pub alpha_clipped_double_sided: Range<usize>,
-}
+pub type PrimitiveRanges = permutations::BlendMode<permutations::FaceSides<Range<usize>>>;
 
 fn get_buffer<'a>(
     gltf: &'a gltf::Gltf,
@@ -41,23 +37,115 @@ fn get_buffer<'a>(
     buffer: gltf::Buffer,
 ) -> Option<&'a [u8]> {
     match buffer.source() {
-        gltf::buffer::Source::Bin => Some(gltf.blob.as_ref().unwrap()),
+        gltf::buffer::Source::Bin => gltf.blob.as_ref().map(|blob| &blob[..]),
         gltf::buffer::Source::Uri(_) => buffer_map.get(&buffer.index()).map(|vec| &vec[..]),
     }
 }
 
+// Collect all the buffers for the primitives into one big staging buffer
+// and collect all the primitive ranges into one big vector.
+fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) -> Range<u32>>(
+    context: &Context<T>,
+    gltf: Arc<gltf::Gltf>,
+    buffer_map: Arc<HashMap<usize, Vec<u8>>>,
+    root_url: &url::Url,
+    staging_primitives: &permutations::BlendMode<
+        permutations::FaceSides<HashMap<Option<usize>, StagingPrimitive<B>>>,
+    >,
+    collect: C,
+) -> (PrimitiveRanges, Vec<Primitive>, B) {
+    let mut primitives = Vec::new();
+    let mut staging_buffers = B::default();
+
+    let primitive_ranges = PrimitiveRanges {
+        opaque: permutations::FaceSides {
+            single: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                staging_primitives.opaque.single.values(),
+                context,
+                gltf.clone(),
+                buffer_map.clone(),
+                root_url,
+                &collect,
+            ),
+            double: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                staging_primitives.opaque.double.values(),
+                context,
+                gltf.clone(),
+                buffer_map.clone(),
+                root_url,
+                &collect,
+            ),
+        },
+        alpha_clipped: permutations::FaceSides {
+            single: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                staging_primitives.alpha_clipped.single.values(),
+                context,
+                gltf.clone(),
+                buffer_map.clone(),
+                root_url,
+                &collect,
+            ),
+            double: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                staging_primitives.alpha_clipped.double.values(),
+                context,
+                gltf.clone(),
+                buffer_map.clone(),
+                root_url,
+                &collect,
+            ),
+        },
+        alpha_blended: permutations::FaceSides {
+            single: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                staging_primitives.alpha_blended.double.values(),
+                context,
+                gltf.clone(),
+                buffer_map.clone(),
+                root_url,
+                &collect,
+            ),
+            double: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                staging_primitives.alpha_blended.double.values(),
+                context,
+                gltf,
+                buffer_map,
+                root_url,
+                &collect,
+            ),
+        },
+    };
+
+    (primitive_ranges, primitives, staging_buffers)
+}
+
+// Loop over each primitive, collecting the primitives together and spawning the texture loading
+// futures.
 fn collect_primitives<
     'a,
     T: HttpClient,
-    I: std::iter::Iterator<Item = &'a StagingPrimitive<StagingBuffers>>,
+    B: 'a,
+    I: std::iter::Iterator<Item = &'a StagingPrimitive<B>>,
+    C: Fn(&mut B, &B) -> Range<u32>,
 >(
     primitives: &mut Vec<Primitive>,
-    staging_buffers: &mut StagingBuffers,
+    staging_buffers: &mut B,
     staging_primitives: I,
     context: &Context<T>,
     gltf: Arc<gltf::Gltf>,
     buffer_map: Arc<HashMap<usize, Vec<u8>>>,
     root_url: &url::Url,
+    collect: C,
 ) -> Range<usize> {
     let primitives_start = primitives.len();
 
@@ -76,57 +164,7 @@ fn collect_primitives<
         let bind_group_setter = bind_group.setter.clone();
 
         primitives.push(Primitive {
-            index_buffer_range: staging_buffers.collect(&staging_primitive.buffers),
-            bind_group,
-        });
-
-        spawn_texture_loading_futures(
-            bind_group_setter,
-            material_bindings,
-            staging_primitive.material_index,
-            gltf.clone(),
-            buffer_map.clone(),
-            context,
-            root_url,
-        )
-    }
-
-    let primitives_end = primitives.len();
-
-    primitives_start..primitives_end
-}
-
-fn collect_animated_primitives<
-    'a,
-    T: HttpClient,
-    I: std::iter::Iterator<Item = &'a StagingPrimitive<AnimatedStagingBuffers>>,
->(
-    primitives: &mut Vec<Primitive>,
-    staging_buffers: &mut AnimatedStagingBuffers,
-    staging_primitives: I,
-    context: &Context<T>,
-    gltf: Arc<gltf::Gltf>,
-    buffer_map: Arc<HashMap<usize, Vec<u8>>>,
-    root_url: &url::Url,
-) -> Range<usize> {
-    let primitives_start = primitives.len();
-
-    for staging_primitive in staging_primitives {
-        let material_bindings = MaterialBindings::new(
-            &context.device,
-            &context.queue,
-            context.bind_group_layouts.clone(),
-            &staging_primitive.material_settings,
-        );
-
-        let bind_group = Swappable::new(Arc::new(
-            material_bindings.create_bind_group(&context.device, &context.texture_settings),
-        ));
-
-        let bind_group_setter = bind_group.setter.clone();
-
-        primitives.push(Primitive {
-            index_buffer_range: staging_buffers.collect(&staging_primitive.buffers),
+            index_buffer_range: collect(staging_buffers, &staging_primitive.buffers),
             bind_group,
         });
 
@@ -168,7 +206,10 @@ async fn collect_buffers<T: HttpClient>(
                 let url = url::Url::options().base_url(Some(root_url)).parse(uri)?;
 
                 if url.scheme() == "data" {
-                    let (_mime_type, data) = url.path().split_once(',').unwrap();
+                    let (_mime_type, data) = url
+                        .path()
+                        .split_once(',')
+                        .ok_or_else(|| anyhow::anyhow!("Failed to get data uri split"))?;
                     log::warn!("Loading buffers from embedded base64 is inefficient. Consider moving the buffers into a seperate file.");
                     buffer_map.insert(buffer.index(), base64::decode(data)?);
                 } else {
@@ -205,10 +246,9 @@ impl Model {
 
         // What we're doing here is essentially collecting all the model primitives that share a meterial together
         // to reduce the number of draw calls.
-        let mut opaque_primitives = HashMap::new();
-        let mut alpha_clipped_primitives = HashMap::new();
-        let mut opaque_double_sided_primitives = HashMap::new();
-        let mut alpha_clipped_double_sided_primitives = HashMap::new();
+        let mut staging_primitives: permutations::BlendMode<
+            permutations::FaceSides<HashMap<_, _>>,
+        > = Default::default();
 
         for (node, mesh) in gltf
             .nodes()
@@ -227,12 +267,14 @@ impl Model {
                 // https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html#double-sided
 
                 let primitive_map = match (material.alpha_mode(), material.double_sided()) {
-                    (gltf::material::AlphaMode::Opaque, false) => &mut opaque_primitives,
-                    (_, false) => &mut alpha_clipped_primitives,
-                    (gltf::material::AlphaMode::Opaque, true) => {
-                        &mut opaque_double_sided_primitives
-                    }
-                    (_, true) => &mut alpha_clipped_double_sided_primitives,
+                    (AlphaMode::Opaque, false) => &mut staging_primitives.opaque.single,
+                    (AlphaMode::Opaque, true) => &mut staging_primitives.opaque.double,
+
+                    (AlphaMode::Mask, false) => &mut staging_primitives.alpha_clipped.single,
+                    (AlphaMode::Mask, true) => &mut staging_primitives.alpha_clipped.double,
+
+                    (AlphaMode::Blend, false) => &mut staging_primitives.alpha_blended.single,
+                    (AlphaMode::Blend, true) => &mut staging_primitives.alpha_blended.double,
                 };
 
                 let reader = primitive.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer));
@@ -249,7 +291,8 @@ impl Model {
                             buffers: StagingBuffers::default(),
                             material_settings: shared_structs::MaterialSettings {
                                 base_color_factor: pbr.base_color_factor().into(),
-                                emissive_factor: material.emissive_factor().into(),
+                                emissive_factor: Vec3::from(material.emissive_factor())
+                                    * material.emissive_strength().unwrap_or(1.0),
                                 metallic_factor: pbr.metallic_factor(),
                                 roughness_factor: pbr.roughness_factor(),
                                 is_unlit: unlit as u32,
@@ -262,92 +305,25 @@ impl Model {
                         }
                     });
 
-                staging_primitive.buffers.indices.extend(
-                    reader
-                        .read_indices()
-                        .unwrap()
-                        .into_u32()
-                        .map(|index| staging_primitive.buffers.positions.len() as u32 + index),
-                );
-
-                let start_positions = staging_primitive.buffers.positions.len();
-
-                staging_primitive.buffers.positions.extend(
-                    reader
-                        .read_positions()
-                        .unwrap()
-                        .map(|pos| transform * Vec3::from(pos)),
-                );
-
-                let num_positions = staging_primitive.buffers.positions.len() - start_positions;
-
-                match reader.read_normals() {
-                    Some(normals) => staging_primitive
-                        .buffers
-                        .normals
-                        .extend(normals.map(|normal| transform.rotation * Vec3::from(normal))),
-                    None => staging_primitive
-                        .buffers
-                        .normals
-                        .extend(std::iter::repeat(Vec3::ZERO).take(num_positions)),
-                }
-                staging_primitive.buffers.uvs.extend(
-                    reader
-                        .read_tex_coords(0)
-                        .unwrap()
-                        .into_f32()
-                        .map(glam::Vec2::from),
-                );
+                staging_primitive
+                    .buffers
+                    .extend_from_reader(&reader, transform)?;
             }
         }
 
-        // Collect all the buffers for the primitives into one big staging buffer
-        // and collect all the primitive ranges into one big vector.
-
-        let mut staging_buffers = StagingBuffers::default();
-
-        let mut primitives = Vec::new();
         let gltf = Arc::new(gltf);
         let buffer_map = Arc::new(buffer_map);
 
-        let primitive_ranges = PrimitiveRanges {
-            opaque: collect_primitives(
-                &mut primitives,
-                &mut staging_buffers,
-                opaque_primitives.values(),
-                context,
-                gltf.clone(),
-                buffer_map.clone(),
-                root_url,
-            ),
-            alpha_clipped: collect_primitives(
-                &mut primitives,
-                &mut staging_buffers,
-                alpha_clipped_primitives.values(),
-                context,
-                gltf.clone(),
-                buffer_map.clone(),
-                root_url,
-            ),
-            opaque_double_sided: collect_primitives(
-                &mut primitives,
-                &mut staging_buffers,
-                opaque_double_sided_primitives.values(),
-                context,
-                gltf.clone(),
-                buffer_map.clone(),
-                root_url,
-            ),
-            alpha_clipped_double_sided: collect_primitives(
-                &mut primitives,
-                &mut staging_buffers,
-                alpha_clipped_double_sided_primitives.values(),
-                context,
-                gltf,
-                buffer_map,
-                root_url,
-            ),
-        };
+        // Collect all the buffers for the primitives into one big staging buffer
+        // and collect all the primitive ranges into one big vector.
+        let (primitive_ranges, mut primitives, mut staging_buffers) = collect_all_primitives(
+            context,
+            gltf,
+            buffer_map,
+            root_url,
+            &staging_primitives,
+            |a, b| a.collect(b),
+        );
 
         let mut command_encoder =
             context
@@ -416,23 +392,14 @@ impl AnimatedModel {
 
         let buffer_map = collect_buffers(&gltf, root_url, context).await?;
 
-        // What we're doing here is essentially collecting all the model primitives that share a meterial together
-        // to reduce the number of draw calls.
-        let mut opaque_primitives = HashMap::new();
-        let mut alpha_clipped_primitives = HashMap::new();
-        let mut opaque_double_sided_primitives = HashMap::new();
-        let mut alpha_clipped_double_sided_primitives = HashMap::new();
+        let mut staging_primitives: permutations::BlendMode<
+            permutations::FaceSides<HashMap<_, _>>,
+        > = Default::default();
 
         for (node, mesh) in gltf
             .nodes()
             .filter_map(|node| node.mesh().map(|mesh| (node, mesh)))
         {
-            let transform = if node.skin().is_some() {
-                Similarity::IDENTITY
-            } else {
-                node_tree.transform_of(node.index())
-            };
-
             for primitive in mesh.primitives() {
                 let material = primitive.material();
 
@@ -444,12 +411,14 @@ impl AnimatedModel {
                 // https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html#double-sided
 
                 let primitive_map = match (material.alpha_mode(), material.double_sided()) {
-                    (gltf::material::AlphaMode::Opaque, false) => &mut opaque_primitives,
-                    (_, false) => &mut alpha_clipped_primitives,
-                    (gltf::material::AlphaMode::Opaque, true) => {
-                        &mut opaque_double_sided_primitives
-                    }
-                    (_, true) => &mut alpha_clipped_double_sided_primitives,
+                    (AlphaMode::Opaque, false) => &mut staging_primitives.opaque.single,
+                    (AlphaMode::Opaque, true) => &mut staging_primitives.opaque.double,
+
+                    (AlphaMode::Mask, false) => &mut staging_primitives.alpha_clipped.single,
+                    (AlphaMode::Mask, true) => &mut staging_primitives.alpha_clipped.double,
+
+                    (AlphaMode::Blend, false) => &mut staging_primitives.alpha_blended.single,
+                    (AlphaMode::Blend, true) => &mut staging_primitives.alpha_blended.double,
                 };
 
                 let reader = primitive.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer));
@@ -466,7 +435,8 @@ impl AnimatedModel {
                             buffers: AnimatedStagingBuffers::default(),
                             material_settings: shared_structs::MaterialSettings {
                                 base_color_factor: pbr.base_color_factor().into(),
-                                emissive_factor: material.emissive_factor().into(),
+                                emissive_factor: Vec3::from(material.emissive_factor())
+                                    * material.emissive_strength().unwrap_or(1.0),
                                 metallic_factor: pbr.metallic_factor(),
                                 roughness_factor: pbr.roughness_factor(),
                                 is_unlit: unlit as u32,
@@ -479,108 +449,56 @@ impl AnimatedModel {
                         }
                     });
 
-                staging_primitive.buffers.indices.extend(
-                    reader
-                        .read_indices()
-                        .unwrap()
-                        .into_u32()
-                        .map(|index| staging_primitive.buffers.positions.len() as u32 + index),
-                );
+                let num_vertices = staging_primitive
+                    .buffers
+                    .base
+                    .extend_from_reader(&reader, Similarity::IDENTITY)?;
 
-                let start_positions = staging_primitive.buffers.positions.len();
+                match reader.read_joints(0) {
+                    Some(joints) => {
+                        staging_primitive
+                            .buffers
+                            .joint_indices
+                            .extend(joints.into_u16().map(|indices| {
+                                UVec4::new(
+                                    indices[0] as u32,
+                                    indices[1] as u32,
+                                    indices[2] as u32,
+                                    indices[3] as u32,
+                                )
+                            }))
+                    }
+                    None => staging_primitive.buffers.joint_indices.extend(
+                        std::iter::repeat(UVec4::splat(node.index() as u32)).take(num_vertices),
+                    ),
+                }
 
-                staging_primitive.buffers.positions.extend(
-                    reader
-                        .read_positions()
-                        .unwrap()
-                        .map(|pos| transform * Vec3::from(pos)),
-                );
-
-                let num_positions = staging_primitive.buffers.positions.len() - start_positions;
-
-                match reader.read_normals() {
-                    Some(normals) => staging_primitive
+                match reader.read_weights(0) {
+                    Some(joint_weights) => staging_primitive
                         .buffers
-                        .normals
-                        .extend(normals.map(|normal| transform.rotation * Vec3::from(normal))),
+                        .joint_weights
+                        .extend(joint_weights.into_f32().map(Vec4::from)),
                     None => staging_primitive
                         .buffers
-                        .normals
-                        .extend(std::iter::repeat(Vec3::ZERO).take(num_positions)),
-                }
-                staging_primitive.buffers.uvs.extend(
-                    reader
-                        .read_tex_coords(0)
-                        .unwrap()
-                        .into_f32()
-                        .map(glam::Vec2::from),
-                );
-
-                staging_primitive.buffers.joint_indices.extend(
-                    reader.read_joints(0).unwrap().into_u16().map(|indices| {
-                        UVec4::new(
-                            indices[0] as u32,
-                            indices[1] as u32,
-                            indices[2] as u32,
-                            indices[3] as u32,
-                        )
-                    }),
-                );
-
-                staging_primitive
-                    .buffers
-                    .joint_weights
-                    .extend(reader.read_weights(0).unwrap().into_f32().map(Vec4::from));
+                        .joint_weights
+                        .extend(std::iter::repeat(Vec4::X).take(num_vertices)),
+                };
             }
         }
 
-        // Collect all the buffers for the primitives into one big staging buffer
-        // and collect all the primitive ranges into one big vector.
-
-        let mut staging_buffers = AnimatedStagingBuffers::default();
-
-        let mut primitives = Vec::new();
         let gltf = Arc::new(gltf);
         let buffer_map = Arc::new(buffer_map);
 
-        let primitive_ranges = PrimitiveRanges {
-            opaque: collect_animated_primitives(
-                &mut primitives,
-                &mut staging_buffers,
-                opaque_primitives.values(),
-                context,
-                gltf.clone(),
-                buffer_map.clone(),
-                root_url,
-            ),
-            alpha_clipped: collect_animated_primitives(
-                &mut primitives,
-                &mut staging_buffers,
-                alpha_clipped_primitives.values(),
-                context,
-                gltf.clone(),
-                buffer_map.clone(),
-                root_url,
-            ),
-            opaque_double_sided: collect_animated_primitives(
-                &mut primitives,
-                &mut staging_buffers,
-                opaque_double_sided_primitives.values(),
-                context,
-                gltf.clone(),
-                buffer_map.clone(),
-                root_url,
-            ),
-            alpha_clipped_double_sided: collect_animated_primitives(
-                &mut primitives,
-                &mut staging_buffers,
-                alpha_clipped_double_sided_primitives.values(),
-                context,
-                gltf.clone(),
-                buffer_map.clone(),
-                root_url,
-            ),
-        };
+        // Collect all the buffers for the primitives into one big staging buffer
+        // and collect all the primitive ranges into one big vector.
+        let (primitive_ranges, mut primitives, mut staging_buffers) = collect_all_primitives(
+            context,
+            gltf.clone(),
+            buffer_map.clone(),
+            root_url,
+            &staging_primitives,
+            |a, b| a.collect(b),
+        );
 
         let mut command_encoder =
             context
@@ -590,9 +508,9 @@ impl AnimatedModel {
                 });
 
         let vertex_buffer_range = context.animated_vertex_buffers.insert(
-            &staging_buffers.positions,
-            &staging_buffers.normals,
-            &staging_buffers.uvs,
+            &staging_buffers.base.positions,
+            &staging_buffers.base.normals,
+            &staging_buffers.base.uvs,
             &staging_buffers.joint_indices,
             &staging_buffers.joint_weights,
             &context.device,
@@ -601,12 +519,12 @@ impl AnimatedModel {
         );
 
         // Make sure the indices point to the right vertices.
-        for index in &mut staging_buffers.indices {
+        for index in &mut staging_buffers.base.indices {
             *index += vertex_buffer_range.start;
         }
 
         let index_buffer_range = context.index_buffer.insert(
-            &staging_buffers.indices,
+            &staging_buffers.base.indices,
             &context.device,
             &context.queue,
             &mut command_encoder,
@@ -634,14 +552,14 @@ impl AnimatedModel {
 
         let skin = gltf.skins().next();
 
-        let joint_indices_to_node_indices: Vec<_> = if let Some(skin) = skin.as_ref() {
-            skin.joints().map(|node| node.index()).collect()
-        } else {
-            gltf.nodes().map(|node| node.index()).collect()
+        let joint_indices_to_node_indices: Vec<_> = match skin.as_ref() {
+            Some(skin) => skin.joints().map(|node| node.index()).collect(),
+            None => gltf.nodes().map(|node| node.index()).collect(),
         };
 
-        let inverse_bind_transforms: Vec<Similarity> = if let Some(skin) = skin.as_ref() {
-            skin.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer))
+        let inverse_bind_transforms: Vec<Similarity> = match skin.as_ref() {
+            Some(skin) => skin
+                .reader(|buffer| get_buffer(&gltf, &buffer_map, buffer))
                 .read_inverse_bind_matrices()
                 .expect("Missing inverse bind matrices")
                 .map(|matrix| {
@@ -649,11 +567,8 @@ impl AnimatedModel {
                         gltf::scene::Transform::Matrix { matrix }.decomposed();
                     Similarity::new_from_gltf(translation, rotation, scale)
                 })
-                .collect()
-        } else {
-            gltf.nodes()
-                .map(|node| node_tree.transform_of(node.index()).inverse())
-                .collect()
+                .collect(),
+            None => gltf.nodes().map(|_| Similarity::IDENTITY).collect(),
         };
 
         let depth_first_nodes = gltf_helpers::DepthFirstNodes::new(gltf.nodes(), &node_tree);
@@ -715,35 +630,70 @@ impl StagingBuffers {
 
         indices_start..indices_end
     }
+
+    fn extend_from_reader<'a, F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'a [u8]>>(
+        &mut self,
+        reader: &gltf::mesh::Reader<'a, 'a, F, ()>,
+        transform: Similarity,
+    ) -> anyhow::Result<usize> {
+        let vertices_offset = self.positions.len();
+
+        self.positions.extend(
+            reader
+                .read_positions()
+                .ok_or_else(|| anyhow::anyhow!("Primitive doesn't specifiy vertex positions."))?
+                .map(|pos| transform * Vec3::from(pos)),
+        );
+
+        let num_vertices = self.positions.len() - vertices_offset;
+
+        match reader.read_indices() {
+            Some(indices) => self.indices.extend(
+                indices
+                    .into_u32()
+                    .map(|index| vertices_offset as u32 + index),
+            ),
+            None => {
+                log::warn!("No indices specified, using inefficient per-vertex indices.");
+
+                self.indices
+                    .extend(vertices_offset as u32..vertices_offset as u32 + num_vertices as u32);
+            }
+        };
+
+        match reader.read_normals() {
+            Some(normals) => self
+                .normals
+                .extend(normals.map(|normal| transform.rotation * Vec3::from(normal))),
+            None => self
+                .normals
+                .extend(std::iter::repeat(Vec3::ZERO).take(num_vertices)),
+        }
+
+        match reader.read_tex_coords(0) {
+            Some(uvs) => self.uvs.extend(uvs.into_f32().map(glam::Vec2::from)),
+            None => self
+                .uvs
+                .extend(std::iter::repeat(glam::Vec2::ZERO).take(num_vertices)),
+        }
+
+        Ok(num_vertices)
+    }
 }
 
 #[derive(Default)]
 struct AnimatedStagingBuffers {
-    indices: Vec<u32>,
-    positions: Vec<Vec3>,
-    normals: Vec<Vec3>,
-    uvs: Vec<Vec2>,
+    base: StagingBuffers,
     joint_indices: Vec<UVec4>,
     joint_weights: Vec<Vec4>,
 }
 
 impl AnimatedStagingBuffers {
     fn collect(&mut self, new: &AnimatedStagingBuffers) -> Range<u32> {
-        let indices_start = self.indices.len() as u32;
-        let num_vertices = self.positions.len() as u32;
-
-        self.indices
-            .extend(new.indices.iter().map(|index| index + num_vertices));
-
-        self.positions.extend_from_slice(&new.positions);
-        self.normals.extend_from_slice(&new.normals);
-        self.uvs.extend_from_slice(&new.uvs);
         self.joint_indices.extend_from_slice(&new.joint_indices);
         self.joint_weights.extend_from_slice(&new.joint_weights);
 
-        let indices_end = self.indices.len() as u32;
-
-        indices_start..indices_end
+        self.base.collect(&new.base)
     }
 }
 
@@ -922,7 +872,8 @@ async fn load_image_from_gltf<T: HttpClient>(
 ) -> anyhow::Result<Arc<Texture>> {
     match texture.source().source() {
         gltf::image::Source::View { mime_type, view } => {
-            let buffer = get_buffer(&context.gltf, &context.buffer_map, view.buffer()).unwrap();
+            let buffer = get_buffer(&context.gltf, &context.buffer_map, view.buffer())
+                .ok_or_else(|| anyhow::anyhow!("Failed to get buffer"))?;
 
             let bytes = &buffer[view.offset()..view.offset() + view.length()];
 

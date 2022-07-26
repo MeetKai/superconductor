@@ -59,7 +59,7 @@ impl MaterialBindings {
                 device,
                 queue,
                 wgpu::TextureFormat::Rgba8UnormSrgb,
-                &[0, 0, 0, 255],
+                &[255, 255, 255, 255],
             ),
             metallic_roughness: load_single_pixel_image(
                 device,

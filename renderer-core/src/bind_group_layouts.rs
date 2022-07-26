@@ -82,7 +82,7 @@ impl BindGroupLayouts {
                     sampler_entry(1),
                     texture_entry(2),
                     cubemap_entry(3),
-                    cubemap_entry(4),
+                    uniform_entry(4, wgpu::ShaderStages::FRAGMENT),
                 ],
             }),
             mirror_uniform: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

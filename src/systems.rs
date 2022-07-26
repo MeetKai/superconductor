@@ -5,7 +5,7 @@ use crate::components::{
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, Camera, ClampSampler, CompositeBindGroup, Device,
     IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer,
-    LineBuffer, MainBindGroup, NewIblTextures, Pipelines, Queue, SkyboxUniformBindGroup,
+    LineBuffer, MainBindGroup, NewIblCubemap, Pipelines, Queue, SkyboxUniformBindGroup,
     SkyboxUniformBuffer, SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
@@ -14,7 +14,7 @@ use renderer_core::{
     assets::{textures, HttpClient},
     bytemuck, create_main_bind_group,
     crevice::std140::AsStd140,
-    ibl::IblTextures,
+    ibl::IblResources,
     shared_structs, spawn,
     utils::{Setter, Swappable},
     GpuInstance, Texture,
@@ -284,10 +284,10 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     let pipelines = &pipelines.0;
     let bind_group_layouts = &bind_group_layouts.0;
 
-    let ibl_textures = Arc::new(IblTextures {
-        ggx_lut: ArcSwap::from(Arc::new(Texture::new(device.create_texture(
+    let ibl_resources = Arc::new(IblResources {
+        lut: ArcSwap::from(Arc::new(Texture::new(device.create_texture(
             &wgpu::TextureDescriptor {
-                label: Some("dummy IBL LUT"),
+                label: Some("dummy ibl lut"),
                 size: wgpu::Extent3d {
                     width: 1,
                     height: 1,
@@ -300,9 +300,9 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
                 format: wgpu::TextureFormat::Rgba8Unorm,
             },
         )))),
-        diffuse_cubemap: ArcSwap::from(Arc::new(Texture::new_cubemap(device.create_texture(
+        cubemap: ArcSwap::from(Arc::new(Texture::new_cubemap(device.create_texture(
             &wgpu::TextureDescriptor {
-                label: Some("dummy diffuse cubemap"),
+                label: Some("dummy ibl cubemap"),
                 size: wgpu::Extent3d {
                     width: 1,
                     height: 1,
@@ -315,21 +315,12 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
                 format: wgpu::TextureFormat::Rgba16Float,
             },
         )))),
-        specular_cubemap: ArcSwap::from(Arc::new(Texture::new_cubemap(device.create_texture(
-            &wgpu::TextureDescriptor {
-                label: Some("dummy specular cubemap"),
-                size: wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 6,
-                },
-                sample_count: 1,
-                mip_level_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                format: wgpu::TextureFormat::Rgba16Float,
-            },
-        )))),
+        sphere_harmonics: device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("sphere harmonics buffer"),
+            size: 144,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        }),
     });
 
     let uniform_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
@@ -366,7 +357,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
 
     let main_bind_group = Swappable::new(create_main_bind_group(
         device,
-        &ibl_textures,
+        &ibl_resources,
         &uniform_buffer,
         &clamp_sampler,
         bind_group_layouts,
@@ -377,7 +368,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     commands.insert_resource(UniformBuffer(uniform_buffer.clone()));
     commands.insert_resource(MainBindGroup(main_bind_group));
     commands.insert_resource(ClampSampler(clamp_sampler.clone()));
-    commands.insert_resource(ibl_textures.clone());
+    commands.insert_resource(ibl_resources.clone());
 
     commands.insert_resource(SkyboxUniformBuffer(skybox_uniform_buffer));
     commands.insert_resource(SkyboxUniformBindGroup(skybox_uniform_bind_group));
@@ -411,11 +402,11 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
 
         match result {
             Ok((lut_texture, _size)) => {
-                ibl_textures.ggx_lut.store(lut_texture);
+                ibl_resources.lut.store(lut_texture);
 
                 main_bind_group_setter.set(create_main_bind_group(
                     &textures_context.device,
-                    &ibl_textures,
+                    &ibl_resources,
                     &uniform_buffer,
                     &clamp_sampler,
                     &textures_context.bind_group_layouts,
@@ -456,21 +447,21 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn update_ibl_textures<T: HttpClient>(
+pub(crate) fn update_ibl_resources<T: HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<textures::Settings>,
-    mut new_ibl_textures: ResMut<NewIblTextures>,
-    ibl_textures: Res<Arc<IblTextures>>,
+    mut new_ibl_cubemap: ResMut<NewIblCubemap>,
+    ibl_resources: Res<Arc<IblResources>>,
     clamp_sampler: Res<ClampSampler>,
     main_bind_group: Res<MainBindGroup>,
     uniform_buffer: Res<UniformBuffer>,
     http_client: Res<T>,
 ) {
-    let new_ibl_textures = match new_ibl_textures.0.take() {
-        Some(new_ibl_textures) => new_ibl_textures,
+    let new_ibl_cubemap = match new_ibl_cubemap.0.take() {
+        Some(new_ibl_cubemap) => new_ibl_cubemap,
         None => return,
     };
 
@@ -482,7 +473,7 @@ pub(crate) fn update_ibl_textures<T: HttpClient>(
     let bind_group_layouts = &bind_group_layouts.0;
     let clamp_sampler = clamp_sampler.0.clone();
     let uniform_buffer = uniform_buffer.0.clone();
-    let ibl_textures = ibl_textures.clone();
+    let ibl_resources = ibl_resources.clone();
 
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
@@ -493,32 +484,33 @@ pub(crate) fn update_ibl_textures<T: HttpClient>(
         settings: texture_settings.clone(),
     };
 
+    let queue = queue.clone();
+
     spawn(async move {
-        let diffuse_fut = renderer_core::assets::textures::load_ktx2_cubemap(
+        match renderer_core::assets::textures::load_ibl_cubemap(
             textures_context.clone(),
-            &new_ibl_textures.diffuse_cubemap,
-        );
-
-        let specular_fut = renderer_core::assets::textures::load_ktx2_cubemap(
-            textures_context.clone(),
-            &new_ibl_textures.specular_cubemap,
-        );
-
-        match futures::future::join(diffuse_fut, specular_fut).await {
-            (Ok(diffuse_cubemap), Ok(specular_cubemap)) => {
-                ibl_textures.diffuse_cubemap.store(diffuse_cubemap);
-                ibl_textures.specular_cubemap.store(specular_cubemap);
+            &new_ibl_cubemap,
+        )
+        .await
+        {
+            Ok(ibl_data) => {
+                ibl_resources.cubemap.store(ibl_data.texture);
+                queue.write_buffer(
+                    &ibl_resources.sphere_harmonics,
+                    0,
+                    &ibl_data.padded_sphere_harmonics_bytes,
+                );
 
                 main_bind_group_setter.set(create_main_bind_group(
                     &textures_context.device,
-                    &ibl_textures,
+                    &ibl_resources,
                     &uniform_buffer,
                     &clamp_sampler,
                     &textures_context.bind_group_layouts,
                 ));
             }
-            _ => {
-                log::error!("Error file loading cubemaps");
+            Err(error) => {
+                log::error!("Error file loading ibl cubemap: {}", error);
             }
         }
     });
@@ -571,7 +563,7 @@ pub(crate) fn set_desktop_uniform_buffers(
     let perspective_matrix = create_perspective_matrix(
         59.0_f32.to_radians(),
         surface_frame_view.width as f32 / surface_frame_view.height as f32,
-        0.01,
+        0.001,
         1000.0,
         cfg!(not(feature = "wasm")),
     );

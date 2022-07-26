@@ -152,7 +152,7 @@ impl DepthFirstNodes {
             for child in nodes.clone().nth(parent).unwrap().children() {
                 children.push(Child {
                     index: child.index(),
-                    parent: parent,
+                    parent,
                 });
 
                 stack.push(child.index());

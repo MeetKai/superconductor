@@ -3,7 +3,7 @@ use crate::resources::{
     Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
 };
 use renderer_core::{
-    arc_swap, LineVertex, RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
+    arc_swap, permutations, LineVertex, RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
 };
 use std::ops::Range;
 use std::sync::Arc;
@@ -359,6 +359,61 @@ pub(crate) fn render(
     queue.submit(std::iter::once(command_encoder.finish()));
 }
 
+fn render_mode<
+    'a,
+    R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usize>>,
+>(
+    render_pass: &mut wgpu::RenderPass<'a>,
+    vertex_buffers: &'a RawVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
+    animated_vertex_buffers: &'a RawAnimatedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
+    static_models: &'a Query<(&mut Model, &InstanceRange)>,
+    animated_models: &'a Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
+    static_model_bind_groups: &'a ModelBindGroups,
+    animated_model_bind_groups: &'a ModelBindGroups,
+    pipelines: &'a permutations::ModelTypes<permutations::FaceSides<wgpu::RenderPipeline>>,
+    range_getter: R,
+) {
+    bind_static_vertex_buffers(render_pass, vertex_buffers);
+
+    render_pass.set_pipeline(&pipelines.stationary.single);
+
+    render_all_primitives(
+        render_pass,
+        static_models,
+        static_model_bind_groups,
+        |primitive_ranges| range_getter(primitive_ranges).single.clone(),
+    );
+
+    render_pass.set_pipeline(&pipelines.stationary.double);
+
+    render_all_primitives(
+        render_pass,
+        static_models,
+        static_model_bind_groups,
+        |primitive_ranges| range_getter(primitive_ranges).double.clone(),
+    );
+
+    bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
+
+    render_pass.set_pipeline(&pipelines.animated.single);
+
+    render_all_animated_primitives(
+        render_pass,
+        animated_models,
+        animated_model_bind_groups,
+        |primitive_ranges| range_getter(primitive_ranges).single.clone(),
+    );
+
+    render_pass.set_pipeline(&pipelines.animated.double);
+
+    render_all_animated_primitives(
+        render_pass,
+        animated_models,
+        animated_model_bind_groups,
+        |primitive_ranges| range_getter(primitive_ranges).double.clone(),
+    );
+}
+
 #[allow(clippy::too_many_arguments)]
 fn render_everything<'a>(
     render_pass: &mut wgpu::RenderPass<'a>,
@@ -376,95 +431,44 @@ fn render_everything<'a>(
     line_buffer: &'a VecGpuBuffer<LineVertex>,
 ) {
     render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-    bind_static_vertex_buffers(render_pass, vertex_buffers);
     render_pass.set_vertex_buffer(3, instance_buffer.slice(..));
 
     render_pass.set_bind_group(0, main_bind_group, &[]);
 
-    render_pass.set_pipeline(&pipelines.pbr.opaque);
-
-    render_all_primitives(
+    render_mode(
         render_pass,
+        vertex_buffers,
+        animated_vertex_buffers,
         static_models,
+        animated_models,
         static_model_bind_groups,
+        animated_model_bind_groups,
+        &pipelines.pbr.opaque,
         |primitive_ranges| primitive_ranges.opaque.clone(),
     );
 
-    bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
-
-    render_pass.set_pipeline(&pipelines.pbr.opaque_animated);
-
-    render_all_animated_primitives(
+    render_mode(
         render_pass,
-        animated_models,
-        animated_model_bind_groups,
-        |primitive_ranges| primitive_ranges.opaque.clone(),
-    );
-
-    bind_static_vertex_buffers(render_pass, vertex_buffers);
-
-    render_pass.set_pipeline(&pipelines.pbr_double_sided.opaque);
-
-    render_all_primitives(
-        render_pass,
+        vertex_buffers,
+        animated_vertex_buffers,
         static_models,
-        static_model_bind_groups,
-        |primitive_ranges| primitive_ranges.opaque_double_sided.clone(),
-    );
-
-    bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
-
-    render_pass.set_pipeline(&pipelines.pbr_double_sided.opaque_animated);
-
-    render_all_animated_primitives(
-        render_pass,
         animated_models,
-        animated_model_bind_groups,
-        |primitive_ranges| primitive_ranges.opaque_double_sided.clone(),
-    );
-
-    bind_static_vertex_buffers(render_pass, vertex_buffers);
-
-    render_pass.set_pipeline(&pipelines.pbr.alpha_clipped);
-
-    render_all_primitives(
-        render_pass,
-        static_models,
         static_model_bind_groups,
+        animated_model_bind_groups,
+        &pipelines.pbr.alpha_clipped,
         |primitive_ranges| primitive_ranges.alpha_clipped.clone(),
     );
 
-    bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
-
-    render_pass.set_pipeline(&pipelines.pbr.alpha_clipped_animated);
-
-    render_all_animated_primitives(
+    render_mode(
         render_pass,
-        animated_models,
-        animated_model_bind_groups,
-        |primitive_ranges| primitive_ranges.alpha_clipped.clone(),
-    );
-
-    bind_static_vertex_buffers(render_pass, vertex_buffers);
-
-    render_pass.set_pipeline(&pipelines.pbr_double_sided.alpha_clipped);
-
-    render_all_primitives(
-        render_pass,
+        vertex_buffers,
+        animated_vertex_buffers,
         static_models,
-        static_model_bind_groups,
-        |primitive_ranges| primitive_ranges.alpha_clipped_double_sided.clone(),
-    );
-
-    bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
-
-    render_pass.set_pipeline(&pipelines.pbr_double_sided.alpha_clipped_animated);
-
-    render_all_animated_primitives(
-        render_pass,
         animated_models,
+        static_model_bind_groups,
         animated_model_bind_groups,
-        |primitive_ranges| primitive_ranges.alpha_clipped_double_sided.clone(),
+        &pipelines.pbr.alpha_blended,
+        |primitive_ranges| primitive_ranges.alpha_blended.clone(),
     );
 
     if line_buffer.len() > 0 {

@@ -12,16 +12,12 @@ pub struct Queue(pub Arc<wgpu::Queue>);
 pub struct WindowChanges {
     pub cursor_grab: Option<bool>,
     pub cursor_visible: Option<bool>,
+    pub fullscreen: Option<bool>,
 }
 
 pub struct FrameTime(pub f64);
 
-pub struct NewIblTextures(pub Option<NewIblTexturesInner>);
-
-pub struct NewIblTexturesInner {
-    pub diffuse_cubemap: url::Url,
-    pub specular_cubemap: url::Url,
-}
+pub struct NewIblCubemap(pub Option<url::Url>);
 
 pub struct EventQueue(pub Vec<winit::event::Event<'static, ()>>);
 
