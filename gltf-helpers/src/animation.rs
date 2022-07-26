@@ -131,10 +131,13 @@ impl AnimationJoints {
     }
 
     pub fn iter<'a>(
-        &'a self,
+        &'a mut self,
         joint_indices_to_node_indices: &'a [usize],
         inverse_bind_transforms: &'a [Similarity],
+        depth_first_nodes: &DepthFirstNodes,
     ) -> impl Iterator<Item = Similarity> + 'a {
+        self.update(depth_first_nodes);
+
         joint_indices_to_node_indices
             .iter()
             .enumerate()
@@ -210,7 +213,7 @@ impl<T: Interpolate> Channel<T> {
         };
 
         let previous_time = self.inputs[i];
-        let next_time = self.inputs[i + 1];
+        let next_time = self.inputs.get(i + 1)?;
         let delta = next_time - previous_time;
         let from_start = t - previous_time;
         let factor = from_start / delta;
@@ -269,12 +272,7 @@ impl Animation {
         self.total_time
     }
 
-    pub fn animate(
-        &self,
-        animation_joints: &mut AnimationJoints,
-        time: f32,
-        depth_first_nodes: &DepthFirstNodes,
-    ) {
+    pub fn animate(&self, animation_joints: &mut AnimationJoints, time: f32) {
         self.translation_channels
             .iter()
             .filter_map(move |channel| channel.sample(time))
@@ -295,8 +293,6 @@ impl Animation {
             .for_each(|(node_index, scale)| {
                 animation_joints.local_transforms[node_index].scale = scale;
             });
-
-        animation_joints.update(depth_first_nodes);
     }
 }
 

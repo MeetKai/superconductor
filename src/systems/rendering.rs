@@ -359,10 +359,7 @@ pub(crate) fn render(
     queue.submit(std::iter::once(command_encoder.finish()));
 }
 
-fn render_mode<
-    'a,
-    R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usize>>,
->(
+fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usize>>>(
     render_pass: &mut wgpu::RenderPass<'a>,
     vertex_buffers: &'a RawVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
     animated_vertex_buffers: &'a RawAnimatedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,

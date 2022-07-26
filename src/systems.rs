@@ -103,11 +103,7 @@ pub(crate) fn sample_animations(
                 let animations = &animated_model.0.animation_data.animations;
 
                 if let Some(animation) = animations.get(animation_state.animation_index) {
-                    animation.animate(
-                        &mut animation_joints.0,
-                        animation_state.time,
-                        &animated_model.0.animation_data.depth_first_nodes,
-                    );
+                    animation.animate(&mut animation_joints.0, animation_state.time);
                 }
             }
             Err(error) => {
@@ -128,10 +124,10 @@ pub(crate) fn upload_joint_buffers(query: Query<&JointBuffer>, queue: Res<Queue>
 }
 
 pub(crate) fn push_joints(
-    instance_query: Query<(&InstanceOf, &AnimationJoints)>,
+    mut instance_query: Query<(&InstanceOf, &mut AnimationJoints)>,
     mut model_query: Query<(&AnimatedModel, &mut JointBuffer)>,
 ) {
-    instance_query.for_each(|(instance_of, animation_joints)| {
+    instance_query.for_each_mut(|(instance_of, mut animation_joints)| {
         match model_query.get_mut(instance_of.0) {
             Ok((animated_model, mut joint_buffer)) => {
                 'joint_loop: for joint in animation_joints
@@ -142,6 +138,7 @@ pub(crate) fn push_joints(
                             .animation_data
                             .joint_indices_to_node_indices,
                         &animated_model.0.animation_data.inverse_bind_transforms,
+                        &animated_model.0.animation_data.depth_first_nodes,
                     )
                     .map(|joint| {
                         shared_structs::JointTransform::new(
