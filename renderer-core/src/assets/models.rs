@@ -1,6 +1,7 @@
 use super::materials::MaterialBindings;
 use super::textures::{self, load_image_with_mime_type, ImageSource};
 use super::HttpClient;
+use crate::permutations;
 use crate::{
     spawn,
     utils::{Setter, Swappable},
@@ -28,17 +29,7 @@ pub struct Context<T> {
     pub texture_settings: textures::Settings,
 }
 
-#[derive(Default, Debug)]
-pub struct PrimitiveRangeSet {
-    pub opaque: Range<usize>,
-    pub alpha_clipped: Range<usize>,
-}
-
-#[derive(Default, Debug)]
-pub struct PrimitiveRanges {
-    pub regular: PrimitiveRangeSet,
-    pub double_sided: PrimitiveRangeSet,
-}
+pub type PrimitiveRanges = permutations::BlendMode<permutations::FaceSides<Range<usize>>>;
 
 fn get_buffer<'a>(
     gltf: &'a gltf::Gltf,
@@ -58,31 +49,30 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
     gltf: Arc<gltf::Gltf>,
     buffer_map: Arc<HashMap<usize, Vec<u8>>>,
     root_url: &url::Url,
-    opaque_primitives: &HashMap<Option<usize>, StagingPrimitive<B>>,
-    alpha_clipped_primitives: &HashMap<Option<usize>, StagingPrimitive<B>>,
-    opaque_double_sided_primitives: &HashMap<Option<usize>, StagingPrimitive<B>>,
-    alpha_clipped_double_sided_primitives: &HashMap<Option<usize>, StagingPrimitive<B>>,
+    staging_primitives: &permutations::BlendMode<
+        permutations::FaceSides<HashMap<Option<usize>, StagingPrimitive<B>>>,
+    >,
     collect: C,
 ) -> (PrimitiveRanges, Vec<Primitive>, B) {
     let mut primitives = Vec::new();
     let mut staging_buffers = B::default();
 
     let primitive_ranges = PrimitiveRanges {
-        regular: PrimitiveRangeSet {
-            opaque: collect_primitives(
+        opaque: permutations::FaceSides {
+            single: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
-                opaque_primitives.values(),
+                staging_primitives.opaque.single.values(),
                 context,
                 gltf.clone(),
                 buffer_map.clone(),
                 root_url,
                 &collect,
             ),
-            alpha_clipped: collect_primitives(
+            double: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
-                alpha_clipped_primitives.values(),
+                staging_primitives.opaque.double.values(),
                 context,
                 gltf.clone(),
                 buffer_map.clone(),
@@ -90,21 +80,43 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 &collect,
             ),
         },
-        double_sided: PrimitiveRangeSet {
-            opaque: collect_primitives(
+        alpha_clipped: permutations::FaceSides {
+            single: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
-                opaque_double_sided_primitives.values(),
+                staging_primitives.alpha_clipped.single.values(),
                 context,
                 gltf.clone(),
                 buffer_map.clone(),
                 root_url,
                 &collect,
             ),
-            alpha_clipped: collect_primitives(
+            double: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
-                alpha_clipped_double_sided_primitives.values(),
+                staging_primitives.alpha_clipped.double.values(),
+                context,
+                gltf.clone(),
+                buffer_map.clone(),
+                root_url,
+                &collect,
+            ),
+        },
+        alpha_blended: permutations::FaceSides {
+            single: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                staging_primitives.alpha_blended.double.values(),
+                context,
+                gltf.clone(),
+                buffer_map.clone(),
+                root_url,
+                &collect,
+            ),
+            double: collect_primitives(
+                &mut primitives,
+                &mut staging_buffers,
+                staging_primitives.alpha_blended.double.values(),
                 context,
                 gltf,
                 buffer_map,
@@ -234,10 +246,9 @@ impl Model {
 
         // What we're doing here is essentially collecting all the model primitives that share a meterial together
         // to reduce the number of draw calls.
-        let mut opaque_primitives = HashMap::new();
-        let mut alpha_clipped_primitives = HashMap::new();
-        let mut opaque_double_sided_primitives = HashMap::new();
-        let mut alpha_clipped_double_sided_primitives = HashMap::new();
+        let mut staging_primitives: permutations::BlendMode<
+            permutations::FaceSides<HashMap<_, _>>,
+        > = Default::default();
 
         for (node, mesh) in gltf
             .nodes()
@@ -256,18 +267,14 @@ impl Model {
                 // https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html#double-sided
 
                 let primitive_map = match (material.alpha_mode(), material.double_sided()) {
-                    (AlphaMode::Opaque, false) => &mut opaque_primitives,
-                    (AlphaMode::Mask, false) => &mut alpha_clipped_primitives,
-                    (AlphaMode::Opaque, true) => &mut opaque_double_sided_primitives,
-                    (AlphaMode::Mask, true) => &mut alpha_clipped_double_sided_primitives,
-                    (AlphaMode::Blend, double_sided) => {
-                        log::warn!("Alpha-blended materials aren't supported");
-                        if double_sided {
-                            &mut alpha_clipped_double_sided_primitives
-                        } else {
-                            &mut alpha_clipped_primitives
-                        }
-                    }
+                    (AlphaMode::Opaque, false) => &mut staging_primitives.opaque.single,
+                    (AlphaMode::Opaque, true) => &mut staging_primitives.opaque.double,
+
+                    (AlphaMode::Mask, false) => &mut staging_primitives.alpha_clipped.single,
+                    (AlphaMode::Mask, true) => &mut staging_primitives.alpha_clipped.double,
+
+                    (AlphaMode::Blend, false) => &mut staging_primitives.alpha_blended.single,
+                    (AlphaMode::Blend, true) => &mut staging_primitives.alpha_blended.double,
                 };
 
                 let reader = primitive.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer));
@@ -314,10 +321,7 @@ impl Model {
             gltf,
             buffer_map,
             root_url,
-            &opaque_primitives,
-            &alpha_clipped_primitives,
-            &opaque_double_sided_primitives,
-            &alpha_clipped_double_sided_primitives,
+            &staging_primitives,
             |a, b| a.collect(b),
         );
 
@@ -388,12 +392,9 @@ impl AnimatedModel {
 
         let buffer_map = collect_buffers(&gltf, root_url, context).await?;
 
-        // What we're doing here is essentially collecting all the model primitives that share a meterial together
-        // to reduce the number of draw calls.
-        let mut opaque_primitives = HashMap::new();
-        let mut alpha_clipped_primitives = HashMap::new();
-        let mut opaque_double_sided_primitives = HashMap::new();
-        let mut alpha_clipped_double_sided_primitives = HashMap::new();
+        let mut staging_primitives: permutations::BlendMode<
+            permutations::FaceSides<HashMap<_, _>>,
+        > = Default::default();
 
         for (node, mesh) in gltf
             .nodes()
@@ -410,18 +411,14 @@ impl AnimatedModel {
                 // https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html#double-sided
 
                 let primitive_map = match (material.alpha_mode(), material.double_sided()) {
-                    (AlphaMode::Opaque, false) => &mut opaque_primitives,
-                    (AlphaMode::Mask, false) => &mut alpha_clipped_primitives,
-                    (AlphaMode::Opaque, true) => &mut opaque_double_sided_primitives,
-                    (AlphaMode::Mask, true) => &mut alpha_clipped_double_sided_primitives,
-                    (AlphaMode::Blend, double_sided) => {
-                        log::warn!("Alpha-blended materials aren't supported");
-                        if double_sided {
-                            &mut alpha_clipped_double_sided_primitives
-                        } else {
-                            &mut alpha_clipped_primitives
-                        }
-                    }
+                    (AlphaMode::Opaque, false) => &mut staging_primitives.opaque.single,
+                    (AlphaMode::Opaque, true) => &mut staging_primitives.opaque.double,
+
+                    (AlphaMode::Mask, false) => &mut staging_primitives.alpha_clipped.single,
+                    (AlphaMode::Mask, true) => &mut staging_primitives.alpha_clipped.double,
+
+                    (AlphaMode::Blend, false) => &mut staging_primitives.alpha_blended.single,
+                    (AlphaMode::Blend, true) => &mut staging_primitives.alpha_blended.double,
                 };
 
                 let reader = primitive.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer));
@@ -499,10 +496,7 @@ impl AnimatedModel {
             gltf.clone(),
             buffer_map.clone(),
             root_url,
-            &opaque_primitives,
-            &alpha_clipped_primitives,
-            &opaque_double_sided_primitives,
-            &alpha_clipped_double_sided_primitives,
+            &staging_primitives,
             |a, b| a.collect(b),
         );
 

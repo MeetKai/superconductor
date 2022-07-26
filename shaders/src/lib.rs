@@ -206,7 +206,7 @@ pub fn fragment(
     if material_settings.is_unlit != 0 {
         // we don't want to use tonemapping for unlit materials.
         *output = potentially_convert_linear_to_srgb(material_params.base.albedo_colour, uniforms)
-            .extend(1.0);
+            .extend(material_params.alpha);
         return;
     }
 
@@ -303,7 +303,7 @@ pub fn fragment_alpha_clipped(
     if material_settings.is_unlit != 0 {
         // we don't want to use tonemapping for unlit materials.
         *output = potentially_convert_linear_to_srgb(material_params.base.albedo_colour, uniforms)
-            .extend(1.0);
+            .extend(material_params.alpha);
         return;
     }
 

@@ -1,10 +1,11 @@
 mod bind_group_layouts;
 mod buffers;
-mod pipelines;
 
 pub mod assets;
 pub mod ibl;
 pub mod instance;
+pub mod permutations;
+pub mod pipelines;
 pub mod utils;
 
 pub use arc_swap;
