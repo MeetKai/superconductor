@@ -98,9 +98,6 @@ impl BindGroupLayouts {
                     texture_entry(3),
                     uniform_entry(4, wgpu::ShaderStages::FRAGMENT),
                     sampler_entry(5),
-                    sampler_entry(6),
-                    sampler_entry(7),
-                    sampler_entry(8),
                 ],
             }),
             tonemap: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

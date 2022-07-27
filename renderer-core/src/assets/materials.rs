@@ -128,18 +128,6 @@ impl MaterialBindings {
                     binding: 5,
                     resource: wgpu::BindingResource::Sampler(&linear_sampler),
                 },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: wgpu::BindingResource::Sampler(&linear_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 7,
-                    resource: wgpu::BindingResource::Sampler(&linear_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 8,
-                    resource: wgpu::BindingResource::Sampler(&linear_sampler),
-                },
             ],
         })
     }
