@@ -2,3 +2,8 @@
 shaders/src/tonemapping.rs
 shaders/target
 demo/web/pkg
+zips
+perf.data
+*.cap
+demo/web/assets/models
+demo/web/assets/cubemaps/forest.ktx2

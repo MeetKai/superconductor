@@ -179,22 +179,19 @@ pub fn fragment(
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
-    #[spirv(descriptor_set = 1, binding = 5)] albedo_texture_sampler: &Sampler,
-    #[spirv(descriptor_set = 1, binding = 6)] normal_texture_sampler: &Sampler,
-    #[spirv(descriptor_set = 1, binding = 7)] metallic_roughness_texture_sampler: &Sampler,
-    #[spirv(descriptor_set = 1, binding = 8)] emissive_texture_sampler: &Sampler,
+    #[spirv(descriptor_set = 1, binding = 5)] texture_sampler: &Sampler,
     #[spirv(view_index)] view_index: i32,
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
-    let albedo_texture = TextureSampler::new(albedo_texture, *albedo_texture_sampler, uv);
+    let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
     let metallic_roughness_texture = TextureSampler::new(
         metallic_roughness_texture,
-        *metallic_roughness_texture_sampler,
+        *texture_sampler,
         uv,
     );
-    let normal_texture = TextureSampler::new(normal_texture, *normal_texture_sampler, uv);
-    let emissive_texture = TextureSampler::new(emissive_texture, *emissive_texture_sampler, uv);
+    let normal_texture = TextureSampler::new(normal_texture, *texture_sampler, uv);
+    let emissive_texture = TextureSampler::new(emissive_texture, *texture_sampler, uv);
 
     let material_params = ExtendedMaterialParams::new(
         &albedo_texture,
@@ -266,22 +263,19 @@ pub fn fragment_alpha_clipped(
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
-    #[spirv(descriptor_set = 1, binding = 5)] albedo_texture_sampler: &Sampler,
-    #[spirv(descriptor_set = 1, binding = 6)] normal_texture_sampler: &Sampler,
-    #[spirv(descriptor_set = 1, binding = 7)] metallic_roughness_texture_sampler: &Sampler,
-    #[spirv(descriptor_set = 1, binding = 8)] emissive_texture_sampler: &Sampler,
+    #[spirv(descriptor_set = 1, binding = 5)] texture_sampler: &Sampler,
     #[spirv(view_index)] view_index: i32,
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
-    let albedo_texture = TextureSampler::new(albedo_texture, *albedo_texture_sampler, uv);
+    let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
     let metallic_roughness_texture = TextureSampler::new(
         metallic_roughness_texture,
-        *metallic_roughness_texture_sampler,
+        *texture_sampler,
         uv,
     );
-    let normal_texture = TextureSampler::new(normal_texture, *normal_texture_sampler, uv);
-    let emissive_texture = TextureSampler::new(emissive_texture, *emissive_texture_sampler, uv);
+    let normal_texture = TextureSampler::new(normal_texture, *texture_sampler, uv);
+    let emissive_texture = TextureSampler::new(emissive_texture, *texture_sampler, uv);
 
     let material_params = ExtendedMaterialParams::new(
         &albedo_texture,
