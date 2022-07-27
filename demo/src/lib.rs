@@ -18,10 +18,10 @@ pub fn main() {
 }
 
 pub async fn run() {
-    #[cfg(feature = "wasm")]
+    #[cfg(all(feature = "wasm", feature = "webgl"))]
     let mode = select_mode_via_buttons().await;
 
-    #[cfg(not(feature = "wasm"))]
+    #[cfg(not(all(feature = "wasm", feature = "webgl")))]
     let mode = Mode::Desktop;
 
     let initialised_state = superconductor::initialise(mode).await;
@@ -173,7 +173,7 @@ fn animate_vrms(
     })
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", feature = "webgl"))]
 pub async fn select_mode_via_buttons() -> superconductor::Mode {
     use futures::FutureExt;
 

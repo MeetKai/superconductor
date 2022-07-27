@@ -5,6 +5,7 @@ use std::io::Read;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
+use crate::pipelines::BC6H_DECOMPRESSION_TARGET_FORMAT;
 
 #[derive(Clone)]
 pub struct Settings {
@@ -148,7 +149,7 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
         format: if bc6h_supported {
             wgpu::TextureFormat::Bc6hRgbUfloat
         } else {
-            wgpu::TextureFormat::Rg11b10Float
+            BC6H_DECOMPRESSION_TARGET_FORMAT
         },
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
     };
@@ -232,7 +233,7 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
                             mip_level_count: 1,
                             sample_count: 1,
                             dimension: wgpu::TextureDimension::D2,
-                            format: wgpu::TextureFormat::Rg11b10Float,
+                            format: BC6H_DECOMPRESSION_TARGET_FORMAT,
                             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                                 | wgpu::TextureUsages::COPY_SRC,
                         });

@@ -143,7 +143,7 @@ unsafe impl raw_window_handle::HasRawWindowHandle for Canvas {
     }
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", feature = "webgl"))]
 pub fn create_view_from_device_framebuffer(
     device: &wgpu::Device,
     framebuffer: web_sys::WebGlFramebuffer,
