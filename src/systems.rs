@@ -6,7 +6,7 @@ use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, Camera, ClampSampler, CompositeBindGroup, Device,
     IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer,
     LineBuffer, MainBindGroup, NewIblCubemap, Pipelines, Queue, SkyboxUniformBindGroup,
-    SkyboxUniformBuffer, SurfaceFrameView, UniformBuffer, VertexBuffers,
+    SkyboxUniformBuffer, SurfaceFrameView, UniformBuffer, VertexBuffers, LutUrl,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
@@ -274,6 +274,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<textures::Settings>,
     http_client: Res<T>,
+    lut_url: Res<LutUrl>,
     mut commands: Commands,
 ) {
     let device = &device.0;
@@ -379,9 +380,9 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
         settings: texture_settings.clone(),
     };
 
-    spawn(async move {
-        let lut_url = url::Url::parse("http://localhost:8000/assets/lut_ggx.png").unwrap();
+    let lut_url = lut_url.0.clone();
 
+    spawn(async move {
         // This results in only the skybox being rendered:
         //let bytes = &include_bytes!("../../lut_ggx.png")[..];
         let bytes = textures_context

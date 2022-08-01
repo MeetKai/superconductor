@@ -28,7 +28,7 @@ pub use renderer_core::{
 
 use components::Instance;
 use resources::{
-    Camera, Device, EventQueue, NewIblCubemap, Queue, SurfaceFrameView, WindowChanges,
+    Camera, Device, EventQueue, NewIblCubemap, Queue, SurfaceFrameView, WindowChanges, LutUrl,
 };
 
 #[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
@@ -70,6 +70,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
         app.insert_resource(NewIblCubemap(None));
         app.insert_resource(WindowChanges::default());
         app.insert_resource(self.http_client.clone());
+        app.insert_resource(LutUrl(url::Url::parse("http://localhost:8000/assets/lut_ggx.png").unwrap()));
 
         app.add_startup_stage(
             StartupStage::PipelineCreation,
