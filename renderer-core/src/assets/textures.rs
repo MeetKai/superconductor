@@ -38,6 +38,10 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
         .fetch_bytes(url, Some(0..ktx2::Header::LENGTH))
         .await?;
 
+    if fetched_header.len() != ktx2::Header::LENGTH {
+        return Err(anyhow::anyhow!("File did not respect the range request. Expected a response length of {} but got {}. Is the file 404ing?", ktx2::Header::LENGTH, fetched_header.len()));
+    }
+
     header_bytes.copy_from_slice(&fetched_header);
 
     let header = ktx2::Header::from_bytes(&header_bytes)?;

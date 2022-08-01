@@ -507,7 +507,11 @@ pub(crate) fn update_ibl_resources<T: HttpClient>(
                 ));
             }
             Err(error) => {
-                log::error!("Error file loading ibl cubemap: {}", error);
+                log::error!(
+                    "Error file loading ibl cubemap {}: {}",
+                    new_ibl_cubemap,
+                    error
+                );
             }
         }
     });
