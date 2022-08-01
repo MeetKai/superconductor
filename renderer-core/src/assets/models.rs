@@ -750,8 +750,10 @@ fn spawn_texture_loading_futures<T: HttpClient>(
                         image_context.material_bindings.albedo.store(texture);
                     },
                 )
-                .await;
+                .await?;
             }
+
+            Ok(())
         }
     });
 
@@ -778,8 +780,10 @@ fn spawn_texture_loading_futures<T: HttpClient>(
                             .store(texture);
                     },
                 )
-                .await;
+                .await?;
             }
+
+            Ok(())
         }
     });
 
@@ -802,8 +806,10 @@ fn spawn_texture_loading_futures<T: HttpClient>(
                         image_context.material_bindings.normal.store(texture);
                     },
                 )
-                .await;
+                .await?;
             }
+
+            Ok(())
         }
     });
 
@@ -824,8 +830,10 @@ fn spawn_texture_loading_futures<T: HttpClient>(
                         image_context.material_bindings.emission.store(texture);
                     },
                 )
-                .await;
+                .await?;
             }
+
+            Ok(())
         }
     });
 }
@@ -845,7 +853,7 @@ async fn load_image_from_gltf_with_followup<T: HttpClient, F: Fn(Arc<Texture>)>(
     srgb: bool,
     context: &ImageContext<T>,
     follow_up: F,
-) {
+) -> anyhow::Result<()> {
     let result = load_image_from_gltf(texture, srgb, context).await;
 
     match result {
@@ -858,10 +866,14 @@ async fn load_image_from_gltf_with_followup<T: HttpClient, F: Fn(Arc<Texture>)>(
                     &context.textures_context.device,
                     &context.textures_context.settings,
                 )));
+
+            Ok(())
         }
-        Err(error) => {
-            log::error!("Failed to load texture for {}: {}", context.root_url, error);
-        }
+        Err(error) => Err(anyhow::anyhow!(
+            "Failed to load texture for {}: {}",
+            context.root_url,
+            error
+        )),
     }
 }
 

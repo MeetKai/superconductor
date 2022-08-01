@@ -5,8 +5,8 @@ use crate::components::{
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, Camera, ClampSampler, CompositeBindGroup, Device,
     IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer,
-    LineBuffer, MainBindGroup, NewIblCubemap, Pipelines, Queue, SkyboxUniformBindGroup,
-    SkyboxUniformBuffer, SurfaceFrameView, UniformBuffer, VertexBuffers, LutUrl,
+    LineBuffer, LutUrl, MainBindGroup, NewIblCubemap, Pipelines, Queue, SkyboxUniformBindGroup,
+    SkyboxUniformBuffer, SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
@@ -409,10 +409,14 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
                     &clamp_sampler,
                     &textures_context.bind_group_layouts,
                 ));
+
+                Ok(())
             }
-            Err(error) => {
-                log::error!("Got an error while trying to load {}: {}", lut_url, error);
-            }
+            Err(error) => Err(anyhow::anyhow!(
+                "Got an error while trying to load {}: {}",
+                lut_url,
+                error
+            )),
         }
     });
 
@@ -506,14 +510,14 @@ pub(crate) fn update_ibl_resources<T: HttpClient>(
                     &clamp_sampler,
                     &textures_context.bind_group_layouts,
                 ));
+
+                Ok(())
             }
-            Err(error) => {
-                log::error!(
-                    "Error file loading ibl cubemap {}: {}",
-                    new_ibl_cubemap,
-                    error
-                );
-            }
+            Err(error) => Err(anyhow::anyhow!(
+                "Error file loading ibl cubemap {}: {}",
+                new_ibl_cubemap,
+                error
+            )),
         }
     });
 }
@@ -733,16 +737,16 @@ pub(crate) fn start_loading_models<T: HttpClient>(
                 let result = renderer_core::assets::models::Model::load(&context, &url).await;
 
                 match result {
-                    Err(error) => {
-                        log::error!(
-                            "Got an error while trying to load a model from '{}': {}",
-                            url,
-                            error
-                        );
-                    }
                     Ok(model) => {
                         model_setter.set(model);
+
+                        Ok(())
                     }
+                    Err(error) => Err(anyhow::anyhow!(
+                        "Got an error while trying to load a model from '{}': {}",
+                        url,
+                        error
+                    )),
                 }
             }
         });
@@ -784,16 +788,15 @@ pub(crate) fn start_loading_models<T: HttpClient>(
                     renderer_core::assets::models::AnimatedModel::load(&context, &url).await;
 
                 match result {
-                    Err(error) => {
-                        log::error!(
-                            "Got an error while trying to load a model from '{}': {}",
-                            url,
-                            error
-                        );
-                    }
                     Ok(model) => {
                         model_setter.set(model);
+                        Ok(())
                     }
+                    Err(error) => Err(anyhow::anyhow!(
+                        "Got an error while trying to load a model from '{}': {}",
+                        url,
+                        error
+                    )),
                 }
             }
         });

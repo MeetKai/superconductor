@@ -248,14 +248,22 @@ pub fn create_main_bind_group(
 }
 
 #[cfg(feature = "wasm")]
-pub fn spawn<F: std::future::Future<Output = ()> + 'static>(future: F) {
-    wasm_bindgen_futures::spawn_local(future);
+pub fn spawn<F: std::future::Future<Output = anyhow::Result<()>> + 'static>(future: F) {
+    wasm_bindgen_futures::spawn_local(async move {
+        if let Err(error) = future.await {
+            log::error!("{}", error);
+        }
+    });
 }
 
 #[cfg(not(feature = "wasm"))]
-pub fn spawn<F: std::future::Future<Output = ()> + Send + 'static>(future: F)
+pub fn spawn<F: std::future::Future<Output = anyhow::Result<()>> + Send + 'static>(future: F)
 where
     <F as std::future::Future>::Output: Send,
 {
-    tokio::spawn(future);
+    tokio::spawn(async move {
+        if let Err(error) = future.await {
+            log::error!("{}", error);
+        }
+    });
 }

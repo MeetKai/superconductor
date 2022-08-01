@@ -19,6 +19,9 @@ pub fn main() {
 
 pub async fn run() {
     #[cfg(feature = "wasm")]
+    basis_universal_wasm::wasm_init().await;
+
+    #[cfg(feature = "wasm")]
     let mode = select_mode_via_buttons().await;
 
     #[cfg(not(feature = "wasm"))]

@@ -125,6 +125,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
+name = "basis-universal"
+version = "0.1.1"
+source = "git+https://github.com/expenses/basis-universal-rs?branch=wasm-support#8e574b16da844fd4b15af39c188c3b86d81c35d3"
+dependencies = [
+ "basis-universal-sys",
+ "basis-universal-wasm",
+ "bitflags",
+ "js-sys",
+ "lazy_static",
+]
+
+[[package]]
+name = "basis-universal-sys"
+version = "0.1.1"
+source = "git+https://github.com/expenses/basis-universal-rs?branch=wasm-support#8e574b16da844fd4b15af39c188c3b86d81c35d3"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "basis-universal-wasm"
+version = "0.1.0"
+source = "git+https://github.com/expenses/basis-universal-rs-wasm#a240b3c5aaffa2c0a60ce6a150a45a5c3a1c7d07"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "bevy_app"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1824,6 +1854,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "base64",
+ "basis-universal",
  "bytemuck",
  "crevice",
  "glam",
@@ -2082,6 +2113,7 @@ dependencies = [
 name = "superconductor-demo"
 version = "0.1.0"
 dependencies = [
+ "basis-universal-wasm",
  "console_error_panic_hook",
  "console_log",
  "dolly",

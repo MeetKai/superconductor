@@ -183,18 +183,10 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
                                 ..(level_index.byte_offset + level_index.byte_length) as usize,
                         ),
                     )
-                    .await
-                    .unwrap();
+                    .await?;
 
-                let decompressed = match header.supercompression_scheme {
-                    Some(ktx2::SupercompressionScheme::Zstandard) => zstd::bulk::decompress(
-                        &bytes,
-                        level_index.uncompressed_byte_length as usize,
-                    )
-                    .unwrap(),
-                    Some(other) => panic!("Unsupported: {:?}", other),
-                    None => bytes.to_vec(),
-                };
+                let decompressed =
+                    zstd::bulk::decompress(&bytes, level_index.uncompressed_byte_length as usize)?;
 
                 if !bc6h_supported {
                     let mut command_encoder = device.create_command_encoder(&Default::default());
@@ -308,6 +300,8 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
                     );
                 }
             }
+
+            Ok(())
         }
     });
 
@@ -327,7 +321,9 @@ fn write_bytes_to_texture(
 ) {
     let format_info = desc.format.describe();
 
-    let mip_size = desc.mip_level_size(mip).unwrap();
+    let mip_size = desc
+        .mip_level_size(mip)
+        .expect("cannot be None with a sensible `mip`.");
 
     let mip_physical = mip_size.physical_size(desc.format);
 
@@ -381,9 +377,14 @@ pub(super) async fn load_image_with_mime_type<T: HttpClient>(
     context: &Context<T>,
 ) -> anyhow::Result<Arc<Texture>> {
     match (mime_type, source.extension()) {
-        (Some("image/ktx2"), _) | (_, Some("ktx2")) => {
-            Err(anyhow::anyhow!("ktx2 loading not yet implemented"))
-        }
+        (Some("image/ktx2"), _) | (_, Some("ktx2")) => match source {
+            ImageSource::Url(url) => load_ktx2_async(context, &url, srgb, |_| {}).await,
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Loading ktx2 images from embedded bytes is currently unsupported"
+                ))
+            }
+        },
         _ => {
             let (image, _size) = load_image_crate_image(
                 &source.get_bytes(&context.http_client).await?,
@@ -466,7 +467,7 @@ pub fn load_image_crate_image<T>(
         .collect();
 
     let source_view = texture.texture.create_view(&wgpu::TextureViewDescriptor {
-        mip_level_count: Some(std::num::NonZeroU32::new(1).unwrap()),
+        mip_level_count: Some(std::num::NonZeroU32::new(1).expect("cannot be None")),
         ..Default::default()
     });
 
@@ -615,4 +616,286 @@ pub(super) fn create_texture_with_first_mip_data(
 
 fn mip_levels_for_image_size(width: u32, height: u32) -> u32 {
     (width.max(height) as f32).log2() as u32 + 1
+}
+
+pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
+    context: &Context<T>,
+    url: &url::Url,
+    srgb: bool,
+    on_level_load: F,
+) -> anyhow::Result<Arc<Texture>> {
+    fn downscaling_for_max_size(texture_size: u32, max_size: u32) -> u32 {
+        let texture_size_log = (texture_size as f32).log2();
+        let max_size_log = (max_size as f32).log2();
+
+        (texture_size_log as u32).saturating_sub(max_size_log as u32)
+    }
+
+    let mut header_bytes = [0; ktx2::Header::LENGTH];
+
+    let fetched_header = context
+        .http_client
+        .fetch_bytes(url, Some(0..ktx2::Header::LENGTH))
+        .await?;
+
+    header_bytes.copy_from_slice(&fetched_header);
+
+    let header = ktx2::Header::from_bytes(&header_bytes)?;
+
+    if let Some(format) = header.format {
+        return Err(anyhow::anyhow!(
+            "Expected a UASTC texture, got {:?}",
+            format
+        ));
+    }
+
+    if header.supercompression_scheme != Some(ktx2::SupercompressionScheme::Zstandard) {
+        return Err(anyhow::anyhow!(
+            "Got an unsupported supercompression scheme: {:?}",
+            header.supercompression_scheme
+        ));
+    }
+
+    let down_scaling_level = downscaling_for_max_size(
+        header.pixel_width.max(header.pixel_width),
+        context.device.limits().max_texture_dimension_2d,
+    )
+    .min(header.level_count - 1);
+
+    let mut level_indices = Vec::with_capacity(header.level_count as usize);
+
+    {
+        let mut reader = std::io::Cursor::new(
+            context
+                .http_client
+                .fetch_bytes(
+                    url,
+                    Some(
+                        ktx2::Header::LENGTH
+                            ..ktx2::Header::LENGTH
+                                + ktx2::LevelIndex::LENGTH * header.level_count as usize,
+                    ),
+                )
+                .await?,
+        );
+
+        for _ in 0..header.level_count {
+            let mut level_index_bytes = [0; ktx2::LevelIndex::LENGTH];
+
+            reader.read_exact(&mut level_index_bytes)?;
+
+            level_indices.push(ktx2::LevelIndex::from_bytes(&level_index_bytes));
+        }
+    }
+
+    let format = CompressedTextureFormat::new_from_features(context.device.features());
+
+    let downscaled_width = header.pixel_width >> down_scaling_level;
+    let downscaled_height = header.pixel_height >> down_scaling_level;
+
+    let texture_descriptor = move || wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            // Compressed textures made made of 4x4 blocks, so there are some issues
+            // with textures that don't have a side length divisible by 4.
+            // They're considered fine everywhere except D3D11 and old versions of D3D12
+            // (according to jasperrlz in the Wgpu Users element chat).
+            width: downscaled_width - (downscaled_width % 4),
+            height: downscaled_height - (downscaled_height % 4),
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: header.level_count - down_scaling_level,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: format.as_wgpu(srgb),
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+    };
+
+    let texture = Arc::new(Texture::new(
+        context.device.create_texture(&texture_descriptor()),
+    ));
+
+    let mut levels = level_indices.into_iter().enumerate().rev();
+
+    // Load the smallest (1x1 pixel) mip first before returning the texture
+    {
+        let (i, level_index) = match levels.next() {
+            Some((i, level_index)) => (i, level_index),
+            None => return Err(anyhow::anyhow!("No level indices in the file")),
+        };
+
+        let bytes = context
+            .http_client
+            .fetch_bytes(
+                &url,
+                Some(
+                    level_index.byte_offset as usize
+                        ..(level_index.byte_offset + level_index.byte_length) as usize,
+                ),
+            )
+            .await?;
+
+        let transcoder = basis_universal::LowLevelUastcTranscoder::new();
+
+        let decompressed =
+            zstd::bulk::decompress(&bytes, level_index.uncompressed_byte_length as usize)?;
+
+        let slice_width = header.pixel_width >> i;
+        let slice_height = header.pixel_height >> i;
+
+        let (block_width_pixels, block_height_pixels) = (4, 4);
+
+        let transcoded = transcoder
+            .transcode_slice(
+                &decompressed,
+                basis_universal::SliceParametersUastc {
+                    num_blocks_x: ((slice_width + block_width_pixels - 1) / block_width_pixels)
+                        .max(1),
+                    num_blocks_y: ((slice_height + block_height_pixels - 1) / block_height_pixels)
+                        .max(1),
+                    has_alpha: false,
+                    original_width: slice_width,
+                    original_height: slice_height,
+                },
+                basis_universal::DecodeFlags::HIGH_QUALITY,
+                format.as_transcoder_block_format(),
+            )
+            .map_err(|err| anyhow::anyhow!("Transcoder error: {:?}", err))?;
+
+        write_bytes_to_texture(
+            &context.queue,
+            &texture.texture,
+            i as u32 - down_scaling_level,
+            &transcoded,
+            &texture_descriptor(),
+        );
+
+        on_level_load(i as u32 - down_scaling_level)
+    }
+
+    // Load all other mips in the background.
+    spawn({
+        //let url = Rc::clone(url);
+        let texture = Arc::clone(&texture);
+        let url = url.clone();
+        let http_client = context.http_client.clone();
+        let queue = context.queue.clone();
+
+        async move {
+            for (i, level_index) in levels {
+                if i < down_scaling_level as usize {
+                    return Ok(());
+                }
+
+                let bytes = http_client
+                    .fetch_bytes(
+                        &url,
+                        Some(
+                            level_index.byte_offset as usize
+                                ..(level_index.byte_offset + level_index.byte_length) as usize,
+                        ),
+                    )
+                    .await?;
+
+                let transcoder = basis_universal::LowLevelUastcTranscoder::new();
+
+                let decompressed =
+                    zstd::bulk::decompress(&bytes, level_index.uncompressed_byte_length as usize)?;
+
+                let slice_width = header.pixel_width >> i;
+                let slice_height = header.pixel_height >> i;
+
+                let (block_width_pixels, block_height_pixels) = (4, 4);
+
+                let transcoded = transcoder
+                    .transcode_slice(
+                        &decompressed,
+                        basis_universal::SliceParametersUastc {
+                            num_blocks_x: ((slice_width + block_width_pixels - 1)
+                                / block_width_pixels)
+                                .max(1),
+                            num_blocks_y: ((slice_height + block_height_pixels - 1)
+                                / block_height_pixels)
+                                .max(1),
+                            has_alpha: false,
+                            original_width: slice_width,
+                            original_height: slice_height,
+                        },
+                        basis_universal::DecodeFlags::HIGH_QUALITY,
+                        format.as_transcoder_block_format(),
+                    )
+                    .map_err(|err| anyhow::anyhow!("Transcoder error: {:?}", err))?;
+
+                write_bytes_to_texture(
+                    &queue,
+                    &texture.texture,
+                    i as u32 - down_scaling_level,
+                    &transcoded,
+                    &texture_descriptor(),
+                );
+
+                on_level_load(i as u32 - down_scaling_level)
+            }
+
+            Ok(())
+        }
+    });
+
+    Ok(texture)
+}
+
+#[derive(Clone, Copy, Debug)]
+enum CompressedTextureFormat {
+    Bc7,
+    Astc,
+    Rgba,
+}
+
+impl CompressedTextureFormat {
+    // https://github.com/KhronosGroup/3D-Formats-Guidelines/blob/main/KTXDeveloperGuide.md#primary-transcode-targets
+    // suggests we have Astc as 1st priority, Bc7 as second and then fallback to uncompressed rgba.
+    fn new_from_features(features: wgpu::Features) -> Self {
+        if features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR) {
+            Self::Astc
+        } else if features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
+            Self::Bc7
+        } else {
+            Self::Rgba
+        }
+    }
+
+    fn as_transcoder_block_format(&self) -> basis_universal::TranscoderBlockFormat {
+        match self {
+            Self::Bc7 => basis_universal::TranscoderBlockFormat::BC7,
+            Self::Astc => basis_universal::TranscoderBlockFormat::ASTC_4x4,
+            Self::Rgba => basis_universal::TranscoderBlockFormat::RGBA32,
+        }
+    }
+
+    fn as_wgpu(&self, srgb: bool) -> wgpu::TextureFormat {
+        match self {
+            Self::Astc => wgpu::TextureFormat::Astc {
+                block: wgpu::AstcBlock::B4x4,
+                channel: if srgb {
+                    wgpu::AstcChannel::UnormSrgb
+                } else {
+                    wgpu::AstcChannel::Unorm
+                },
+            },
+            Self::Rgba => {
+                if srgb {
+                    wgpu::TextureFormat::Rgba8UnormSrgb
+                } else {
+                    wgpu::TextureFormat::Rgba8Unorm
+                }
+            }
+            Self::Bc7 => {
+                if srgb {
+                    wgpu::TextureFormat::Bc7RgbaUnormSrgb
+                } else {
+                    wgpu::TextureFormat::Bc7RgbaUnorm
+                }
+            }
+        }
+    }
 }

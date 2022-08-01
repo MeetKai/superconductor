@@ -19,6 +19,7 @@ tokio = { version = "1.19.2", features = ["rt", "macros", "rt-multi-thread"] }
 wasm-bindgen = "0.2.81"
 wasm-bindgen-futures = "0.4.31"
 web-sys = "0.3.58"
+basis-universal-wasm = { git = "https://github.com/expenses/basis-universal-rs-wasm" }
 
 [features]
 wasm = ["superconductor/wasm"]
