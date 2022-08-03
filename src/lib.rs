@@ -46,7 +46,7 @@ pub enum Stage {
     Rendering,
 }
 
-pub struct XrPlugin<T: HttpClient = ReqwestHttpClient> {
+pub struct XrPlugin<T: HttpClient = SimpleHttpClient> {
     pub mode: Mode,
     pub http_client: T,
 }
@@ -76,25 +76,24 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
 
         app.add_startup_stage(
             StartupStage::PipelineCreation,
-            SystemStage::single_threaded()
-                .with_system(systems::create_bind_group_layouts_and_pipelines),
+            SystemStage::parallel().with_system(systems::create_bind_group_layouts_and_pipelines),
         );
         app.add_startup_stage_after(
             StartupStage::PipelineCreation,
             StartupStage::BindGroupCreation,
-            SystemStage::single_threaded().with_system(systems::allocate_bind_groups::<T>),
+            SystemStage::parallel().with_system(systems::allocate_bind_groups::<T>),
         );
 
         app.add_stage(
             Stage::AssetLoading,
-            SystemStage::single_threaded()
+            SystemStage::parallel()
                 .with_system(systems::start_loading_models::<T>)
                 .with_system(systems::finish_loading_models)
                 .with_system(systems::update_ibl_resources::<T>)
                 .with_system(systems::add_joints_to_instances),
         );
 
-        let mut buffer_resetting_stage = SystemStage::single_threaded()
+        let mut buffer_resetting_stage = SystemStage::parallel()
             .with_system(systems::clear_instance_buffers)
             .with_system(systems::clear_joint_buffers)
             .with_system(systems::sample_animations)
@@ -118,7 +117,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
         app.add_stage_after(
             Stage::BufferResetting,
             Stage::InstanceBuffering,
-            SystemStage::single_threaded()
+            SystemStage::parallel()
                 .with_system(systems::push_entity_instances)
                 .with_system(systems::push_joints)
                 // For debugging joints
@@ -128,14 +127,14 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
         app.add_stage_after(
             Stage::InstanceBuffering,
             Stage::BufferUploading,
-            SystemStage::single_threaded()
+            SystemStage::parallel()
                 .with_system(systems::upload_instances)
                 .with_system(systems::upload_joint_buffers)
                 .with_system(systems::progress_animation_times)
                 .with_system(systems::upload_lines),
         );
 
-        let mut rendering_stage = SystemStage::single_threaded();
+        let mut rendering_stage = SystemStage::parallel();
 
         rendering_stage = match self.mode {
             Mode::Desktop => rendering_stage.with_system(systems::rendering::render_desktop),
@@ -520,17 +519,14 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
 }
 
 #[derive(Clone, Default)]
-pub struct ReqwestHttpClient(reqwest::Client);
+pub struct SimpleHttpClient(surf::Client);
 
-impl renderer_core::assets::HttpClient for ReqwestHttpClient {
-    #[cfg(not(feature = "wasm"))]
-    type Future =
-        std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>> + Send>>;
-
-    #[cfg(feature = "wasm")]
-    type Future = std::pin::Pin<Box<dyn core::future::Future<Output = anyhow::Result<Vec<u8>>>>>;
-
-    fn fetch_bytes(&self, url: &url::Url, byte_range: Option<Range<usize>>) -> Self::Future {
+impl renderer_core::assets::HttpClient for SimpleHttpClient {
+    fn fetch_bytes(
+        &self,
+        url: &url::Url,
+        byte_range: Option<Range<usize>>,
+    ) -> renderer_core::assets::HttpClientFuture {
         fn byte_range_string(range: Range<usize>) -> String {
             format!("bytes={}-{}", range.start, range.end - 1)
         }
@@ -546,15 +542,14 @@ impl renderer_core::assets::HttpClient for ReqwestHttpClient {
         Box::pin(async move {
             log::debug!("Requesting {}", url);
 
-            let response = request_builder.send().await?;
-
-            log::debug!("Got response for {}", url);
-
-            let bytes = response.bytes().await?;
+            let bytes = request_builder
+                .recv_bytes()
+                .await
+                .map_err(|err| anyhow::anyhow!("{}", err))?;
 
             log::debug!("Got bytes for {}: {}", url, bytes.len());
 
-            Ok(bytes.as_ref().to_vec())
+            Ok(bytes)
         })
     }
 }

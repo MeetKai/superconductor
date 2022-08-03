@@ -1,7 +1,6 @@
 mod lib;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     env_logger::init();
-    lib::run().await;
+    async_std::task::block_on(lib::run());
 }

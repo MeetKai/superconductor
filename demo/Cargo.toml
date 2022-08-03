@@ -16,11 +16,13 @@ futures = "0.3.21"
 js-sys = "0.3.58"
 log = "0.4.17"
 superconductor = { path = ".." }
-tokio = { version = "1.19.2", features = ["rt", "macros", "rt-multi-thread"] }
 wasm-bindgen = "0.2.81"
 wasm-bindgen-futures = "0.4.31"
 web-sys = "0.3.58"
 basis-universal-wasm = { git = "https://github.com/expenses/basis-universal-rs-wasm" }
+async-std = "1.12.0"
 
 [features]
+default = ["native"]
 wasm = ["superconductor/wasm"]
+native = ["superconductor/native"]

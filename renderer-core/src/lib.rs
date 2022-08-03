@@ -261,7 +261,7 @@ pub fn spawn<F: std::future::Future<Output = anyhow::Result<()>> + Send + 'stati
 where
     <F as std::future::Future>::Output: Send,
 {
-    tokio::spawn(async move {
+    async_std::task::spawn(async move {
         if let Err(error) = future.await {
             log::error!("{}", error);
         }
