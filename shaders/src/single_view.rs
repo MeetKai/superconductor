@@ -146,36 +146,6 @@ pub fn fragment_alpha_clipped(
 }
 
 #[spirv(vertex)]
-pub fn vertex_mirrored(
-    position: Vec3,
-    normal: Vec3,
-    uv: Vec2,
-    instance_translation_and_scale: Vec4,
-    instance_rotation: glam::Quat,
-    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
-    #[spirv(descriptor_set = 2, binding = 0, uniform)] mirror_uniforms: &MirrorUniforms,
-    #[spirv(position)] builtin_pos: &mut Vec4,
-    out_position: &mut Vec3,
-    out_normal: &mut Vec3,
-    out_uv: &mut Vec2,
-) {
-    super::vertex_mirrored(
-        position,
-        normal,
-        uv,
-        instance_translation_and_scale,
-        instance_rotation,
-        uniforms,
-        mirror_uniforms,
-        builtin_pos,
-        0,
-        out_position,
-        out_normal,
-        out_uv,
-    )
-}
-
-#[spirv(vertex)]
 pub fn vertex_skybox(
     #[spirv(vertex_index)] vertex_index: i32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
@@ -184,26 +154,6 @@ pub fn vertex_skybox(
     ray: &mut Vec3,
 ) {
     super::vertex_skybox(vertex_index, uniforms, skybox_uniforms, builtin_pos, 0, ray);
-}
-
-#[spirv(vertex)]
-pub fn vertex_skybox_mirrored(
-    #[spirv(vertex_index)] vertex_index: i32,
-    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
-    #[spirv(descriptor_set = 1, binding = 0, uniform)] skybox_uniforms: &SkyboxUniforms,
-    #[spirv(descriptor_set = 2, binding = 0, uniform)] mirror_uniforms: &MirrorUniforms,
-    #[spirv(position)] builtin_pos: &mut Vec4,
-    ray: &mut Vec3,
-) {
-    super::vertex_skybox_mirrored(
-        vertex_index,
-        uniforms,
-        skybox_uniforms,
-        mirror_uniforms,
-        builtin_pos,
-        0,
-        ray,
-    );
 }
 
 #[spirv(vertex)]

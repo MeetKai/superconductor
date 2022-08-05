@@ -3,7 +3,8 @@ use crate::resources::{
     Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
 };
 use renderer_core::{
-    arc_swap, permutations, LineVertex, RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
+    arc_swap, permutations, pipelines::DEPTH_FORMAT, LineVertex, RawAnimatedVertexBuffers,
+    RawVertexBuffers, VecGpuBuffer,
 };
 use std::ops::Range;
 use std::sync::Arc;
@@ -76,7 +77,7 @@ pub(crate) fn render_desktop(
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth24PlusStencil8,
+            format: DEPTH_FORMAT,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
         },
     );
@@ -255,7 +256,7 @@ pub(crate) fn render(
             device,
             framebuffer,
             &base_layer,
-            wgpu::TextureFormat::Depth24PlusStencil8,
+            DEPTH_FORMAT,
             "device framebuffer (depth)",
         ))
     } else {
@@ -271,7 +272,7 @@ pub(crate) fn render(
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Depth24PlusStencil8,
+                format: DEPTH_FORMAT,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
             },
@@ -378,7 +379,7 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usiz
         render_pass,
         static_models,
         static_model_bind_groups,
-        |primitive_ranges| range_getter(primitive_ranges).single.clone(),
+        |primitive_ranges| range_getter(primitive_ranges).single,
     );
 
     render_pass.set_pipeline(&pipelines.stationary.double);
@@ -387,7 +388,7 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usiz
         render_pass,
         static_models,
         static_model_bind_groups,
-        |primitive_ranges| range_getter(primitive_ranges).double.clone(),
+        |primitive_ranges| range_getter(primitive_ranges).double,
     );
 
     bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
@@ -398,7 +399,7 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usiz
         render_pass,
         animated_models,
         animated_model_bind_groups,
-        |primitive_ranges| range_getter(primitive_ranges).single.clone(),
+        |primitive_ranges| range_getter(primitive_ranges).single,
     );
 
     render_pass.set_pipeline(&pipelines.animated.double);
@@ -407,7 +408,7 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usiz
         render_pass,
         animated_models,
         animated_model_bind_groups,
-        |primitive_ranges| range_getter(primitive_ranges).double.clone(),
+        |primitive_ranges| range_getter(primitive_ranges).double,
     );
 }
 
@@ -456,6 +457,16 @@ fn render_everything<'a>(
         |primitive_ranges| primitive_ranges.alpha_clipped.clone(),
     );
 
+    if line_buffer.len() > 0 {
+        render_pass.set_pipeline(&pipelines.line);
+        render_pass.set_vertex_buffer(0, line_buffer.buffer.slice(..));
+        render_pass.draw(0..line_buffer.len(), 0..1);
+    }
+
+    render_pass.set_pipeline(&pipelines.skybox);
+    render_pass.set_bind_group(1, skybox_uniform_bind_group, &[]);
+    render_pass.draw(0..3, 0..1);
+
     render_mode(
         render_pass,
         vertex_buffers,
@@ -467,16 +478,6 @@ fn render_everything<'a>(
         &pipelines.pbr.alpha_blended,
         |primitive_ranges| primitive_ranges.alpha_blended.clone(),
     );
-
-    if line_buffer.len() > 0 {
-        render_pass.set_pipeline(&pipelines.line);
-        render_pass.set_vertex_buffer(0, line_buffer.buffer.slice(..));
-        render_pass.draw(0..line_buffer.len(), 0..1);
-    }
-
-    render_pass.set_pipeline(&pipelines.skybox);
-    render_pass.set_bind_group(1, skybox_uniform_bind_group, &[]);
-    render_pass.draw(0..3, 0..1);
 }
 
 // The model bind groups for the current frame

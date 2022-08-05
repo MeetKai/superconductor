@@ -542,6 +542,8 @@ pub(crate) fn set_desktop_uniform_buffers(
     //
     // todo: wait, why do we need to do this? I thought that wgpu handled viewport conversion
     // for us.
+    //
+    // Edit: It looks like if we set WGPU_BACKEND=Gl then it's flipped upside down. This doesn't seem right.
     fn create_perspective_matrix(
         vertical_fov: f32,
         aspect_ratio: f32,

@@ -690,8 +690,13 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
 
     let format = CompressedTextureFormat::new_from_features(context.device.features());
 
-    let downscaled_width = header.pixel_width >> down_scaling_level;
-    let downscaled_height = header.pixel_height >> down_scaling_level;
+    let mut downscaled_width = header.pixel_width >> down_scaling_level;
+    let mut downscaled_height = header.pixel_height >> down_scaling_level;
+
+    // We round down the width and height below, but if they're less than 3 then they're rounded down to 0.
+    // The smallest block size is 4x4 so we just round the sizes up to that here.
+    downscaled_width = downscaled_width.max(4);
+    downscaled_height = downscaled_height.max(4);
 
     let texture_descriptor = move || wgpu::TextureDescriptor {
         label: None,
@@ -727,7 +732,7 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         let bytes = context
             .http_client
             .fetch_bytes(
-                &url,
+                url,
                 Some(
                     level_index.byte_offset as usize
                         ..(level_index.byte_offset + level_index.byte_length) as usize,

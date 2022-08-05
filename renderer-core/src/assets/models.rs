@@ -106,7 +106,7 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
             single: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
-                staging_primitives.alpha_blended.double.values(),
+                staging_primitives.alpha_blended.single.values(),
                 context,
                 gltf.clone(),
                 buffer_map.clone(),

@@ -99,6 +99,7 @@ impl<T: bytemuck::Pod> VecGpuBuffer<T> {
         self.capacity = new_capacity;
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> u32 {
         self.offset
     }

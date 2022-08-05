@@ -5,7 +5,7 @@
     no_std
 )]
 
-use shared_structs::{JointTransform, MaterialSettings, MirrorUniforms, SkyboxUniforms, Uniforms};
+use shared_structs::{JointTransform, MaterialSettings, SkyboxUniforms, Uniforms};
 use spirv_std::{
     arch::IndexUnchecked,
     glam::{self, const_vec3, Mat3, UVec4, Vec2, Vec3, Vec4},
@@ -21,8 +21,7 @@ mod single_view;
 
 pub use single_view::{
     animated_vertex as _, fragment as _, fragment_alpha_clipped as _, line_vertex as _,
-    tonemap as _, vertex as _, vertex_mirrored as _, vertex_skybox as _,
-    vertex_skybox_mirrored as _,
+    tonemap as _, vertex as _, vertex_skybox as _,
 };
 
 #[spirv(vertex)]
@@ -185,11 +184,8 @@ pub fn fragment(
     output: &mut Vec4,
 ) {
     let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
-    let metallic_roughness_texture = TextureSampler::new(
-        metallic_roughness_texture,
-        *texture_sampler,
-        uv,
-    );
+    let metallic_roughness_texture =
+        TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv);
     let normal_texture = TextureSampler::new(normal_texture, *texture_sampler, uv);
     let emissive_texture = TextureSampler::new(emissive_texture, *texture_sampler, uv);
 
@@ -269,11 +265,8 @@ pub fn fragment_alpha_clipped(
     output: &mut Vec4,
 ) {
     let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
-    let metallic_roughness_texture = TextureSampler::new(
-        metallic_roughness_texture,
-        *texture_sampler,
-        uv,
-    );
+    let metallic_roughness_texture =
+        TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv);
     let normal_texture = TextureSampler::new(normal_texture, *texture_sampler, uv);
     let emissive_texture = TextureSampler::new(emissive_texture, *texture_sampler, uv);
 
@@ -335,21 +328,6 @@ pub fn fragment_alpha_clipped(
     let combined_output = diffuse_output + specular_output + material_params.emission;
 
     *output = potentially_tonemap(combined_output, uniforms).extend(material_params.alpha);
-}
-
-#[spirv(fragment)]
-pub fn fragment_ui(
-    _position: Vec3,
-    _normal: Vec3,
-    uv: Vec2,
-    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
-    #[spirv(descriptor_set = 0, binding = 1)] sampler: &Sampler,
-    #[spirv(descriptor_set = 1, binding = 0)] texture: &SampledImage,
-    output: &mut Vec4,
-) {
-    let sample = TextureSampler::new(texture, *sampler, uv).sample();
-
-    *output = potentially_tonemap(sample.truncate(), uniforms).extend(sample.w);
 }
 
 fn linear_to_srgb_approx(color_linear: Vec3) -> Vec3 {
@@ -418,50 +396,6 @@ pub fn blit(
 ) {
     uv.y = 1.0 - uv.y;
     *output = texture.sample_by_lod(*sampler, uv, 0.0);
-}
-
-#[spirv(vertex)]
-pub fn vertex_mirrored(
-    position: Vec3,
-    normal: Vec3,
-    uv: Vec2,
-    instance_translation_and_scale: Vec4,
-    instance_rotation: glam::Quat,
-    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
-    #[spirv(descriptor_set = 2, binding = 0, uniform)] mirror_uniforms: &MirrorUniforms,
-    #[spirv(position)] builtin_pos: &mut Vec4,
-    #[spirv(view_index)] view_index: i32,
-    out_position: &mut Vec3,
-    out_normal: &mut Vec3,
-    out_uv: &mut Vec2,
-) {
-    let instance_scale = instance_translation_and_scale.w;
-    let instance_translation = instance_translation_and_scale.truncate();
-
-    let position = instance_translation + (instance_rotation * instance_scale * position);
-    let position = shared_structs::reflect_in_mirror(
-        position,
-        mirror_uniforms.position,
-        mirror_uniforms.normal,
-    );
-
-    let normal = instance_rotation * normal;
-    let normal = shared_structs::reflect(normal, mirror_uniforms.normal);
-
-    *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
-    *out_position = position;
-    *out_normal = normal;
-    *out_uv = uv;
-
-    if uniforms.flip_viewport != 0 {
-        builtin_pos.y = -builtin_pos.y;
-    }
-}
-
-// Used for testing stencil writes.
-#[spirv(fragment)]
-pub fn flat_blue(output: &mut Vec4) {
-    *output = Vec4::new(0.0, 0.0, 1.0, 1.0);
 }
 
 fn saturate(value: Vec3) -> Vec3 {
@@ -545,38 +479,6 @@ pub fn vertex_skybox(
     let unprojected: Vec4 = skybox_uniforms.projection_inverse(view_index) * pos;
 
     *ray = glam::Quat::from_vec4(skybox_uniforms.view_inverse(view_index)) * unprojected.truncate();
-
-    *builtin_pos = pos;
-
-    if uniforms.flip_viewport != 0 {
-        builtin_pos.y = -builtin_pos.y;
-    }
-}
-
-#[spirv(vertex)]
-pub fn vertex_skybox_mirrored(
-    #[spirv(vertex_index)] vertex_index: i32,
-    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
-    #[spirv(descriptor_set = 1, binding = 0, uniform)] skybox_uniforms: &SkyboxUniforms,
-    #[spirv(descriptor_set = 2, binding = 0, uniform)] mirror_uniforms: &MirrorUniforms,
-    #[spirv(position)] builtin_pos: &mut Vec4,
-    #[spirv(view_index)] view_index: i32,
-    ray: &mut Vec3,
-) {
-    // https://github.com/gfx-rs/wgpu/blob/9114283707a8b472412cf4fe685d364327d3a5b4/wgpu/examples/skybox/shader.wgsl#L21
-    let pos = Vec4::new(
-        (vertex_index / 2) as f32 * 4.0 - 1.0,
-        (vertex_index & 1) as f32 * 4.0 - 1.0,
-        1.0,
-        1.0,
-    );
-
-    let unprojected: Vec4 = skybox_uniforms.projection_inverse(view_index) * pos;
-
-    *ray = shared_structs::reflect(
-        glam::Quat::from_vec4(skybox_uniforms.view_inverse(view_index)) * unprojected.truncate(),
-        mirror_uniforms.normal,
-    );
 
     *builtin_pos = pos;
 
