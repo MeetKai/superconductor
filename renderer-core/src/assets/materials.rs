@@ -1,6 +1,5 @@
 use super::textures;
 use crate::{BindGroupLayouts, Texture};
-use arc_swap::ArcSwap;
 use crevice::std140::AsStd140;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -10,8 +9,8 @@ fn load_single_pixel_image(
     queue: &wgpu::Queue,
     format: wgpu::TextureFormat,
     bytes: &[u8; 4],
-) -> ArcSwap<Texture> {
-    ArcSwap::from(Arc::new(Texture::new(device.create_texture_with_data(
+) -> Texture {
+    Texture::new(device.create_texture_with_data(
         queue,
         &wgpu::TextureDescriptor {
             label: None,
@@ -27,14 +26,18 @@ fn load_single_pixel_image(
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
         },
         bytes,
-    ))))
+    ))
+}
+
+pub struct Textures<T> {
+    pub albedo: T,
+    pub normal: T,
+    pub metallic_roughness: T,
+    pub emission: T,
 }
 
 pub struct MaterialBindings {
-    pub albedo: ArcSwap<Texture>,
-    pub normal: ArcSwap<Texture>,
-    pub metallic_roughness: ArcSwap<Texture>,
-    pub emission: ArcSwap<Texture>,
+    single_pixel_textures: Textures<Texture>,
 
     material_settings: wgpu::Buffer,
     bind_group_layouts: Arc<BindGroupLayouts>,
@@ -55,38 +58,58 @@ impl MaterialBindings {
 
         Self {
             bind_group_layouts,
-            emission: load_single_pixel_image(
-                device,
-                queue,
-                wgpu::TextureFormat::Rgba8UnormSrgb,
-                &[255, 255, 255, 255],
-            ),
-            metallic_roughness: load_single_pixel_image(
-                device,
-                queue,
-                wgpu::TextureFormat::Rgba8Unorm,
-                &[0, 255, 0, 255],
-            ),
-            normal: load_single_pixel_image(
-                device,
-                queue,
-                wgpu::TextureFormat::Rgba8Unorm,
-                &[127, 127, 255, 255],
-            ),
-            albedo: load_single_pixel_image(
-                device,
-                queue,
-                wgpu::TextureFormat::Rgba8UnormSrgb,
-                &[255, 255, 255, 255],
-            ),
+            single_pixel_textures: Textures {
+                emission: load_single_pixel_image(
+                    device,
+                    queue,
+                    wgpu::TextureFormat::Rgba8UnormSrgb,
+                    &[255, 255, 255, 255],
+                ),
+                metallic_roughness: load_single_pixel_image(
+                    device,
+                    queue,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    &[0, 255, 0, 255],
+                ),
+                normal: load_single_pixel_image(
+                    device,
+                    queue,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    &[127, 127, 255, 255],
+                ),
+                albedo: load_single_pixel_image(
+                    device,
+                    queue,
+                    wgpu::TextureFormat::Rgba8UnormSrgb,
+                    &[255, 255, 255, 255],
+                ),
+            },
             material_settings,
         }
+    }
+
+    pub fn create_initial_bind_group(
+        &self,
+        device: &wgpu::Device,
+        settings: &textures::Settings,
+    ) -> wgpu::BindGroup {
+        self.create_bind_group(
+            device,
+            settings,
+            Textures {
+                albedo: None,
+                normal: None,
+                metallic_roughness: None,
+                emission: None,
+            },
+        )
     }
 
     pub fn create_bind_group(
         &self,
         device: &wgpu::Device,
         settings: &textures::Settings,
+        incoming_textures: Textures<Option<Arc<Texture>>>,
     ) -> wgpu::BindGroup {
         let linear_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::Repeat,
@@ -104,21 +127,35 @@ impl MaterialBindings {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.albedo.load().view),
+                    resource: wgpu::BindingResource::TextureView(match &incoming_textures.albedo {
+                        Some(albedo) => &albedo.view,
+                        None => &self.single_pixel_textures.albedo.view,
+                    }),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.normal.load().view),
+                    resource: wgpu::BindingResource::TextureView(match &incoming_textures.normal {
+                        Some(normal) => &normal.view,
+                        None => &self.single_pixel_textures.normal.view,
+                    }),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(
-                        &self.metallic_roughness.load().view,
+                        match &incoming_textures.metallic_roughness {
+                            Some(metallic_roughness) => &metallic_roughness.view,
+                            None => &self.single_pixel_textures.metallic_roughness.view,
+                        },
                     ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&self.emission.load().view),
+                    resource: wgpu::BindingResource::TextureView(
+                        match &incoming_textures.emission {
+                            Some(emission) => &emission.view,
+                            None => &self.single_pixel_textures.emission.view,
+                        },
+                    ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,

@@ -218,14 +218,12 @@ impl Pipelines {
                 push_constant_ranges: &[],
             });
 
-        let fragment_shader = device.create_shader_module(if options.multiview.is_none() {
-            wgpu::include_spirv!("../../compiled-shaders/single_view_fragment.spv")
-        } else {
-            wgpu::include_spirv!("../../compiled-shaders/fragment.spv")
-        });
-
         let fragment_opaque = wgpu::FragmentState {
-            module: &fragment_shader,
+            module: &device.create_shader_module(if options.multiview.is_none() {
+                wgpu::include_spirv!("../../compiled-shaders/single_view_fragment.spv")
+            } else {
+                wgpu::include_spirv!("../../compiled-shaders/fragment.spv")
+            }),
             entry_point: &format!("{}fragment", prefix),
             targets: &[Some(target_format.into())],
         };
@@ -242,9 +240,15 @@ impl Pipelines {
             targets: &[Some(target_format.into())],
         };
 
-        let fragment_alpha_blend = wgpu::FragmentState {
-            module: &fragment_shader,
-            entry_point: &format!("{}fragment", prefix),
+        let fragment_alpha_blended = wgpu::FragmentState {
+            module: &device.create_shader_module(if options.multiview.is_none() {
+                wgpu::include_spirv!(
+                    "../../compiled-shaders/single_view_fragment_alpha_blended.spv"
+                )
+            } else {
+                wgpu::include_spirv!("../../compiled-shaders/fragment_alpha_blended.spv")
+            }),
+            entry_point: &format!("{}fragment_alpha_blended", prefix),
             targets: &[Some(wgpu::ColorTargetState {
                 format: target_format,
                 blend: Some(wgpu::BlendState::ALPHA_BLENDING),
@@ -386,7 +390,7 @@ impl Pipelines {
                             label: Some("alpha blended stationary single-sided pipeline"),
                             layout: Some(&model_pipeline_layout),
                             vertex: vertex_state.clone(),
-                            fragment: Some(fragment_alpha_blend.clone()),
+                            fragment: Some(fragment_alpha_blended.clone()),
                             primitive: backface_culling_primitive_state,
                             depth_stencil: Some(normal_depth_state.clone()),
                             multisample: Default::default(),
@@ -396,7 +400,7 @@ impl Pipelines {
                             label: Some("alpha blended stationary double-sided pipeline"),
                             layout: Some(&model_pipeline_layout),
                             vertex: vertex_state.clone(),
-                            fragment: Some(fragment_alpha_blend.clone()),
+                            fragment: Some(fragment_alpha_blended.clone()),
                             primitive: double_sided_primitive_state,
                             depth_stencil: Some(normal_depth_state.clone()),
                             multisample: Default::default(),
@@ -408,7 +412,7 @@ impl Pipelines {
                             label: Some("alpha blended animated single-sided pipeline"),
                             layout: Some(&animated_model_pipeline_layout),
                             vertex: animated_vertex_state.clone(),
-                            fragment: Some(fragment_alpha_blend.clone()),
+                            fragment: Some(fragment_alpha_blended.clone()),
                             primitive: backface_culling_primitive_state,
                             depth_stencil: Some(normal_depth_state.clone()),
                             multisample: Default::default(),
@@ -418,7 +422,7 @@ impl Pipelines {
                             label: Some("alpha blended animated double-sided pipeline"),
                             layout: Some(&animated_model_pipeline_layout),
                             vertex: animated_vertex_state.clone(),
-                            fragment: Some(fragment_alpha_blend.clone()),
+                            fragment: Some(fragment_alpha_blended.clone()),
                             primitive: double_sided_primitive_state,
                             depth_stencil: Some(normal_depth_state),
                             multisample: Default::default(),

@@ -21,7 +21,7 @@ mod single_view;
 
 pub use single_view::{
     animated_vertex as _, fragment as _, fragment_alpha_clipped as _, line_vertex as _,
-    tonemap as _, vertex as _, vertex_skybox as _,
+    tonemap as _, vertex as _, vertex_skybox as _, fragment_alpha_blended as _,
 };
 
 #[spirv(vertex)]
@@ -199,6 +199,88 @@ pub fn fragment(
     if material_settings.is_unlit != 0 {
         // we don't want to use tonemapping for unlit materials.
         *output = potentially_convert_linear_to_srgb(material_params.base.albedo_colour, uniforms)
+            .extend(1.0);
+        return;
+    }
+
+    let view_vector = (uniforms.eye_position(view_index) - position).normalize();
+
+    let normal = calculate_normal(normal, uv, view_vector, &normal_texture, front_facing);
+    let view = glam_pbr::View(view_vector);
+
+    let lut_values = glam_pbr::ggx_lut_lookup(
+        normal,
+        view,
+        material_params.base,
+        |normal_dot_view: f32, perceptual_roughness: glam_pbr::PerceptualRoughness| {
+            let uv = Vec2::new(normal_dot_view, perceptual_roughness.0);
+            let sample: Vec4 = ibl_lut.sample_by_lod(*clamp_sampler, uv, 0.0);
+            Vec2::new(sample.x, sample.y)
+        },
+    );
+
+    let diffuse_output = glam_pbr::ibl_irradiance_lambertian(
+        normal,
+        view,
+        material_params.base,
+        lut_values,
+        |normal| unsafe { sample_sphere_harmonics(sphere_harmonics, normal) },
+    );
+
+    let specular_output = glam_pbr::get_ibl_radiance_ggx(
+        normal,
+        view,
+        material_params.base,
+        lut_values,
+        9,
+        |ray, lod| {
+            let sample: Vec4 = ibl_cubemap.sample_by_lod(*clamp_sampler, ray, lod);
+            sample.truncate()
+        },
+    );
+
+    let combined_output = diffuse_output + specular_output + material_params.emission;
+
+    *output = potentially_tonemap(combined_output, uniforms).extend(1.0);
+}
+
+
+#[spirv(fragment)]
+pub fn fragment_alpha_blended(
+    position: Vec3,
+    normal: Vec3,
+    uv: Vec2,
+    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
+    #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 3)] ibl_cubemap: &Image!(cube, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 4, uniform)] sphere_harmonics: &SphereHarmonics,
+    #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
+    #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
+    #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
+    #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &SampledImage,
+    #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
+    #[spirv(descriptor_set = 1, binding = 5)] texture_sampler: &Sampler,
+    #[spirv(view_index)] view_index: i32,
+    #[spirv(front_facing)] front_facing: bool,
+    output: &mut Vec4,
+) {
+    let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
+    let metallic_roughness_texture =
+        TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv);
+    let normal_texture = TextureSampler::new(normal_texture, *texture_sampler, uv);
+    let emissive_texture = TextureSampler::new(emissive_texture, *texture_sampler, uv);
+
+    let material_params = ExtendedMaterialParams::new(
+        &albedo_texture,
+        &metallic_roughness_texture,
+        &emissive_texture,
+        &material_settings,
+    );
+
+    if material_settings.is_unlit != 0 {
+        // we don't want to use tonemapping for unlit materials.
+        *output = potentially_convert_linear_to_srgb(material_params.base.albedo_colour, uniforms)
             .extend(material_params.alpha);
         return;
     }
@@ -243,6 +325,7 @@ pub fn fragment(
 
     *output = potentially_tonemap(combined_output, uniforms).extend(material_params.alpha);
 }
+
 
 #[spirv(fragment)]
 pub fn fragment_alpha_clipped(
@@ -290,7 +373,7 @@ pub fn fragment_alpha_clipped(
     if material_settings.is_unlit != 0 {
         // we don't want to use tonemapping for unlit materials.
         *output = potentially_convert_linear_to_srgb(material_params.base.albedo_colour, uniforms)
-            .extend(material_params.alpha);
+            .extend(1.0);
         return;
     }
 
@@ -327,7 +410,7 @@ pub fn fragment_alpha_clipped(
 
     let combined_output = diffuse_output + specular_output + material_params.emission;
 
-    *output = potentially_tonemap(combined_output, uniforms).extend(material_params.alpha);
+    *output = potentially_tonemap(combined_output, uniforms).extend(1.0);
 }
 
 fn linear_to_srgb_approx(color_linear: Vec3) -> Vec3 {

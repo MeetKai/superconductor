@@ -158,7 +158,7 @@ fn collect_primitives<
         );
 
         let bind_group = Swappable::new(Arc::new(
-            material_bindings.create_bind_group(&context.device, &context.texture_settings),
+            material_bindings.create_initial_bind_group(&context.device, &context.texture_settings),
         ));
 
         let bind_group_setter = bind_group.setter.clone();
@@ -734,104 +734,108 @@ fn spawn_texture_loading_futures<T: HttpClient>(
         let image_context = image_context.clone();
 
         async move {
-            let material = image_context
-                .gltf
-                .materials()
-                .nth(material_index)
-                .expect("we checked this earlier");
+            let albedo_texture = {
+                let image_context = image_context.clone();
 
-            let pbr = material.pbr_metallic_roughness();
-            if let Some(albedo_texture) = pbr.base_color_texture() {
-                load_image_from_gltf_with_followup(
-                    albedo_texture.texture(),
-                    true,
-                    &image_context,
-                    |texture| {
-                        image_context.material_bindings.albedo.store(texture);
-                    },
+                async move {
+                    let material = image_context
+                        .gltf
+                        .materials()
+                        .nth(material_index)
+                        .expect("we checked this earlier");
+
+                    let pbr = material.pbr_metallic_roughness();
+
+                    anyhow::Ok(match pbr.base_color_texture() {
+                        Some(texture) => Some(
+                            load_image_from_gltf(texture.texture(), true, &image_context).await?,
+                        ),
+                        None => None,
+                    })
+                }
+            };
+
+            let metallic_roughness_texture = {
+                let image_context = image_context.clone();
+
+                async move {
+                    let material = image_context
+                        .gltf
+                        .materials()
+                        .nth(material_index)
+                        .expect("we checked this earlier");
+
+                    let pbr = material.pbr_metallic_roughness();
+
+                    anyhow::Ok(match pbr.metallic_roughness_texture() {
+                        Some(texture) => Some(
+                            load_image_from_gltf(texture.texture(), false, &image_context).await?,
+                        ),
+                        None => None,
+                    })
+                }
+            };
+
+            let normal_texture = {
+                let image_context = image_context.clone();
+
+                async move {
+                    let material = image_context
+                        .gltf
+                        .materials()
+                        .nth(material_index)
+                        .expect("we checked this earlier");
+
+                    anyhow::Ok(match material.normal_texture() {
+                        Some(texture) => Some(
+                            load_image_from_gltf(texture.texture(), false, &image_context).await?,
+                        ),
+                        None => None,
+                    })
+                }
+            };
+
+            let emissive_texture = {
+                let image_context = image_context.clone();
+
+                async move {
+                    let material = image_context
+                        .gltf
+                        .materials()
+                        .nth(material_index)
+                        .expect("we checked this earlier");
+
+                    anyhow::Ok(match material.emissive_texture() {
+                        Some(texture) => Some(
+                            load_image_from_gltf(texture.texture(), true, &image_context).await?,
+                        ),
+                        None => None,
+                    })
+                }
+            };
+
+            let (albedo_texture, metallic_roughness_texture, normal_texture, emission_texture) =
+                futures::future::join4(
+                    albedo_texture,
+                    metallic_roughness_texture,
+                    normal_texture,
+                    emissive_texture,
                 )
-                .await?;
-            }
+                .await;
+            let incoming_textures = super::materials::Textures {
+                albedo: albedo_texture?,
+                metallic_roughness: metallic_roughness_texture?,
+                normal: normal_texture?,
+                emission: emission_texture?,
+            };
 
-            Ok(())
-        }
-    });
-
-    spawn({
-        let image_context = image_context.clone();
-
-        async move {
-            let material = image_context
-                .gltf
-                .materials()
-                .nth(material_index)
-                .expect("we checked this earlier");
-
-            let pbr = material.pbr_metallic_roughness();
-            if let Some(metallic_roughness_texture) = pbr.metallic_roughness_texture() {
-                load_image_from_gltf_with_followup(
-                    metallic_roughness_texture.texture(),
-                    false,
-                    &image_context,
-                    |texture| {
-                        image_context
-                            .material_bindings
-                            .metallic_roughness
-                            .store(texture);
-                    },
-                )
-                .await?;
-            }
-
-            Ok(())
-        }
-    });
-
-    spawn({
-        let image_context = image_context.clone();
-
-        async move {
-            let material = image_context
-                .gltf
-                .materials()
-                .nth(material_index)
-                .expect("we checked this earlier");
-
-            if let Some(normal_texture) = material.normal_texture() {
-                load_image_from_gltf_with_followup(
-                    normal_texture.texture(),
-                    false,
-                    &image_context,
-                    |texture| {
-                        image_context.material_bindings.normal.store(texture);
-                    },
-                )
-                .await?;
-            }
-
-            Ok(())
-        }
-    });
-
-    spawn({
-        async move {
-            let material = image_context
-                .gltf
-                .materials()
-                .nth(material_index)
-                .expect("we checked this earlier");
-
-            if let Some(emissive_texture) = material.emissive_texture() {
-                load_image_from_gltf_with_followup(
-                    emissive_texture.texture(),
-                    true,
-                    &image_context,
-                    |texture| {
-                        image_context.material_bindings.emission.store(texture);
-                    },
-                )
-                .await?;
-            }
+            image_context.bind_group_setter.set(Arc::new(
+                image_context.material_bindings.create_bind_group(
+                    &image_context.textures_context.device,
+                    &image_context.textures_context.settings,
+                    incoming_textures,
+                ),
+            ));
 
             Ok(())
         }
@@ -846,35 +850,6 @@ struct ImageContext<T> {
     textures_context: textures::Context<T>,
     bind_group_setter: Setter<Arc<wgpu::BindGroup>>,
     material_bindings: Arc<MaterialBindings>,
-}
-
-async fn load_image_from_gltf_with_followup<T: HttpClient, F: Fn(Arc<Texture>)>(
-    texture: gltf::Texture<'_, ()>,
-    srgb: bool,
-    context: &ImageContext<T>,
-    follow_up: F,
-) -> anyhow::Result<()> {
-    let result = load_image_from_gltf(texture, srgb, context).await;
-
-    match result {
-        Ok(texture) => {
-            follow_up(texture);
-
-            context
-                .bind_group_setter
-                .set(Arc::new(context.material_bindings.create_bind_group(
-                    &context.textures_context.device,
-                    &context.textures_context.settings,
-                )));
-
-            Ok(())
-        }
-        Err(error) => Err(anyhow::anyhow!(
-            "Failed to load texture for {}: {}",
-            context.root_url,
-            error
-        )),
-    }
 }
 
 async fn load_image_from_gltf<T: HttpClient>(

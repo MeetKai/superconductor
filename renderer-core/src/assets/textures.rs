@@ -39,7 +39,11 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
         .await?;
 
     if fetched_header.len() != ktx2::Header::LENGTH {
-        return Err(anyhow::anyhow!("File did not respect the range request. Expected a response length of {} but got {}. Is the file 404ing?", ktx2::Header::LENGTH, fetched_header.len()));
+        return Err(anyhow::anyhow!(
+            "File did not respect the range request. Expected a response length of {} but got {}",
+            ktx2::Header::LENGTH,
+            fetched_header.len()
+        ));
     }
 
     header_bytes.copy_from_slice(&fetched_header);
@@ -618,6 +622,12 @@ fn mip_levels_for_image_size(width: u32, height: u32) -> u32 {
     (width.max(height) as f32).log2() as u32 + 1
 }
 
+#[derive(Clone, Copy)]
+enum Ktx2Format {
+    WgpuCompatible(wgpu::TextureFormat),
+    Uastc(UastcTranscodeTargetFormat),
+}
+
 pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
     context: &Context<T>,
     url: &url::Url,
@@ -638,23 +648,54 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         .fetch_bytes(url, Some(0..ktx2::Header::LENGTH))
         .await?;
 
+    if fetched_header.len() != ktx2::Header::LENGTH {
+        return Err(anyhow::anyhow!(
+            "File did not respect the range request. Expected a response length of {} but got {}",
+            ktx2::Header::LENGTH,
+            fetched_header.len()
+        ));
+    }
+
     header_bytes.copy_from_slice(&fetched_header);
 
     let header = ktx2::Header::from_bytes(&header_bytes)?;
 
-    if let Some(format) = header.format {
-        return Err(anyhow::anyhow!(
-            "Expected a UASTC texture, got {:?}",
-            format
-        ));
-    }
+    let format = match header.format {
+        Some(ktx2::Format::BC7_SRGB_BLOCK | ktx2::Format::BC7_UNORM_BLOCK) => {
+            if !context
+                .device
+                .features()
+                .contains(wgpu::Features::TEXTURE_COMPRESSION_BC)
+            {
+                return Err(anyhow::anyhow!(
+                    "BC7 Compressed textures are not supported on this device"
+                ));
+            }
 
-    if header.supercompression_scheme != Some(ktx2::SupercompressionScheme::Zstandard) {
-        return Err(anyhow::anyhow!(
-            "Got an unsupported supercompression scheme: {:?}",
-            header.supercompression_scheme
-        ));
-    }
+            Ktx2Format::WgpuCompatible(if srgb {
+                wgpu::TextureFormat::Bc7RgbaUnormSrgb
+            } else {
+                wgpu::TextureFormat::Bc7RgbaUnorm
+            })
+        }
+        Some(other) => {
+            return Err(anyhow::anyhow!("Format {:?} is not supported", other));
+        }
+        None => Ktx2Format::Uastc(UastcTranscodeTargetFormat::new_from_features(
+            context.device.features(),
+        )),
+    };
+
+    let uses_zstd_supercompression = match header.supercompression_scheme {
+        Some(ktx2::SupercompressionScheme::Zstandard) => true,
+        None => false,
+        Some(other) => {
+            return Err(anyhow::anyhow!(
+                "Got an unsupported supercompression scheme: {:?}",
+                other
+            ));
+        }
+    };
 
     let down_scaling_level = downscaling_for_max_size(
         header.pixel_width.max(header.pixel_width),
@@ -688,8 +729,6 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         }
     }
 
-    let format = CompressedTextureFormat::new_from_features(context.device.features());
-
     let mut downscaled_width = header.pixel_width >> down_scaling_level;
     let mut downscaled_height = header.pixel_height >> down_scaling_level;
 
@@ -712,7 +751,10 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         mip_level_count: header.level_count - down_scaling_level,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: format.as_wgpu(srgb),
+        format: match format {
+            Ktx2Format::Uastc(transcode_target_format) => transcode_target_format.as_wgpu(srgb),
+            Ktx2Format::WgpuCompatible(format) => format,
+        },
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
     };
 
@@ -740,38 +782,46 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
             )
             .await?;
 
-        let transcoder = basis_universal::LowLevelUastcTranscoder::new();
-
-        let decompressed =
-            zstd::bulk::decompress(&bytes, level_index.uncompressed_byte_length as usize)?;
+        let format_bytes = if uses_zstd_supercompression {
+            zstd::bulk::decompress(&bytes, level_index.uncompressed_byte_length as usize)?
+        } else {
+            bytes
+        };
 
         let slice_width = header.pixel_width >> i;
         let slice_height = header.pixel_height >> i;
 
         let (block_width_pixels, block_height_pixels) = (4, 4);
 
-        let transcoded = transcoder
-            .transcode_slice(
-                &decompressed,
-                basis_universal::SliceParametersUastc {
-                    num_blocks_x: ((slice_width + block_width_pixels - 1) / block_width_pixels)
-                        .max(1),
-                    num_blocks_y: ((slice_height + block_height_pixels - 1) / block_height_pixels)
-                        .max(1),
-                    has_alpha: false,
-                    original_width: slice_width,
-                    original_height: slice_height,
-                },
-                basis_universal::DecodeFlags::HIGH_QUALITY,
-                format.as_transcoder_block_format(),
-            )
-            .map_err(|err| anyhow::anyhow!("Transcoder error: {:?}", err))?;
+        let bytes_to_upload = if let Ktx2Format::Uastc(transcode_target_format) = format {
+            let transcoder = basis_universal::LowLevelUastcTranscoder::new();
+
+            transcoder
+                .transcode_slice(
+                    &format_bytes,
+                    basis_universal::SliceParametersUastc {
+                        num_blocks_x: ((slice_width + block_width_pixels - 1) / block_width_pixels)
+                            .max(1),
+                        num_blocks_y: ((slice_height + block_height_pixels - 1)
+                            / block_height_pixels)
+                            .max(1),
+                        has_alpha: false,
+                        original_width: slice_width,
+                        original_height: slice_height,
+                    },
+                    basis_universal::DecodeFlags::HIGH_QUALITY,
+                    transcode_target_format.as_transcoder_block_format(),
+                )
+                .map_err(|err| anyhow::anyhow!("Transcoder error: {:?}", err))?
+        } else {
+            format_bytes
+        };
 
         write_bytes_to_texture(
             &context.queue,
             &texture.texture,
             i as u32 - down_scaling_level,
-            &transcoded,
+            &bytes_to_upload,
             &texture_descriptor(),
         );
 
@@ -802,40 +852,47 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
                     )
                     .await?;
 
-                let transcoder = basis_universal::LowLevelUastcTranscoder::new();
-
-                let decompressed =
-                    zstd::bulk::decompress(&bytes, level_index.uncompressed_byte_length as usize)?;
+                let format_bytes = if uses_zstd_supercompression {
+                    zstd::bulk::decompress(&bytes, level_index.uncompressed_byte_length as usize)?
+                } else {
+                    bytes
+                };
 
                 let slice_width = header.pixel_width >> i;
                 let slice_height = header.pixel_height >> i;
 
                 let (block_width_pixels, block_height_pixels) = (4, 4);
 
-                let transcoded = transcoder
-                    .transcode_slice(
-                        &decompressed,
-                        basis_universal::SliceParametersUastc {
-                            num_blocks_x: ((slice_width + block_width_pixels - 1)
-                                / block_width_pixels)
-                                .max(1),
-                            num_blocks_y: ((slice_height + block_height_pixels - 1)
-                                / block_height_pixels)
-                                .max(1),
-                            has_alpha: false,
-                            original_width: slice_width,
-                            original_height: slice_height,
-                        },
-                        basis_universal::DecodeFlags::HIGH_QUALITY,
-                        format.as_transcoder_block_format(),
-                    )
-                    .map_err(|err| anyhow::anyhow!("Transcoder error: {:?}", err))?;
+                let bytes_to_upload = if let Ktx2Format::Uastc(transcode_target_format) = format {
+                    let transcoder = basis_universal::LowLevelUastcTranscoder::new();
+
+                    transcoder
+                        .transcode_slice(
+                            &format_bytes,
+                            basis_universal::SliceParametersUastc {
+                                num_blocks_x: ((slice_width + block_width_pixels - 1)
+                                    / block_width_pixels)
+                                    .max(1),
+                                num_blocks_y: ((slice_height + block_height_pixels - 1)
+                                    / block_height_pixels)
+                                    .max(1),
+                                has_alpha: false,
+                                original_width: slice_width,
+                                original_height: slice_height,
+                            },
+                            basis_universal::DecodeFlags::HIGH_QUALITY,
+                            transcode_target_format.as_transcoder_block_format(),
+                        )
+                        .map_err(|err| anyhow::anyhow!("Transcoder error: {:?}", err))?
+                } else {
+                    format_bytes
+                };
 
                 write_bytes_to_texture(
                     &queue,
                     &texture.texture,
                     i as u32 - down_scaling_level,
-                    &transcoded,
+                    &bytes_to_upload,
                     &texture_descriptor(),
                 );
 
@@ -850,13 +907,13 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
 }
 
 #[derive(Clone, Copy, Debug)]
-enum CompressedTextureFormat {
+enum UastcTranscodeTargetFormat {
     Bc7,
     Astc,
     Rgba,
 }
 
-impl CompressedTextureFormat {
+impl UastcTranscodeTargetFormat {
     // https://github.com/KhronosGroup/3D-Formats-Guidelines/blob/main/KTXDeveloperGuide.md#primary-transcode-targets
     // suggests we have Astc as 1st priority, Bc7 as second and then fallback to uncompressed rgba.
     fn new_from_features(features: wgpu::Features) -> Self {

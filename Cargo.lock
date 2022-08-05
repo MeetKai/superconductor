@@ -2295,6 +2295,7 @@ dependencies = [
  "basis-universal",
  "bytemuck",
  "crevice",
+ "futures",
  "glam",
  "glow",
  "gltf",
