@@ -1228,7 +1228,7 @@ dependencies = [
 [[package]]
 name = "gltf"
 version = "1.0.0"
-source = "git+https://github.com/expenses/gltf?branch=extended#1ad1488ef29b4e5a8766299fd85b24c725701244"
+source = "git+https://github.com/expenses/gltf?branch=extended#a66e5fd587e5695b88d33fa35c2881617c492107"
 dependencies = [
  "byteorder",
  "gltf-derive",
@@ -1240,7 +1240,7 @@ dependencies = [
 [[package]]
 name = "gltf-derive"
 version = "1.0.0"
-source = "git+https://github.com/expenses/gltf?branch=extended#1ad1488ef29b4e5a8766299fd85b24c725701244"
+source = "git+https://github.com/expenses/gltf?branch=extended#a66e5fd587e5695b88d33fa35c2881617c492107"
 dependencies = [
  "inflections",
  "proc-macro2",
@@ -1262,7 +1262,7 @@ dependencies = [
 [[package]]
 name = "gltf-json"
 version = "1.0.0"
-source = "git+https://github.com/expenses/gltf?branch=extended#1ad1488ef29b4e5a8766299fd85b24c725701244"
+source = "git+https://github.com/expenses/gltf?branch=extended#a66e5fd587e5695b88d33fa35c2881617c492107"
 dependencies = [
  "gltf-derive",
  "serde",

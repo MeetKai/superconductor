@@ -7,7 +7,7 @@ use crate::{
     utils::{Setter, Swappable},
     BindGroupLayouts, Texture,
 };
-use glam::{UVec4, Vec2, Vec3, Vec4};
+use glam::{Mat2, UVec4, Vec2, Vec3, Vec4};
 use gltf::material::AlphaMode;
 use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
@@ -279,35 +279,22 @@ impl Model {
 
                 let reader = primitive.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer));
 
-                // Workaround for some exporters (Scaniverse) exporting scanned models that are meant to be
-                // rendered unlit but don't set the material flag.
-                let unlit = material.unlit() || reader.read_normals().is_none();
+                let material_info = MaterialInfo::load(&material, &reader);
 
                 let staging_primitive =
-                    primitive_map.entry(material.index()).or_insert_with(|| {
-                        let pbr = material.pbr_metallic_roughness();
-
-                        StagingPrimitive {
+                    primitive_map
+                        .entry(material.index())
+                        .or_insert_with(|| StagingPrimitive {
                             buffers: StagingBuffers::default(),
-                            material_settings: shared_structs::MaterialSettings {
-                                base_color_factor: pbr.base_color_factor().into(),
-                                emissive_factor: Vec3::from(material.emissive_factor())
-                                    * material.emissive_strength().unwrap_or(1.0),
-                                metallic_factor: pbr.metallic_factor(),
-                                roughness_factor: pbr.roughness_factor(),
-                                is_unlit: unlit as u32,
-                                // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
-                                // todo: find a nicer way to resolve this.
-                                #[cfg(not(feature = "wasm"))]
-                                _padding: 0,
-                            },
+                            material_settings: material_info.settings,
                             material_index: material.index().unwrap_or(0),
-                        }
-                    });
+                        });
 
-                staging_primitive
-                    .buffers
-                    .extend_from_reader(&reader, transform)?;
+                staging_primitive.buffers.extend_from_reader(
+                    &reader,
+                    transform,
+                    material_info.texture_transform,
+                )?;
             }
         }
 
@@ -423,36 +410,22 @@ impl AnimatedModel {
 
                 let reader = primitive.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer));
 
-                // Workaround for some exporters (Scaniverse) exporting scanned models that are meant to be
-                // rendered unlit but don't set the material flag.
-                let unlit = material.unlit() || reader.read_normals().is_none();
+                let material_info = MaterialInfo::load(&material, &reader);
 
                 let staging_primitive =
-                    primitive_map.entry(material.index()).or_insert_with(|| {
-                        let pbr = material.pbr_metallic_roughness();
-
-                        StagingPrimitive {
+                    primitive_map
+                        .entry(material.index())
+                        .or_insert_with(|| StagingPrimitive {
                             buffers: AnimatedStagingBuffers::default(),
-                            material_settings: shared_structs::MaterialSettings {
-                                base_color_factor: pbr.base_color_factor().into(),
-                                emissive_factor: Vec3::from(material.emissive_factor())
-                                    * material.emissive_strength().unwrap_or(1.0),
-                                metallic_factor: pbr.metallic_factor(),
-                                roughness_factor: pbr.roughness_factor(),
-                                is_unlit: unlit as u32,
-                                // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
-                                // todo: find a nicer way to resolve this.
-                                #[cfg(not(feature = "wasm"))]
-                                _padding: 0,
-                            },
+                            material_settings: material_info.settings,
                             material_index: material.index().unwrap_or(0),
-                        }
-                    });
+                        });
 
-                let num_vertices = staging_primitive
-                    .buffers
-                    .base
-                    .extend_from_reader(&reader, Similarity::IDENTITY)?;
+                let num_vertices = staging_primitive.buffers.base.extend_from_reader(
+                    &reader,
+                    Similarity::IDENTITY,
+                    material_info.texture_transform,
+                )?;
 
                 match reader.read_joints(0) {
                     Some(joints) => {
@@ -635,6 +608,7 @@ impl StagingBuffers {
         &mut self,
         reader: &gltf::mesh::Reader<'a, 'a, F, ()>,
         transform: Similarity,
+        texture_transform: Option<gltf::texture::TextureTransform>,
     ) -> anyhow::Result<usize> {
         let vertices_offset = self.positions.len();
 
@@ -671,10 +645,18 @@ impl StagingBuffers {
         }
 
         match reader.read_tex_coords(0) {
-            Some(uvs) => self.uvs.extend(uvs.into_f32().map(glam::Vec2::from)),
+            Some(uvs) => match texture_transform {
+                Some(transform) => self.uvs.extend(uvs.into_f32().map(|uv| {
+                    Vec2::from(transform.offset())
+                        + (Mat2::from_angle(transform.rotation())
+                            * Vec2::from(transform.scale())
+                            * Vec2::from(uv))
+                })),
+                None => self.uvs.extend(uvs.into_f32().map(Vec2::from)),
+            },
             None => self
                 .uvs
-                .extend(std::iter::repeat(glam::Vec2::ZERO).take(num_vertices)),
+                .extend(std::iter::repeat(Vec2::ZERO).take(num_vertices)),
         }
 
         Ok(num_vertices)
@@ -901,6 +883,55 @@ async fn load_image_from_gltf<T: HttpClient>(
                 )
                 .await
             }
+        }
+    }
+}
+
+struct MaterialInfo<'a> {
+    settings: shared_structs::MaterialSettings,
+    texture_transform: Option<gltf::texture::TextureTransform<'a>>,
+}
+
+impl<'a> MaterialInfo<'a> {
+    fn load<F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'a [u8]>>(
+        material: &gltf::Material<'a, ()>,
+        reader: &gltf::mesh::Reader<'a, 'a, F, ()>,
+    ) -> Self {
+        // Workaround for some exporters (Scaniverse) exporting scanned models that are meant to be
+        // rendered unlit but don't set the material flag.
+        let unlit = material.unlit() || reader.read_normals().is_none();
+
+        let pbr = material.pbr_metallic_roughness();
+
+        let texture_transform = pbr
+            .base_color_texture()
+            .and_then(|texture| texture.texture_transform())
+            .or(pbr
+                .metallic_roughness_texture()
+                .and_then(|texture| texture.texture_transform()))
+            .or(material
+                .normal_texture()
+                .and_then(|texture| texture.texture_transform()))
+            .or(material
+                .emissive_texture()
+                .and_then(|texture| texture.texture_transform()));
+
+        let settings = shared_structs::MaterialSettings {
+            base_color_factor: pbr.base_color_factor().into(),
+            emissive_factor: Vec3::from(material.emissive_factor())
+                * material.emissive_strength().unwrap_or(1.0),
+            metallic_factor: pbr.metallic_factor(),
+            roughness_factor: pbr.roughness_factor(),
+            is_unlit: unlit as u32,
+            // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
+            // todo: find a nicer way to resolve this.
+            #[cfg(not(feature = "wasm"))]
+            _padding: 0,
+        };
+
+        Self {
+            settings,
+            texture_transform,
         }
     }
 }

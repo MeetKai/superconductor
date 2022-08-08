@@ -678,6 +678,26 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
                 wgpu::TextureFormat::Bc7RgbaUnorm
             })
         }
+        Some(ktx2::Format::ASTC_6x6_SRGB_BLOCK | ktx2::Format::ASTC_6x6_UNORM_BLOCK) => {
+            if !context
+                .device
+                .features()
+                .contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR)
+            {
+                return Err(anyhow::anyhow!(
+                    "ASTC Compressed textures are not supported on this device"
+                ));
+            }
+
+            Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Astc {
+                block: wgpu::AstcBlock::B6x6,
+                channel: if srgb {
+                    wgpu::AstcChannel::UnormSrgb
+                } else {
+                    wgpu::AstcChannel::Unorm
+                },
+            })
+        }
         Some(other) => {
             return Err(anyhow::anyhow!("Format {:?} is not supported", other));
         }
@@ -729,25 +749,23 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         }
     }
 
-    let mut downscaled_width = header.pixel_width >> down_scaling_level;
-    let mut downscaled_height = header.pixel_height >> down_scaling_level;
+    let mut starting_extent = wgpu::Extent3d {
+        width: header.pixel_width,
+        height: header.pixel_height,
+        depth_or_array_layers: 1,
+    }
+    .mip_level_size(down_scaling_level, false);
+
+    if let Ktx2Format::WgpuCompatible(format) = format {
+        starting_extent = starting_extent.physical_size(format);
+    }
 
     // We round down the width and height below, but if they're less than 3 then they're rounded down to 0.
     // The smallest block size is 4x4 so we just round the sizes up to that here.
-    downscaled_width = downscaled_width.max(4);
-    downscaled_height = downscaled_height.max(4);
 
     let texture_descriptor = move || wgpu::TextureDescriptor {
         label: None,
-        size: wgpu::Extent3d {
-            // Compressed textures made made of 4x4 blocks, so there are some issues
-            // with textures that don't have a side length divisible by 4.
-            // They're considered fine everywhere except D3D11 and old versions of D3D12
-            // (according to jasperrlz in the Wgpu Users element chat).
-            width: downscaled_width - (downscaled_width % 4),
-            height: downscaled_height - (downscaled_height % 4),
-            depth_or_array_layers: 1,
-        },
+        size: starting_extent,
         mip_level_count: header.level_count - down_scaling_level,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -788,13 +806,13 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
             bytes
         };
 
-        let slice_width = header.pixel_width >> i;
-        let slice_height = header.pixel_height >> i;
-
-        let (block_width_pixels, block_height_pixels) = (4, 4);
-
         let bytes_to_upload = if let Ktx2Format::Uastc(transcode_target_format) = format {
             let transcoder = basis_universal::LowLevelUastcTranscoder::new();
+
+            let slice_width = header.pixel_width >> i;
+            let slice_height = header.pixel_height >> i;
+
+            let (block_width_pixels, block_height_pixels) = (4, 4);
 
             transcoder
                 .transcode_slice(
@@ -858,13 +876,13 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
                     bytes
                 };
 
-                let slice_width = header.pixel_width >> i;
-                let slice_height = header.pixel_height >> i;
-
-                let (block_width_pixels, block_height_pixels) = (4, 4);
-
                 let bytes_to_upload = if let Ktx2Format::Uastc(transcode_target_format) = format {
                     let transcoder = basis_universal::LowLevelUastcTranscoder::new();
+
+                    let slice_width = header.pixel_width >> i;
+                    let slice_height = header.pixel_height >> i;
+
+                    let (block_width_pixels, block_height_pixels) = (4, 4);
 
                     transcoder
                         .transcode_slice(

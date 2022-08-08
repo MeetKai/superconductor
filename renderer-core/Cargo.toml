@@ -22,7 +22,7 @@ zstd = { version = "0.11.2", default-features = false, features = ["wasm"] }
 anyhow = "1.0.58"
 url = "2.2.2"
 wasm-bindgen-futures = "0.4.31"
-gltf = {  git = "https://github.com/expenses/gltf", branch = "extended", features = ["KHR_materials_unlit", "KHR_materials_emissive_strength"], default-features = false }
+gltf = {  git = "https://github.com/expenses/gltf", branch = "extended", features = ["KHR_materials_unlit", "KHR_materials_emissive_strength", "KHR_texture_transform"], default-features = false }
 gltf-helpers = { path = "../gltf-helpers" }
 base64 = "0.13.0"
 range-alloc = { git = "https://github.com/expenses/gfx", branch = "range-allocator" }
