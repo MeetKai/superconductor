@@ -628,6 +628,28 @@ enum Ktx2Format {
     Uastc(UastcTranscodeTargetFormat),
 }
 
+impl Ktx2Format {
+    fn from_astc(block_format: wgpu::AstcBlock, srgb: bool, device: &wgpu::Device) -> anyhow::Result<Self> {
+        if !device
+                .features()
+                .contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR)
+            {
+                return Err(anyhow::anyhow!(
+                    "ASTC Compressed textures are not supported on this device"
+                ));
+            }
+
+            Ok(Self::WgpuCompatible(wgpu::TextureFormat::Astc {
+                block: block_format,
+                channel: if srgb {
+                    wgpu::AstcChannel::UnormSrgb
+                } else {
+                    wgpu::AstcChannel::Unorm
+                },
+            }))
+    }
+}
+
 pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
     context: &Context<T>,
     url: &url::Url,
@@ -679,24 +701,7 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
             })
         }
         Some(ktx2::Format::ASTC_6x6_SRGB_BLOCK | ktx2::Format::ASTC_6x6_UNORM_BLOCK) => {
-            if !context
-                .device
-                .features()
-                .contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR)
-            {
-                return Err(anyhow::anyhow!(
-                    "ASTC Compressed textures are not supported on this device"
-                ));
-            }
-
-            Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Astc {
-                block: wgpu::AstcBlock::B6x6,
-                channel: if srgb {
-                    wgpu::AstcChannel::UnormSrgb
-                } else {
-                    wgpu::AstcChannel::Unorm
-                },
-            })
+            Ktx2Format::from_astc(wgpu::AstcBlock::B6x6, srgb, &context.device)?
         }
         Some(other) => {
             return Err(anyhow::anyhow!("Format {:?} is not supported", other));
