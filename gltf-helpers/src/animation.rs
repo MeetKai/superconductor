@@ -112,10 +112,19 @@ pub struct AnimationJoints {
 }
 
 impl AnimationJoints {
-    pub fn new(nodes: gltf::iter::Nodes, depth_first_nodes: &DepthFirstNodes) -> Self {
-        let node_transforms: Vec<_> = nodes
+    pub fn new(gltf: &goth_gltf::Gltf, depth_first_nodes: &DepthFirstNodes) -> Self {
+        let node_transforms: Vec<_> = gltf
+            .nodes
+            .iter()
             .map(|node| {
-                let (translation, rotation, scale) = node.transform().decomposed();
+                let (translation, rotation, scale) = match node.transform() {
+                    goth_gltf::NodeTransform::Matrix(_) => todo!(),
+                    goth_gltf::NodeTransform::Set {
+                        translation,
+                        rotation,
+                        scale,
+                    } => (translation, rotation, scale),
+                };
                 Similarity::new_from_gltf(translation, rotation, scale)
             })
             .collect();

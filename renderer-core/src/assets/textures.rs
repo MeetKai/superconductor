@@ -629,24 +629,28 @@ enum Ktx2Format {
 }
 
 impl Ktx2Format {
-    fn from_astc(block_format: wgpu::AstcBlock, srgb: bool, device: &wgpu::Device) -> anyhow::Result<Self> {
+    fn from_astc(
+        block_format: wgpu::AstcBlock,
+        srgb: bool,
+        device: &wgpu::Device,
+    ) -> anyhow::Result<Self> {
         if !device
-                .features()
-                .contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR)
-            {
-                return Err(anyhow::anyhow!(
-                    "ASTC Compressed textures are not supported on this device"
-                ));
-            }
+            .features()
+            .contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR)
+        {
+            return Err(anyhow::anyhow!(
+                "ASTC Compressed textures are not supported on this device"
+            ));
+        }
 
-            Ok(Self::WgpuCompatible(wgpu::TextureFormat::Astc {
-                block: block_format,
-                channel: if srgb {
-                    wgpu::AstcChannel::UnormSrgb
-                } else {
-                    wgpu::AstcChannel::Unorm
-                },
-            }))
+        Ok(Self::WgpuCompatible(wgpu::TextureFormat::Astc {
+            block: block_format,
+            channel: if srgb {
+                wgpu::AstcChannel::UnormSrgb
+            } else {
+                wgpu::AstcChannel::Unorm
+            },
+        }))
     }
 }
 

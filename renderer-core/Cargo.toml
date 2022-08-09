@@ -22,7 +22,6 @@ zstd = { version = "0.11.2", default-features = false, features = ["wasm"] }
 anyhow = "1.0.58"
 url = "2.2.2"
 wasm-bindgen-futures = "0.4.31"
-gltf = {  git = "https://github.com/expenses/gltf", rev = "a66e5fd587e5695b88d33fa35c2881617c492107", features = ["KHR_materials_unlit", "KHR_materials_emissive_strength", "KHR_texture_transform"], default-features = false }
 gltf-helpers = { path = "../gltf-helpers" }
 base64 = "0.13.0"
 range-alloc = { git = "https://github.com/expenses/gfx", rev = "6afbeb6d9733e295404f4fe0ac936591e277a26e" }
@@ -32,6 +31,9 @@ arc-swap = "1.5.0"
 basis-universal = { git = "https://github.com/expenses/basis-universal-rs", rev = "d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610" }
 async-std = "1.12.0"
 futures = "0.3.21"
+goth-gltf = { path = "../../../goth-gltf"}
+serde_json = "1.0.83"
+either = "1.7.0"
 
 [dependencies.web-sys]
 version = "0.3.58"
