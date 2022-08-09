@@ -713,8 +713,6 @@ fn spawn_texture_loading_futures<T: HttpClient>(
     };
 
     spawn({
-        let image_context = image_context.clone();
-
         async move {
             let albedo_texture = {
                 let image_context = image_context.clone();
@@ -906,13 +904,13 @@ impl<'a> MaterialInfo<'a> {
         let texture_transform = pbr
             .base_color_texture()
             .and_then(|texture| texture.texture_transform())
-            .or(pbr
+            .or_else(|| pbr
                 .metallic_roughness_texture()
                 .and_then(|texture| texture.texture_transform()))
-            .or(material
+            .or_else(|| material
                 .normal_texture()
                 .and_then(|texture| texture.texture_transform()))
-            .or(material
+            .or_else(|| material
                 .emissive_texture()
                 .and_then(|texture| texture.texture_transform()));
 
