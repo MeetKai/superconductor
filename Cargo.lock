@@ -274,7 +274,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 [[package]]
 name = "basis-universal"
 version = "0.1.1"
-source = "git+https://github.com/expenses/basis-universal-rs?branch=wasm-support#8e574b16da844fd4b15af39c188c3b86d81c35d3"
+source = "git+https://github.com/expenses/basis-universal-rs?rev=d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610#d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610"
 dependencies = [
  "basis-universal-sys",
  "basis-universal-wasm",
@@ -286,7 +286,7 @@ dependencies = [
 [[package]]
 name = "basis-universal-sys"
 version = "0.1.1"
-source = "git+https://github.com/expenses/basis-universal-rs?branch=wasm-support#8e574b16da844fd4b15af39c188c3b86d81c35d3"
+source = "git+https://github.com/expenses/basis-universal-rs?rev=d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610#d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610"
 dependencies = [
  "cc",
 ]
@@ -294,7 +294,7 @@ dependencies = [
 [[package]]
 name = "basis-universal-wasm"
 version = "0.1.0"
-source = "git+https://github.com/expenses/basis-universal-rs-wasm#a240b3c5aaffa2c0a60ce6a150a45a5c3a1c7d07"
+source = "git+https://github.com/expenses/basis-universal-rs-wasm?rev=a240b3c5aaffa2c0a60ce6a150a45a5c3a1c7d07#a240b3c5aaffa2c0a60ce6a150a45a5c3a1c7d07"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -1217,7 +1217,7 @@ dependencies = [
 [[package]]
 name = "glow"
 version = "0.11.2"
-source = "git+https://github.com/expenses/glow?branch=webxr#60dbcbb607ca3bc771bf78829cf7efab5e8262df"
+source = "git+https://github.com/grovesNL/glow?rev=11853d28ae64fbd7db5c856fe8b92a4a20fded94#11853d28ae64fbd7db5c856fe8b92a4a20fded94"
 dependencies = [
  "js-sys",
  "slotmap",
@@ -1228,7 +1228,7 @@ dependencies = [
 [[package]]
 name = "gltf"
 version = "1.0.0"
-source = "git+https://github.com/expenses/gltf?branch=extended#1ad1488ef29b4e5a8766299fd85b24c725701244"
+source = "git+https://github.com/expenses/gltf?rev=1ad1488ef29b4e5a8766299fd85b24c725701244#1ad1488ef29b4e5a8766299fd85b24c725701244"
 dependencies = [
  "byteorder",
  "gltf-derive",
@@ -1240,7 +1240,7 @@ dependencies = [
 [[package]]
 name = "gltf-derive"
 version = "1.0.0"
-source = "git+https://github.com/expenses/gltf?branch=extended#1ad1488ef29b4e5a8766299fd85b24c725701244"
+source = "git+https://github.com/expenses/gltf?rev=1ad1488ef29b4e5a8766299fd85b24c725701244#1ad1488ef29b4e5a8766299fd85b24c725701244"
 dependencies = [
  "inflections",
  "proc-macro2",
@@ -1262,7 +1262,7 @@ dependencies = [
 [[package]]
 name = "gltf-json"
 version = "1.0.0"
-source = "git+https://github.com/expenses/gltf?branch=extended#1ad1488ef29b4e5a8766299fd85b24c725701244"
+source = "git+https://github.com/expenses/gltf?rev=1ad1488ef29b4e5a8766299fd85b24c725701244#1ad1488ef29b4e5a8766299fd85b24c725701244"
 dependencies = [
  "gltf-derive",
  "serde",
@@ -1566,7 +1566,7 @@ dependencies = [
 [[package]]
 name = "ktx2"
 version = "0.3.0"
-source = "git+https://github.com/expenses/ktx2?branch=public-kv-iterator#47f98a7e225d07b47db18564546d13c11d80f52d"
+source = "git+https://github.com/BVE-Reborn/ktx2?rev=0e5b0febb09546c91bc845a5e7b5d04610d70044#0e5b0febb09546c91bc845a5e7b5d04610d70044"
 dependencies = [
  "bitflags",
 ]
@@ -2241,7 +2241,7 @@ checksum = "63e935c45e09cc6dcf00d2f0b2d630a58f4095320223d47fc68918722f0538b6"
 [[package]]
 name = "range-alloc"
 version = "0.1.2"
-source = "git+https://github.com/expenses/gfx?branch=range-allocator#6afbeb6d9733e295404f4fe0ac936591e277a26e"
+source = "git+https://github.com/expenses/gfx?rev=6afbeb6d9733e295404f4fe0ac936591e277a26e#6afbeb6d9733e295404f4fe0ac936591e277a26e"
 
 [[package]]
 name = "raw-window-handle"
@@ -2303,7 +2303,7 @@ dependencies = [
  "ktx2",
  "log",
  "parking_lot 0.12.1",
- "range-alloc 0.1.2 (git+https://github.com/expenses/gfx?branch=range-allocator)",
+ "range-alloc 0.1.2 (git+https://github.com/expenses/gfx?rev=6afbeb6d9733e295404f4fe0ac936591e277a26e)",
  "raw-window-handle",
  "shared-structs",
  "url",
@@ -3123,13 +3123,13 @@ dependencies = [
 [[package]]
 name = "wgpu"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#2d8a9ee4b29975ccfc9a893447fb44355ffd7044"
+source = "git+https://github.com/expenses/wgpu?rev=2d8a9ee4b29975ccfc9a893447fb44355ffd7044#2d8a9ee4b29975ccfc9a893447fb44355ffd7044"
 dependencies = [
  "arrayvec",
  "js-sys",
  "log",
  "naga",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "raw-window-handle",
  "smallvec",
  "wasm-bindgen",
@@ -3143,7 +3143,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#2d8a9ee4b29975ccfc9a893447fb44355ffd7044"
+source = "git+https://github.com/expenses/wgpu?rev=2d8a9ee4b29975ccfc9a893447fb44355ffd7044#2d8a9ee4b29975ccfc9a893447fb44355ffd7044"
 dependencies = [
  "arrayvec",
  "bit-vec",
@@ -3154,7 +3154,7 @@ dependencies = [
  "fxhash",
  "log",
  "naga",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "profiling",
  "raw-window-handle",
  "smallvec",
@@ -3167,7 +3167,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#2d8a9ee4b29975ccfc9a893447fb44355ffd7044"
+source = "git+https://github.com/expenses/wgpu?rev=2d8a9ee4b29975ccfc9a893447fb44355ffd7044#2d8a9ee4b29975ccfc9a893447fb44355ffd7044"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -3190,7 +3190,7 @@ dependencies = [
  "metal",
  "naga",
  "objc",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "profiling",
  "range-alloc 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "raw-window-handle",
@@ -3205,7 +3205,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?branch=webxr-more-extensions#2d8a9ee4b29975ccfc9a893447fb44355ffd7044"
+source = "git+https://github.com/expenses/wgpu?rev=2d8a9ee4b29975ccfc9a893447fb44355ffd7044#2d8a9ee4b29975ccfc9a893447fb44355ffd7044"
 dependencies = [
  "bitflags",
 ]
