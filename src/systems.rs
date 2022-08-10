@@ -585,6 +585,7 @@ pub(crate) fn set_desktop_uniform_buffers(
         right_eye_position: camera.position,
         flip_viewport: false as u32,
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
+        // wgpu does
         inline_srgb: false as u32,
     };
 

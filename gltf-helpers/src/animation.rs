@@ -1,80 +1,111 @@
 use crate::{DepthFirstNodes, Similarity};
-use glam::{Quat, Vec3};
-use gltf::animation::Interpolation;
+use glam::{Mat4, Quat, Vec3};
+use goth_gltf::Interpolation;
 use std::fmt;
 use std::ops::{Add, Mul};
 
-pub fn read_animations<'a, F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'a [u8]>>(
-    animations: gltf::iter::Animations<'a>,
-    channel_reader: F,
+fn signed_short_to_float(short: i16) -> f32 {
+    (short as f32 / 32767.0).max(-1.0)
+}
+
+pub fn read_animations<'a, F: Clone + Fn(&'a goth_gltf::Accessor) -> Option<&'a [u8]>>(
+    gltf: &'a goth_gltf::Gltf,
+    reader: F,
 ) -> Vec<Animation> {
-    animations
+    gltf.animations
+        .iter()
         .map(|animation| {
-            let mut translation_channels = Vec::new();
-            let mut rotation_channels = Vec::new();
-            let mut scale_channels = Vec::new();
+            let mut translation_channels: Vec<Channel<Vec3>> = Vec::new();
+            let mut rotation_channels: Vec<Channel<Quat>> = Vec::new();
+            let mut scale_channels: Vec<Channel<f32>> = Vec::new();
 
-            for (channel_index, channel) in animation.channels().enumerate() {
-                let reader = channel.reader(channel_reader.clone());
+            for (channel_index, channel) in animation.channels.iter().enumerate() {
+                let sampler = &animation.samplers[channel.sampler];
 
-                let inputs = reader.read_inputs().unwrap().collect();
+                let input_accessor = &gltf.accessors[sampler.input];
+                let input_buffer_view = &gltf.buffer_views[input_accessor.buffer_view.unwrap()];
 
-                log::trace!(
-                    "animation {:?}, channel {} ({:?}) uses {:?} interpolation.",
-                    animation.name(),
-                    channel_index,
-                    channel.target().property(),
-                    channel.sampler().interpolation()
-                );
+                let output_accessor = &gltf.accessors[sampler.output];
+                let output_buffer_view = &gltf.buffer_views[output_accessor.buffer_view.unwrap()];
 
-                match channel.target().property() {
-                    gltf::animation::Property::Translation => {
-                        let outputs = match reader.read_outputs().unwrap() {
-                            gltf::animation::util::ReadOutputs::Translations(translations) => {
-                                translations.map(Vec3::from).collect()
-                            }
-                            _ => unreachable!(),
-                        };
+                let inputs = reader(input_accessor).unwrap();
+                let inputs: &[f32] = bytemuck::cast_slice(inputs);
+                let inputs: Vec<_> = inputs.iter().copied().collect();
+
+                let outputs = reader(output_accessor).unwrap();
+
+                match channel.target.path {
+                    goth_gltf::TargetPath::Translation => {
+                        dbg!(
+                            &input_accessor,
+                            input_buffer_view,
+                            output_accessor,
+                            output_buffer_view
+                        );
 
                         translation_channels.push(Channel {
-                            interpolation: channel.sampler().interpolation(),
+                            interpolation: sampler.interpolation,
                             inputs,
-                            outputs,
-                            node_index: channel.target().node().index(),
+                            node_index: channel.target.node.unwrap(),
+                            outputs: {
+                                let outputs: &[f32] = bytemuck::cast_slice(outputs);
+                                outputs.chunks(3).map(Vec3::from_slice).collect()
+                            },
                         });
                     }
-                    gltf::animation::Property::Rotation => {
-                        let outputs = match reader.read_outputs().unwrap() {
-                            gltf::animation::util::ReadOutputs::Rotations(rotations) => {
-                                rotations.into_f32().map(Quat::from_array).collect()
-                            }
-                            _ => unreachable!(),
-                        };
-
+                    goth_gltf::TargetPath::Rotation => {
                         rotation_channels.push(Channel {
-                            interpolation: channel.sampler().interpolation(),
+                            interpolation: sampler.interpolation,
                             inputs,
-                            outputs,
-                            node_index: channel.target().node().index(),
+                            node_index: channel.target.node.unwrap(),
+                            outputs: {
+                                match output_accessor.component_type {
+                                    goth_gltf::ComponentType::Float => {
+                                        let outputs: &[f32] = bytemuck::cast_slice(outputs);
+                                        outputs.chunks(4).map(Quat::from_slice).collect()
+                                    }
+                                    goth_gltf::ComponentType::Short => {
+                                        let outputs: &[[i16; 4]] = bytemuck::cast_slice(outputs);
+                                        outputs
+                                            .iter()
+                                            .map(|chunk| {
+                                                Quat::from_array([
+                                                    signed_short_to_float(chunk[0]),
+                                                    signed_short_to_float(chunk[1]),
+                                                    signed_short_to_float(chunk[2]),
+                                                    signed_short_to_float(chunk[3]),
+                                                ])
+                                            })
+                                            .collect()
+                                    }
+                                    _ => todo!(),
+                                }
+                            },
                         });
                     }
-                    gltf::animation::Property::Scale => {
-                        let outputs = match reader.read_outputs().unwrap() {
-                            gltf::animation::util::ReadOutputs::Scales(scales) => scales
-                                .map(|scale| scale[0].max(scale[1]).max(scale[2]))
-                                .collect(),
-                            _ => unreachable!(),
-                        };
+                    goth_gltf::TargetPath::Scale => {
+                        dbg!(
+                            &input_accessor,
+                            input_buffer_view,
+                            output_accessor,
+                            output_buffer_view
+                        );
 
                         scale_channels.push(Channel {
-                            interpolation: channel.sampler().interpolation(),
+                            interpolation: sampler.interpolation,
                             inputs,
-                            outputs,
-                            node_index: channel.target().node().index(),
+                            node_index: channel.target.node.unwrap(),
+                            outputs: {
+                                let outputs: &[f32] = bytemuck::cast_slice(outputs);
+                                outputs
+                                    .chunks(3)
+                                    .map(|slice| slice[0].max(slice[1]).max(slice[2]))
+                                    .collect()
+                            },
                         });
                     }
-                    property => {
-                        log::warn!("Animation type {:?} is not supported, ignoring.", property);
+                    goth_gltf::TargetPath::Weights => {
+                        log::warn!("Weight animations are not supported, ignoring.");
                     }
                 }
             }
@@ -116,16 +147,15 @@ impl AnimationJoints {
         let node_transforms: Vec<_> = gltf
             .nodes
             .iter()
-            .map(|node| {
-                let (translation, rotation, scale) = match node.transform() {
-                    goth_gltf::NodeTransform::Matrix(_) => todo!(),
-                    goth_gltf::NodeTransform::Set {
-                        translation,
-                        rotation,
-                        scale,
-                    } => (translation, rotation, scale),
-                };
-                Similarity::new_from_gltf(translation, rotation, scale)
+            .map(|node| match node.transform() {
+                goth_gltf::NodeTransform::Matrix(matrix) => {
+                    Similarity::new_from_mat4(Mat4::from_cols_array(&matrix))
+                }
+                goth_gltf::NodeTransform::Set {
+                    translation,
+                    rotation,
+                    scale,
+                } => Similarity::new_from_gltf(translation, rotation, scale),
             })
             .collect();
 

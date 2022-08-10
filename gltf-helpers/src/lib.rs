@@ -48,9 +48,16 @@ impl Similarity {
         }
     }
 
+    pub fn new_from_mat4(mat4: Mat4) -> Self {
+        let (scale, rotation, translation) = mat4.to_scale_rotation_translation();
+        Self::new_from_gltf(translation.into(), rotation.into(), scale.into())
+    }
+
     pub fn new_from_gltf_node(node: &goth_gltf::Node) -> Self {
         match node.transform() {
-            goth_gltf::NodeTransform::Matrix(_) => todo!(),
+            goth_gltf::NodeTransform::Matrix(matrix) => {
+                Self::new_from_mat4(Mat4::from_cols_array(&matrix))
+            }
             goth_gltf::NodeTransform::Set {
                 translation,
                 rotation,

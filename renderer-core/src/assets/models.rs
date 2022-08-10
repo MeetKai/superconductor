@@ -8,7 +8,7 @@ use crate::{
     BindGroupLayouts, Texture,
 };
 use either::Either;
-use glam::{Mat2, UVec4, Vec2, Vec3, Vec4};
+use glam::{Mat2, Mat4, UVec4, Vec2, Vec3, Vec4};
 use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
     Similarity,
@@ -238,7 +238,7 @@ impl Model {
     ) -> anyhow::Result<Self> {
         let bytes = context.http_client.fetch_bytes(root_url, None).await?;
 
-        let gltf: goth_gltf::Gltf = serde_json::from_slice(&bytes)?;
+        let gltf = goth_gltf::Gltf::from_str(std::str::from_utf8(&bytes).unwrap())?;
 
         let node_tree = gltf_helpers::NodeTree::new(&gltf);
 
@@ -363,229 +363,6 @@ impl Model {
     }
 }
 
-fn unsigned_short_to_float(short: u16) -> f32 {
-    short as f32 / 65535.0
-}
-
-fn signed_byte_to_float(byte: i8) -> f32 {
-    (byte as f32 / 127.0).max(-1.0)
-}
-
-struct PrimitiveReader<'a> {
-    gltf: &'a goth_gltf::Gltf,
-    primitive: &'a goth_gltf::Primitive,
-    buffer_map: &'a HashMap<usize, Vec<u8>>,
-}
-
-impl<'a> PrimitiveReader<'a> {
-    fn new(
-        gltf: &'a goth_gltf::Gltf,
-        primitive: &'a goth_gltf::Primitive,
-        buffer_map: &'a HashMap<usize, Vec<u8>>,
-    ) -> Self {
-        Self {
-            gltf,
-            primitive,
-            buffer_map,
-        }
-    }
-
-    fn read_accessor(
-        &self,
-        accessor: &goth_gltf::Accessor,
-    ) -> anyhow::Result<(&[u8], Option<usize>)> {
-        let buffer_view_index = accessor
-            .buffer_view
-            .ok_or_else(|| anyhow::anyhow!("Accessor is missing buffer view"))?;
-        let buffer_view = self
-            .gltf
-            .buffer_views
-            .get(buffer_view_index)
-            .ok_or_else(|| {
-                anyhow::anyhow!("Buffer view index {} is out of range", buffer_view_index)
-            })?;
-
-        let buffer = self.buffer_map.get(&buffer_view.buffer).ok_or_else(|| {
-            anyhow::anyhow!("Buffer index {} is out of range", buffer_view.buffer)
-        })?;
-
-        let start = buffer_view.byte_offset + accessor.byte_offset;
-
-        let end = start + accessor.byte_length(buffer_view);
-
-        Ok((&buffer[start..end], buffer_view.byte_stride))
-    }
-
-    fn read_indices(&self) -> anyhow::Result<Option<impl Iterator<Item = u32> + '_>> {
-        let accessor_index = match self.primitive.indices {
-            Some(index) => index,
-            None => return Ok(None),
-        };
-
-        let accessor =
-            self.gltf.accessors.get(accessor_index).ok_or_else(|| {
-                anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
-            })?;
-        let (slice, byte_stride) = self.read_accessor(accessor)?;
-
-        Ok(Some(match accessor.component_type {
-            goth_gltf::ComponentType::UnsignedShort => Either::Left(
-                slice
-                    .chunks(2)
-                    .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]) as u32),
-            ),
-            goth_gltf::ComponentType::UnsignedInt => Either::Right(
-                slice
-                    .chunks(4)
-                    .map(|chunk| u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]])),
-            ),
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported component type for indices: {:?}",
-                    accessor.component_type
-                ))
-            }
-        }))
-    }
-
-    fn read_positions(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 3]> + '_>> {
-        let accessor_index = match self.primitive.attributes.position {
-            Some(index) => index,
-            None => return Ok(None),
-        };
-
-        let accessor =
-            self.gltf.accessors.get(accessor_index).ok_or_else(|| {
-                anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
-            })?;
-        let (slice, byte_stride) = self.read_accessor(accessor)?;
-
-        Ok(Some(match accessor.component_type {
-            goth_gltf::ComponentType::Float => {
-                let floats: &[f32] = bytemuck::cast_slice(slice);
-                Either::Left(floats.chunks(3).map(|chunk| chunk.try_into().unwrap()))
-            }
-            goth_gltf::ComponentType::UnsignedShort => {
-                if byte_stride != Some(8) {
-                    return Err(anyhow::anyhow!(
-                        "Expected a byte stride of {:?}, got {:?}",
-                        Some(8),
-                        byte_stride
-                    ));
-                }
-
-                Either::Right(slice.chunks(8).map(move |chunk| {
-                    [
-                        u16::from_le_bytes([chunk[0], chunk[1]]) as f32,
-                        u16::from_le_bytes([chunk[2], chunk[3]]) as f32,
-                        u16::from_le_bytes([chunk[4], chunk[5]]) as f32,
-                    ]
-                }))
-            }
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported component type for positions: {:?}",
-                    accessor.component_type
-                ))
-            }
-        }))
-    }
-
-    fn read_normals(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 3]> + '_>> {
-        let accessor_index = match self.primitive.attributes.normal {
-            Some(index) => index,
-            None => return Ok(None),
-        };
-
-        let accessor =
-            self.gltf.accessors.get(accessor_index).ok_or_else(|| {
-                anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
-            })?;
-        let (slice, byte_stride) = self.read_accessor(accessor)?;
-
-        Ok(Some(match accessor.component_type {
-            goth_gltf::ComponentType::Float => {
-                let floats: &[f32] = bytemuck::cast_slice(slice);
-                Either::Left(floats.chunks(3).map(|chunk| chunk.try_into().unwrap()))
-            }
-            goth_gltf::ComponentType::Byte => {
-                if byte_stride != Some(4) {
-                    return Err(anyhow::anyhow!(
-                        "Expected a byte stride of {:?}, got {:?}",
-                        Some(4),
-                        byte_stride
-                    ));
-                }
-
-                Either::Right(slice.chunks(4).map(move |chunk| {
-                    [
-                        signed_byte_to_float(i8::from_le_bytes([chunk[0]])),
-                        signed_byte_to_float(i8::from_le_bytes([chunk[1]])),
-                        signed_byte_to_float(i8::from_le_bytes([chunk[2]])),
-                    ]
-                }))
-            }
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported component type for normals: {:?}",
-                    accessor.component_type
-                ))
-            }
-        }))
-    }
-
-    fn read_uvs(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 2]> + '_>> {
-        let accessor_index = match self.primitive.attributes.texcoord_0 {
-            Some(index) => index,
-            None => return Ok(None),
-        };
-
-        let accessor =
-            self.gltf.accessors.get(accessor_index).ok_or_else(|| {
-                anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
-            })?;
-        let (slice, byte_stride) = self.read_accessor(accessor)?;
-
-        Ok(Some(match accessor.component_type {
-            goth_gltf::ComponentType::Float => {
-                let floats: &[f32] = bytemuck::cast_slice(slice);
-                Either::Left(floats.chunks(2).map(|chunk| chunk.try_into().unwrap()))
-            }
-
-            goth_gltf::ComponentType::UnsignedShort => {
-                if byte_stride != Some(4) {
-                    return Err(anyhow::anyhow!(
-                        "Expected a byte stride of {:?}, got {:?}",
-                        Some(4),
-                        byte_stride
-                    ));
-                }
-
-                Either::Right(slice.chunks(4).map(move |chunk| {
-                    [
-                        unsigned_short_to_float(u16::from_le_bytes([chunk[0], chunk[1]])),
-                        unsigned_short_to_float(u16::from_le_bytes([chunk[2], chunk[3]])),
-                    ]
-                }))
-            }
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported component type for uvs: {:?}",
-                    accessor.component_type
-                ))
-            }
-        }))
-    }
-
-    fn read_joints(&self) -> Option<std::iter::Empty<[u32; 4]>> {
-        Some(std::iter::empty())
-    }
-
-    fn read_weights(&self) -> Option<std::iter::Empty<[f32; 4]>> {
-        Some(std::iter::empty())
-    }
-}
-
 pub struct AnimatedModel {
     pub primitives: Vec<Primitive>,
     pub primitive_ranges: PrimitiveRanges,
@@ -601,7 +378,7 @@ impl AnimatedModel {
     ) -> anyhow::Result<Self> {
         let bytes = context.http_client.fetch_bytes(root_url, None).await?;
 
-        let gltf: goth_gltf::Gltf = serde_json::from_slice(&bytes)?;
+        let gltf = goth_gltf::Gltf::from_str(std::str::from_utf8(&bytes).unwrap())?;
 
         let node_tree = gltf_helpers::NodeTree::new(&gltf);
 
@@ -661,7 +438,7 @@ impl AnimatedModel {
                     material_info.texture_transform,
                 )?;
 
-                match reader.read_joints() {
+                match reader.read_joints()? {
                     Some(joints) => {
                         staging_primitive
                             .buffers
@@ -680,7 +457,7 @@ impl AnimatedModel {
                     ),
                 }
 
-                match reader.read_weights() {
+                match reader.read_weights()? {
                     Some(joint_weights) => staging_primitive
                         .buffers
                         .joint_weights
@@ -701,7 +478,7 @@ impl AnimatedModel {
         let (primitive_ranges, mut primitives, mut staging_buffers) = collect_all_primitives(
             context,
             gltf.clone(),
-            buffer_map,
+            buffer_map.clone(),
             root_url,
             &staging_primitives,
             |a, b| a.collect(b),
@@ -747,9 +524,14 @@ impl AnimatedModel {
             primitive.index_buffer_range.end += index_buffer_range.start;
         }
 
-        let animations = Vec::new(); /*read_animations(gltf.animations(), |buffer| {
-                                         get_buffer(&gltf, &buffer_map, buffer)
-                                     });*/
+        let animations = read_animations(&gltf, |accessor| {
+            Some(
+                read_buffer_with_accessor(&buffer_map, &gltf, &accessor)
+                    .unwrap()
+                    .0,
+            )
+            //get_buffer(&gltf, &buffer_map, buffer)
+        });
 
         if gltf.skins.len() > 1 {
             log::warn!("Got {} skins. Using the first.", gltf.skins.len());
@@ -763,17 +545,24 @@ impl AnimatedModel {
         };
 
         let inverse_bind_transforms: Vec<Similarity> = match skin.as_ref() {
-            Some(skin) => panic!()/*skin
-                .reader(|buffer| get_buffer(&gltf, &buffer_map, buffer))
-                .read_inverse_bind_matrices()
-                .expect("Missing inverse bind matrices")
-                .map(|matrix| {
-                    let (translation, rotation, scale) =
-                        gltf::scene::Transform::Matrix { matrix }.decomposed();
-                    Similarity::new_from_gltf(translation, rotation, scale)
-                })
-                .collect()*/,
-            None => (0..gltf.nodes.len()).map(|_| Similarity::IDENTITY).collect(),
+            Some(skin) => {
+                let accessor_index = skin
+                    .inverse_bind_matrices
+                    .ok_or_else(|| anyhow::anyhow!("Missing inverse bind matrices accessor"))?;
+                let accessor = &gltf.accessors[accessor_index];
+
+                let (slice, byte_stride) = read_buffer_with_accessor(&buffer_map, &gltf, accessor)?;
+
+                let matrices: &[[f32; 16]] = bytemuck::cast_slice(slice);
+
+                matrices
+                    .iter()
+                    .map(|matrix| Similarity::new_from_mat4(Mat4::from_cols_array(matrix)))
+                    .collect()
+            }
+            None => (0..gltf.nodes.len())
+                .map(|_| Similarity::IDENTITY)
+                .collect(),
         };
 
         let depth_first_nodes = gltf_helpers::DepthFirstNodes::new(&gltf, &node_tree);
@@ -879,7 +668,7 @@ impl StagingBuffers {
                 Some(transform) => self.uvs.extend(uvs.map(|uv| {
                     Vec2::from(transform.offset)
                         + (Mat2::from_angle(transform.rotation)
-                            * Vec2::from(transform.scale.0)
+                            * Vec2::from(transform.scale)
                             * Vec2::from(uv))
                 })),
                 None => self.uvs.extend(uvs.map(Vec2::from)),
@@ -1103,8 +892,23 @@ async fn load_image_from_gltf<T: HttpClient>(
             )
             .await
         }
+    } else if let Some(buffer_view_index) = image.buffer_view {
+        let buffer_view = &context.gltf.buffer_views[buffer_view_index];
+        dbg!(&buffer_view);
+        let bytes = context.buffer_map.get(&buffer_view.buffer).unwrap();
+        let bytes =
+            &bytes[buffer_view.byte_offset..buffer_view.byte_offset + buffer_view.byte_length];
+        load_image_with_mime_type(
+            ImageSource::Bytes(bytes),
+            srgb,
+            image.mime_type.as_ref().map(|string| &string[..]),
+            &context.textures_context,
+        )
+        .await
     } else {
-        todo!()
+        Err(anyhow::anyhow!(
+            "Neither an uri or a buffer view was specified for the image."
+        ))
     }
 
     /*match context.gltf.textures[texture_index] {
@@ -1180,14 +984,14 @@ impl MaterialInfo {
         let emissive_strength = material
             .extensions
             .khr_materials_emissive_strength
-            .map(|emissive_strength| emissive_strength.emissive_strength.0)
+            .map(|emissive_strength| emissive_strength.emissive_strength)
             .unwrap_or(1.0);
 
         let settings = shared_structs::MaterialSettings {
-            base_color_factor: pbr.base_color_factor.0.into(),
+            base_color_factor: pbr.base_color_factor.into(),
             emissive_factor: Vec3::from(material.emissive_factor) * emissive_strength,
-            metallic_factor: pbr.metallic_factor.0,
-            roughness_factor: pbr.roughness_factor.0,
+            metallic_factor: pbr.metallic_factor,
+            roughness_factor: pbr.roughness_factor,
             is_unlit: unlit as u32,
             // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
             // todo: find a nicer way to resolve this.
@@ -1199,5 +1003,292 @@ impl MaterialInfo {
             settings,
             texture_transform,
         }
+    }
+}
+
+fn unsigned_short_to_float(short: u16) -> f32 {
+    short as f32 / 65535.0
+}
+
+fn unsigned_byte_to_float(byte: u8) -> f32 {
+    byte as f32 / 255.0
+}
+
+fn signed_byte_to_float(byte: i8) -> f32 {
+    (byte as f32 / 127.0).max(-1.0)
+}
+
+fn read_buffer_with_accessor<'a>(
+    buffer_map: &'a HashMap<usize, Vec<u8>>,
+    gltf: &goth_gltf::Gltf,
+    accessor: &goth_gltf::Accessor,
+) -> anyhow::Result<(&'a [u8], Option<usize>)> {
+    let buffer_view_index = accessor
+        .buffer_view
+        .ok_or_else(|| anyhow::anyhow!("Accessor is missing buffer view"))?;
+    let buffer_view = gltf.buffer_views.get(buffer_view_index).ok_or_else(|| {
+        anyhow::anyhow!("Buffer view index {} is out of range", buffer_view_index)
+    })?;
+
+    let buffer = buffer_map
+        .get(&buffer_view.buffer)
+        .ok_or_else(|| anyhow::anyhow!("Buffer index {} is out of range", buffer_view.buffer))?;
+
+    let start = buffer_view.byte_offset + accessor.byte_offset;
+
+    let end = start + accessor.byte_length(buffer_view);
+
+    Ok((&buffer[start..end], buffer_view.byte_stride))
+}
+
+fn assert_byte_stride(
+    expected: Option<usize>,
+    got: Option<usize>,
+    context: &str,
+) -> anyhow::Result<()> {
+    if expected != got {
+        return Err(anyhow::anyhow!(
+            "{}: Expected a byte stride of {:?}, got {:?}",
+            context,
+            expected,
+            got,
+        ));
+    }
+
+    Ok(())
+}
+
+struct PrimitiveReader<'a> {
+    gltf: &'a goth_gltf::Gltf,
+    primitive: &'a goth_gltf::Primitive,
+    buffer_map: &'a HashMap<usize, Vec<u8>>,
+}
+
+impl<'a> PrimitiveReader<'a> {
+    fn new(
+        gltf: &'a goth_gltf::Gltf,
+        primitive: &'a goth_gltf::Primitive,
+        buffer_map: &'a HashMap<usize, Vec<u8>>,
+    ) -> Self {
+        Self {
+            gltf,
+            primitive,
+            buffer_map,
+        }
+    }
+
+    fn read_indices(&self) -> anyhow::Result<Option<impl Iterator<Item = u32> + '_>> {
+        let accessor_index = match self.primitive.indices {
+            Some(index) => index,
+            None => return Ok(None),
+        };
+
+        let accessor =
+            self.gltf.accessors.get(accessor_index).ok_or_else(|| {
+                anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
+            })?;
+        let (slice, byte_stride) = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+
+        Ok(Some(match accessor.component_type {
+            goth_gltf::ComponentType::UnsignedShort => Either::Left(
+                slice
+                    .chunks(2)
+                    .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]) as u32),
+            ),
+            goth_gltf::ComponentType::UnsignedInt => Either::Right(
+                slice
+                    .chunks(4)
+                    .map(|chunk| u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]])),
+            ),
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Unsupported component type for indices: {:?}",
+                    accessor.component_type
+                ))
+            }
+        }))
+    }
+
+    fn read_positions(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 3]> + '_>> {
+        let accessor_index = match self.primitive.attributes.position {
+            Some(index) => index,
+            None => return Ok(None),
+        };
+
+        let accessor =
+            self.gltf.accessors.get(accessor_index).ok_or_else(|| {
+                anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
+            })?;
+        let (slice, byte_stride) = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+
+        Ok(Some(match accessor.component_type {
+            goth_gltf::ComponentType::Float => {
+                let floats: &[f32] = bytemuck::cast_slice(slice);
+                Either::Left(floats.chunks(3).map(|chunk| chunk.try_into().unwrap()))
+            }
+            goth_gltf::ComponentType::UnsignedShort => {
+                assert_byte_stride(Some(8), byte_stride, "positions")?;
+
+                Either::Right(slice.chunks(8).map(move |chunk| {
+                    [
+                        u16::from_le_bytes([chunk[0], chunk[1]]) as f32,
+                        u16::from_le_bytes([chunk[2], chunk[3]]) as f32,
+                        u16::from_le_bytes([chunk[4], chunk[5]]) as f32,
+                    ]
+                }))
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Unsupported component type for positions: {:?}",
+                    accessor.component_type
+                ))
+            }
+        }))
+    }
+
+    fn read_normals(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 3]> + '_>> {
+        let accessor_index = match self.primitive.attributes.normal {
+            Some(index) => index,
+            None => return Ok(None),
+        };
+
+        let accessor =
+            self.gltf.accessors.get(accessor_index).ok_or_else(|| {
+                anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
+            })?;
+        let (slice, byte_stride) = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+
+        Ok(Some(match accessor.component_type {
+            goth_gltf::ComponentType::Float => {
+                let floats: &[f32] = bytemuck::cast_slice(slice);
+                Either::Left(floats.chunks(3).map(|chunk| chunk.try_into().unwrap()))
+            }
+            goth_gltf::ComponentType::Byte => {
+                assert_byte_stride(Some(4), byte_stride, "normals")?;
+
+                Either::Right(slice.chunks(4).map(move |chunk| {
+                    [
+                        signed_byte_to_float(i8::from_le_bytes([chunk[0]])),
+                        signed_byte_to_float(i8::from_le_bytes([chunk[1]])),
+                        signed_byte_to_float(i8::from_le_bytes([chunk[2]])),
+                    ]
+                }))
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Unsupported component type for normals: {:?}",
+                    accessor.component_type
+                ))
+            }
+        }))
+    }
+
+    fn read_uvs(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 2]> + '_>> {
+        let accessor_index = match self.primitive.attributes.texcoord_0 {
+            Some(index) => index,
+            None => return Ok(None),
+        };
+
+        let accessor =
+            self.gltf.accessors.get(accessor_index).ok_or_else(|| {
+                anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
+            })?;
+        let (slice, byte_stride) = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+
+        Ok(Some(match accessor.component_type {
+            goth_gltf::ComponentType::Float => {
+                let floats: &[[f32; 2]] = bytemuck::cast_slice(slice);
+                Either::Left(floats.into_iter().copied())
+            }
+            goth_gltf::ComponentType::UnsignedShort => {
+                assert_byte_stride(Some(4), byte_stride, "uvs")?;
+
+                Either::Right(slice.chunks(4).map(move |chunk| {
+                    [
+                        unsigned_short_to_float(u16::from_le_bytes([chunk[0], chunk[1]])),
+                        unsigned_short_to_float(u16::from_le_bytes([chunk[2], chunk[3]])),
+                    ]
+                }))
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Unsupported component type for uvs: {:?}",
+                    accessor.component_type
+                ))
+            }
+        }))
+    }
+
+    fn read_joints(&self) -> anyhow::Result<Option<impl Iterator<Item = [u32; 4]> + '_>> {
+        let accessor_index = match self.primitive.attributes.joints_0 {
+            Some(index) => index,
+            None => return Ok(None),
+        };
+
+        let accessor =
+            self.gltf.accessors.get(accessor_index).ok_or_else(|| {
+                anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
+            })?;
+
+        dbg!(&accessor);
+
+        let (slice, byte_stride) = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+
+        Ok(Some(match accessor.component_type {
+            goth_gltf::ComponentType::UnsignedByte => slice.chunks(4).map(move |chunk| {
+                [
+                    chunk[0] as u32,
+                    chunk[1] as u32,
+                    chunk[2] as u32,
+                    chunk[3] as u32,
+                ]
+            }),
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Unsupported component type for joints: {:?}",
+                    accessor.component_type
+                ))
+            }
+        }))
+    }
+
+    fn read_weights(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 4]> + '_>> {
+        let accessor_index = match self.primitive.attributes.weights_0 {
+            Some(index) => index,
+            None => return Ok(None),
+        };
+
+        let accessor =
+            self.gltf.accessors.get(accessor_index).ok_or_else(|| {
+                anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
+            })?;
+        let (slice, byte_stride) = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+
+        dbg!(&accessor, slice.len(), byte_stride);
+
+        Ok(Some(match accessor.component_type {
+            goth_gltf::ComponentType::Float => {
+                let floats: &[[f32; 4]] = bytemuck::cast_slice(slice);
+                Either::Left(floats.into_iter().copied())
+            }
+            goth_gltf::ComponentType::UnsignedByte => {
+                assert_byte_stride(Some(4), byte_stride, "weights")?;
+
+                Either::Right(slice.chunks(4).map(move |chunk| {
+                    [
+                        unsigned_byte_to_float(chunk[0]),
+                        unsigned_byte_to_float(chunk[1]),
+                        unsigned_byte_to_float(chunk[2]),
+                        unsigned_byte_to_float(chunk[3]),
+                    ]
+                }))
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Unsupported component type for weights: {:?}",
+                    accessor.component_type
+                ))
+            }
+        }))
     }
 }
