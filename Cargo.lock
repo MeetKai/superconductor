@@ -1560,6 +1560,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
+name = "leb128"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
+
+[[package]]
 name = "libc"
 version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1660,6 +1666,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "meshopt-decoder"
+version = "0.1.0"
+dependencies = [
+ "leb128",
 ]
 
 [[package]]
@@ -2292,6 +2305,7 @@ dependencies = [
  "image",
  "ktx2",
  "log",
+ "meshopt-decoder",
  "parking_lot 0.12.1",
  "range-alloc 0.1.2 (git+https://github.com/expenses/gfx?rev=6afbeb6d9733e295404f4fe0ac936591e277a26e)",
  "raw-window-handle",
@@ -2617,6 +2631,7 @@ dependencies = [
  "bevy_ecs",
  "futures",
  "js-sys",
+ "leb128",
  "log",
  "renderer-core",
  "surf",

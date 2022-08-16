@@ -1,17 +1,23 @@
 use crate::{DepthFirstNodes, Similarity};
 use glam::{Mat4, Quat, Vec3};
-use goth_gltf::Interpolation;
+use goth_gltf::{Interpolation, TargetPath};
 use std::fmt;
 use std::ops::{Add, Mul};
 
-fn signed_short_to_float(short: i16) -> f32 {
-    (short as f32 / 32767.0).max(-1.0)
-}
-
-pub fn read_animations<'a, F: Clone + Fn(&'a goth_gltf::Accessor) -> Option<&'a [u8]>>(
+pub fn read_animations<'a, F1, I1, F3, I3, F4, I4>(
     gltf: &'a goth_gltf::Gltf,
-    reader: F,
-) -> Vec<Animation> {
+    read_f32: F1,
+    read_f32x3: F3,
+    read_f32x4: F4,
+) -> Vec<Animation>
+where
+    I1: Iterator<Item = f32>,
+    F1: Fn(&goth_gltf::Accessor) -> I1,
+    I3: Iterator<Item = [f32; 3]>,
+    F3: Fn(&goth_gltf::Accessor) -> I3,
+    I4: Iterator<Item = [f32; 4]>,
+    F4: Fn(&goth_gltf::Accessor) -> I4,
+{
     gltf.animations
         .iter()
         .map(|animation| {
@@ -23,88 +29,41 @@ pub fn read_animations<'a, F: Clone + Fn(&'a goth_gltf::Accessor) -> Option<&'a 
                 let sampler = &animation.samplers[channel.sampler];
 
                 let input_accessor = &gltf.accessors[sampler.input];
-                let input_buffer_view = &gltf.buffer_views[input_accessor.buffer_view.unwrap()];
 
                 let output_accessor = &gltf.accessors[sampler.output];
-                let output_buffer_view = &gltf.buffer_views[output_accessor.buffer_view.unwrap()];
 
-                let inputs = reader(input_accessor).unwrap();
-                let inputs: &[f32] = bytemuck::cast_slice(inputs);
-                let inputs: Vec<_> = inputs.iter().copied().collect();
-
-                let outputs = reader(output_accessor).unwrap();
+                let inputs = read_f32(input_accessor).collect();
 
                 match channel.target.path {
-                    goth_gltf::TargetPath::Translation => {
-                        dbg!(
-                            &input_accessor,
-                            input_buffer_view,
-                            output_accessor,
-                            output_buffer_view
-                        );
-
+                    TargetPath::Translation => {
                         translation_channels.push(Channel {
                             interpolation: sampler.interpolation,
                             inputs,
                             node_index: channel.target.node.unwrap(),
-                            outputs: {
-                                let outputs: &[f32] = bytemuck::cast_slice(outputs);
-                                outputs.chunks(3).map(Vec3::from_slice).collect()
-                            },
+                            outputs: read_f32x3(output_accessor).map(Vec3::from).collect(),
                         });
                     }
-                    goth_gltf::TargetPath::Rotation => {
+                    TargetPath::Rotation => {
                         rotation_channels.push(Channel {
                             interpolation: sampler.interpolation,
                             inputs,
                             node_index: channel.target.node.unwrap(),
                             outputs: {
-                                match output_accessor.component_type {
-                                    goth_gltf::ComponentType::Float => {
-                                        let outputs: &[f32] = bytemuck::cast_slice(outputs);
-                                        outputs.chunks(4).map(Quat::from_slice).collect()
-                                    }
-                                    goth_gltf::ComponentType::Short => {
-                                        let outputs: &[[i16; 4]] = bytemuck::cast_slice(outputs);
-                                        outputs
-                                            .iter()
-                                            .map(|chunk| {
-                                                Quat::from_array([
-                                                    signed_short_to_float(chunk[0]),
-                                                    signed_short_to_float(chunk[1]),
-                                                    signed_short_to_float(chunk[2]),
-                                                    signed_short_to_float(chunk[3]),
-                                                ])
-                                            })
-                                            .collect()
-                                    }
-                                    _ => todo!(),
-                                }
+                                read_f32x4(output_accessor).map(Quat::from_array).collect()
                             },
                         });
                     }
-                    goth_gltf::TargetPath::Scale => {
-                        dbg!(
-                            &input_accessor,
-                            input_buffer_view,
-                            output_accessor,
-                            output_buffer_view
-                        );
-
+                    TargetPath::Scale => {
                         scale_channels.push(Channel {
                             interpolation: sampler.interpolation,
                             inputs,
                             node_index: channel.target.node.unwrap(),
-                            outputs: {
-                                let outputs: &[f32] = bytemuck::cast_slice(outputs);
-                                outputs
-                                    .chunks(3)
-                                    .map(|slice| slice[0].max(slice[1]).max(slice[2]))
-                                    .collect()
-                            },
+                            outputs: read_f32x3(output_accessor)
+                                .map(|scale| scale[0].max(scale[1]).max(scale[2]))
+                                .collect(),
                         });
                     }
-                    goth_gltf::TargetPath::Weights => {
+                    TargetPath::Weights => {
                         log::warn!("Weight animations are not supported, ignoring.");
                     }
                 }

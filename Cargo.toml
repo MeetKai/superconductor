@@ -21,6 +21,7 @@ url = "2.2.2"
 winit = "0.26.1"
 arrayvec = "0.7.2"
 surf = { version = "2.3.2", default-features = false }
+leb128 = "0.2.5"
 
 [dependencies.web-sys]
 version = "0.3.58"
