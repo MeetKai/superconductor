@@ -48,9 +48,22 @@ impl Similarity {
         }
     }
 
-    pub fn new_from_gltf_node(node: &gltf::Node) -> Self {
-        let (translation, rotation, scale) = node.transform().decomposed();
-        Self::new_from_gltf(translation, rotation, scale)
+    pub fn new_from_mat4(mat4: Mat4) -> Self {
+        let (scale, rotation, translation) = mat4.to_scale_rotation_translation();
+        Self::new_from_gltf(translation.into(), rotation.into(), scale.into())
+    }
+
+    pub fn new_from_gltf_node(node: &goth_gltf::Node) -> Self {
+        match node.transform() {
+            goth_gltf::NodeTransform::Matrix(matrix) => {
+                Self::new_from_mat4(Mat4::from_cols_array(&matrix))
+            }
+            goth_gltf::NodeTransform::Set {
+                translation,
+                rotation,
+                scale,
+            } => Self::new_from_gltf(translation, rotation, scale),
+        }
     }
 }
 
@@ -79,14 +92,13 @@ pub struct NodeTree {
 }
 
 impl NodeTree {
-    pub fn new<E: gltf::json::CustomExtensions>(nodes: gltf::iter::Nodes<E>) -> Self {
-        let mut inner = vec![(Similarity::IDENTITY, usize::max_value()); nodes.clone().count()];
+    pub fn new(gltf: &goth_gltf::Gltf) -> Self {
+        let mut inner = vec![(Similarity::IDENTITY, usize::max_value()); gltf.nodes.len()];
 
-        for node in nodes {
-            let (translation, rotation, scale) = node.transform().decomposed();
-            inner[node.index()].0 = Similarity::new_from_gltf(translation, rotation, scale);
-            for child in node.children() {
-                inner[child.index()].1 = node.index();
+        for (index, node) in gltf.nodes.iter().enumerate() {
+            inner[index].0 = Similarity::new_from_gltf_node(node);
+            for child in &node.children {
+                inner[*child].1 = index;
             }
         }
 
@@ -131,7 +143,7 @@ pub struct DepthFirstNodes {
 }
 
 impl DepthFirstNodes {
-    pub fn new(nodes: gltf::iter::Nodes, node_tree: &NodeTree) -> Self {
+    pub fn new(gltf: &goth_gltf::Gltf, node_tree: &NodeTree) -> Self {
         let roots: Vec<_> = node_tree
             .inner
             .iter()
@@ -149,13 +161,13 @@ impl DepthFirstNodes {
         let mut stack = roots.clone();
 
         while let Some(parent) = stack.pop() {
-            for child in nodes.clone().nth(parent).unwrap().children() {
+            for child in &gltf.nodes[parent].children {
                 children.push(Child {
-                    index: child.index(),
+                    index: *child,
                     parent,
                 });
 
-                stack.push(child.index());
+                stack.push(*child);
             }
         }
 

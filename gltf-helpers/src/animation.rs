@@ -1,80 +1,70 @@
 use crate::{DepthFirstNodes, Similarity};
-use glam::{Quat, Vec3};
-use gltf::animation::Interpolation;
+use glam::{Mat4, Quat, Vec3};
+use goth_gltf::{Interpolation, TargetPath};
 use std::fmt;
 use std::ops::{Add, Mul};
 
-pub fn read_animations<'a, F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'a [u8]>>(
-    animations: gltf::iter::Animations<'a>,
-    channel_reader: F,
-) -> Vec<Animation> {
-    animations
+pub fn read_animations<'a, F1, I1, F3, I3, F4, I4>(
+    gltf: &'a goth_gltf::Gltf,
+    read_f32: F1,
+    read_f32x3: F3,
+    read_f32x4: F4,
+) -> Vec<Animation>
+where
+    I1: Iterator<Item = f32>,
+    F1: Fn(&goth_gltf::Accessor) -> I1,
+    I3: Iterator<Item = [f32; 3]>,
+    F3: Fn(&goth_gltf::Accessor) -> I3,
+    I4: Iterator<Item = [f32; 4]>,
+    F4: Fn(&goth_gltf::Accessor) -> I4,
+{
+    gltf.animations
+        .iter()
         .map(|animation| {
-            let mut translation_channels = Vec::new();
-            let mut rotation_channels = Vec::new();
-            let mut scale_channels = Vec::new();
+            let mut translation_channels: Vec<Channel<Vec3>> = Vec::new();
+            let mut rotation_channels: Vec<Channel<Quat>> = Vec::new();
+            let mut scale_channels: Vec<Channel<f32>> = Vec::new();
 
-            for (channel_index, channel) in animation.channels().enumerate() {
-                let reader = channel.reader(channel_reader.clone());
+            for (channel_index, channel) in animation.channels.iter().enumerate() {
+                let sampler = &animation.samplers[channel.sampler];
 
-                let inputs = reader.read_inputs().unwrap().collect();
+                let input_accessor = &gltf.accessors[sampler.input];
 
-                log::trace!(
-                    "animation {:?}, channel {} ({:?}) uses {:?} interpolation.",
-                    animation.name(),
-                    channel_index,
-                    channel.target().property(),
-                    channel.sampler().interpolation()
-                );
+                let output_accessor = &gltf.accessors[sampler.output];
 
-                match channel.target().property() {
-                    gltf::animation::Property::Translation => {
-                        let outputs = match reader.read_outputs().unwrap() {
-                            gltf::animation::util::ReadOutputs::Translations(translations) => {
-                                translations.map(Vec3::from).collect()
-                            }
-                            _ => unreachable!(),
-                        };
+                let inputs = read_f32(input_accessor).collect();
 
+                match channel.target.path {
+                    TargetPath::Translation => {
                         translation_channels.push(Channel {
-                            interpolation: channel.sampler().interpolation(),
+                            interpolation: sampler.interpolation,
                             inputs,
-                            outputs,
-                            node_index: channel.target().node().index(),
+                            node_index: channel.target.node.unwrap(),
+                            outputs: read_f32x3(output_accessor).map(Vec3::from).collect(),
                         });
                     }
-                    gltf::animation::Property::Rotation => {
-                        let outputs = match reader.read_outputs().unwrap() {
-                            gltf::animation::util::ReadOutputs::Rotations(rotations) => {
-                                rotations.into_f32().map(Quat::from_array).collect()
-                            }
-                            _ => unreachable!(),
-                        };
-
+                    TargetPath::Rotation => {
                         rotation_channels.push(Channel {
-                            interpolation: channel.sampler().interpolation(),
+                            interpolation: sampler.interpolation,
                             inputs,
-                            outputs,
-                            node_index: channel.target().node().index(),
+                            node_index: channel.target.node.unwrap(),
+                            outputs: {
+                                read_f32x4(output_accessor).map(Quat::from_array).collect()
+                            },
                         });
                     }
-                    gltf::animation::Property::Scale => {
-                        let outputs = match reader.read_outputs().unwrap() {
-                            gltf::animation::util::ReadOutputs::Scales(scales) => scales
+                    TargetPath::Scale => {
+                        scale_channels.push(Channel {
+                            interpolation: sampler.interpolation,
+                            inputs,
+                            node_index: channel.target.node.unwrap(),
+                            outputs: read_f32x3(output_accessor)
                                 .map(|scale| scale[0].max(scale[1]).max(scale[2]))
                                 .collect(),
-                            _ => unreachable!(),
-                        };
-
-                        scale_channels.push(Channel {
-                            interpolation: channel.sampler().interpolation(),
-                            inputs,
-                            outputs,
-                            node_index: channel.target().node().index(),
                         });
                     }
-                    property => {
-                        log::warn!("Animation type {:?} is not supported, ignoring.", property);
+                    TargetPath::Weights => {
+                        log::warn!("Weight animations are not supported, ignoring.");
                     }
                 }
             }
@@ -112,11 +102,19 @@ pub struct AnimationJoints {
 }
 
 impl AnimationJoints {
-    pub fn new(nodes: gltf::iter::Nodes, depth_first_nodes: &DepthFirstNodes) -> Self {
-        let node_transforms: Vec<_> = nodes
-            .map(|node| {
-                let (translation, rotation, scale) = node.transform().decomposed();
-                Similarity::new_from_gltf(translation, rotation, scale)
+    pub fn new(gltf: &goth_gltf::Gltf, depth_first_nodes: &DepthFirstNodes) -> Self {
+        let node_transforms: Vec<_> = gltf
+            .nodes
+            .iter()
+            .map(|node| match node.transform() {
+                goth_gltf::NodeTransform::Matrix(matrix) => {
+                    Similarity::new_from_mat4(Mat4::from_cols_array(&matrix))
+                }
+                goth_gltf::NodeTransform::Set {
+                    translation,
+                    rotation,
+                    scale,
+                } => Similarity::new_from_gltf(translation, rotation, scale),
             })
             .collect();
 

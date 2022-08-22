@@ -7,6 +7,6 @@ license = "MIT"
 [dependencies]
 bytemuck = { version = "1.9.1", features = ["derive"] }
 glam = { version = "0.20.3", features = ["bytemuck"] }
-gltf = { git = "https://github.com/expenses/gltf", rev = "a66e5fd587e5695b88d33fa35c2881617c492107", features = ["utils", "names"], default-features = false }
 log = "0.4.16"
 ordered-float = "2.10.0"
+goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "ae5a02f72f88b08b1f9d38502f0d6b1bd530e974" }
