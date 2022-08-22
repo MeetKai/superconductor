@@ -84,7 +84,7 @@ impl Plugin for SuperconductorPlugin {
             .world
             .spawn()
             .insert(components::AnimatedModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/squid6.gltf").unwrap(),
+                url::Url::parse("http://localhost:8000/assets/models/squid6.glb").unwrap(),
             ))
             .insert(components::Instances(Default::default()))
             .insert(components::InstanceRange(Default::default()))
