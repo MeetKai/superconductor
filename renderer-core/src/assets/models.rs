@@ -13,6 +13,7 @@ use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
     Similarity,
 };
+use goth_gltf::extensions::CompressionMode;
 use goth_gltf::{AlphaMode, ComponentType};
 use std::collections::HashMap;
 use std::ops::Range;
@@ -37,7 +38,7 @@ pub type PrimitiveRanges = permutations::BlendMode<permutations::FaceSides<Range
 fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) -> Range<u32>>(
     context: &Context<T>,
     gltf: Arc<goth_gltf::Gltf>,
-    buffer_map: Arc<HashMap<usize, Vec<u8>>>,
+    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
     root_url: &url::Url,
     staging_primitives: &permutations::BlendMode<
         permutations::FaceSides<HashMap<Option<usize>, StagingPrimitive<B>>>,
@@ -55,7 +56,7 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 staging_primitives.opaque.single.values(),
                 context,
                 gltf.clone(),
-                buffer_map.clone(),
+                buffer_view_map.clone(),
                 root_url,
                 &collect,
             ),
@@ -65,7 +66,7 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 staging_primitives.opaque.double.values(),
                 context,
                 gltf.clone(),
-                buffer_map.clone(),
+                buffer_view_map.clone(),
                 root_url,
                 &collect,
             ),
@@ -77,7 +78,7 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 staging_primitives.alpha_clipped.single.values(),
                 context,
                 gltf.clone(),
-                buffer_map.clone(),
+                buffer_view_map.clone(),
                 root_url,
                 &collect,
             ),
@@ -87,7 +88,7 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 staging_primitives.alpha_clipped.double.values(),
                 context,
                 gltf.clone(),
-                buffer_map.clone(),
+                buffer_view_map.clone(),
                 root_url,
                 &collect,
             ),
@@ -99,7 +100,7 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 staging_primitives.alpha_blended.single.values(),
                 context,
                 gltf.clone(),
-                buffer_map.clone(),
+                buffer_view_map.clone(),
                 root_url,
                 &collect,
             ),
@@ -109,7 +110,7 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 staging_primitives.alpha_blended.double.values(),
                 context,
                 gltf,
-                buffer_map,
+                buffer_view_map,
                 root_url,
                 &collect,
             ),
@@ -133,7 +134,7 @@ fn collect_primitives<
     staging_primitives: I,
     context: &Context<T>,
     gltf: Arc<goth_gltf::Gltf>,
-    buffer_map: Arc<HashMap<usize, Vec<u8>>>,
+    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
     root_url: &url::Url,
     collect: C,
 ) -> Range<usize> {
@@ -163,7 +164,7 @@ fn collect_primitives<
             material_bindings,
             staging_primitive.material_index,
             gltf.clone(),
-            buffer_map.clone(),
+            buffer_view_map.clone(),
             context,
             root_url,
         )
@@ -182,19 +183,31 @@ pub struct AnimatedModelData {
     pub animation_joints: AnimationJoints,
 }
 
-async fn collect_buffers<T: HttpClient>(
+async fn collect_buffer_view_map<T: HttpClient>(
     gltf: &goth_gltf::Gltf,
     glb_buffer: Option<&[u8]>,
     root_url: &url::Url,
     context: &Context<T>,
 ) -> anyhow::Result<HashMap<usize, Vec<u8>>> {
+    use std::borrow::Cow;
+
     let mut buffer_map = HashMap::new();
 
     if let Some(glb_buffer) = glb_buffer {
-        buffer_map.insert(0, glb_buffer.to_vec());
+        buffer_map.insert(0, Cow::Borrowed(glb_buffer));
     }
 
     for (index, buffer) in gltf.buffers.iter().enumerate() {
+        if buffer
+            .extensions
+            .ext_meshopt_compression
+            .as_ref()
+            .map(|ext| ext.fallback)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
         match &buffer.uri {
             None => {}
             Some(uri) => {
@@ -206,15 +219,76 @@ async fn collect_buffers<T: HttpClient>(
                         .split_once(',')
                         .ok_or_else(|| anyhow::anyhow!("Failed to get data uri split"))?;
                     log::warn!("Loading buffers from embedded base64 is inefficient. Consider moving the buffers into a seperate file.");
-                    buffer_map.insert(index, base64::decode(data)?);
+                    buffer_map.insert(index, Cow::Owned(base64::decode(data)?));
                 } else {
-                    buffer_map.insert(index, context.http_client.fetch_bytes(&url, None).await?);
+                    buffer_map.insert(
+                        index,
+                        Cow::Owned(context.http_client.fetch_bytes(&url, None).await?),
+                    );
                 }
             }
         }
     }
 
-    Ok(buffer_map)
+    let mut buffer_view_map = HashMap::new();
+
+    for (i, buffer_view) in gltf.buffer_views.iter().enumerate() {
+        if let Some(ext) = buffer_view.extensions.ext_meshopt_compression.as_ref() {
+            if let Some(buffer) = buffer_map.get(&ext.buffer) {
+                let slice = &buffer[ext.byte_offset..ext.byte_offset + ext.byte_length];
+
+                let filter = match ext.filter {
+                    goth_gltf::extensions::CompressionFilter::None => None,
+                    goth_gltf::extensions::CompressionFilter::Octahedral => {
+                        Some(meshopt_decoder::Filter::Octahedral)
+                    }
+                    goth_gltf::extensions::CompressionFilter::Quaternion => {
+                        Some(meshopt_decoder::Filter::Quaternion)
+                    }
+                    goth_gltf::extensions::CompressionFilter::Exponential => {
+                        Some(meshopt_decoder::Filter::Exponential)
+                    }
+                };
+
+                let bytes: Vec<u8> = match (ext.mode, ext.byte_stride) {
+                    (CompressionMode::Triangles, 2) => {
+                        meshopt_decoder::TriangleIterator::new(slice, ext.count)
+                            .unwrap()
+                            .flatten()
+                            .flat_map(|index| (index as u16).to_le_bytes())
+                            .collect()
+                    }
+                    (CompressionMode::Triangles, 4) => {
+                        meshopt_decoder::TriangleIterator::new(slice, ext.count)
+                            .unwrap()
+                            .flatten()
+                            .flat_map(|index| index.to_le_bytes())
+                            .collect()
+                    }
+                    (CompressionMode::Attributes, byte_stride) => {
+                        meshopt_decoder::decompress_attributes_to_vec(
+                            slice,
+                            ext.count,
+                            filter,
+                            byte_stride,
+                        )
+                        .unwrap()
+                    }
+                    x => panic!("{:?}", x),
+                };
+
+                buffer_view_map.insert(i, bytes);
+            }
+        } else if let Some(buffer) = buffer_map.get(&buffer_view.buffer) {
+            buffer_view_map.insert(
+                i,
+                buffer[buffer_view.byte_offset..buffer_view.byte_offset + buffer_view.byte_length]
+                    .to_vec(),
+            );
+        }
+    }
+
+    Ok(buffer_view_map)
 }
 
 pub struct Model {
@@ -235,7 +309,7 @@ impl Model {
 
         let node_tree = gltf_helpers::NodeTree::new(&gltf);
 
-        let buffer_map = collect_buffers(&gltf, glb_buffer, root_url, context).await?;
+        let buffer_view_map = collect_buffer_view_map(&gltf, glb_buffer, root_url, context).await?;
 
         // What we're doing here is essentially collecting all the model primitives that share a meterial together
         // to reduce the number of draw calls.
@@ -274,7 +348,7 @@ impl Model {
                     (AlphaMode::Blend, true) => &mut staging_primitives.alpha_blended.double,
                 };
 
-                let reader = PrimitiveReader::new(&gltf, primitive, &buffer_map); //primitive.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer));
+                let reader = PrimitiveReader::new(&gltf, primitive, &buffer_view_map);
 
                 let material_info = MaterialInfo::load(material, &reader);
 
@@ -296,14 +370,14 @@ impl Model {
         }
 
         let gltf = Arc::new(gltf);
-        let buffer_map = Arc::new(buffer_map);
+        let buffer_view_map = Arc::new(buffer_view_map);
 
         // Collect all the buffers for the primitives into one big staging buffer
         // and collect all the primitive ranges into one big vector.
         let (primitive_ranges, mut primitives, mut staging_buffers) = collect_all_primitives(
             context,
             gltf,
-            buffer_map,
+            buffer_view_map,
             root_url,
             &staging_primitives,
             |a, b| a.collect(b),
@@ -375,7 +449,7 @@ impl AnimatedModel {
 
         let node_tree = gltf_helpers::NodeTree::new(&gltf);
 
-        let buffer_map = collect_buffers(&gltf, glb_buffer, root_url, context).await?;
+        let buffer_view_map = collect_buffer_view_map(&gltf, glb_buffer, root_url, context).await?;
 
         let mut staging_primitives: permutations::BlendMode<
             permutations::FaceSides<HashMap<_, _>>,
@@ -411,7 +485,7 @@ impl AnimatedModel {
                     (AlphaMode::Blend, true) => &mut staging_primitives.alpha_blended.double,
                 };
 
-                let reader = PrimitiveReader::new(&gltf, primitive, &buffer_map); //primitive.reader(|buffer| get_buffer(&gltf, &buffer_map, buffer));
+                let reader = PrimitiveReader::new(&gltf, primitive, &buffer_view_map);
 
                 let material_info = MaterialInfo::load(material, &reader);
 
@@ -463,14 +537,14 @@ impl AnimatedModel {
         }
 
         let gltf = Arc::new(gltf);
-        let buffer_map = Arc::new(buffer_map);
+        let buffer_view_map = Arc::new(buffer_view_map);
 
         // Collect all the buffers for the primitives into one big staging buffer
         // and collect all the primitive ranges into one big vector.
         let (primitive_ranges, mut primitives, mut staging_buffers) = collect_all_primitives(
             context,
             gltf.clone(),
-            buffer_map.clone(),
+            buffer_view_map.clone(),
             root_url,
             &staging_primitives,
             |a, b| a.collect(b),
@@ -519,19 +593,19 @@ impl AnimatedModel {
         let animations = read_animations(
             &gltf,
             |accessor| {
-                let source_buffer =
-                    read_buffer_with_accessor(&buffer_map, &gltf, accessor).unwrap();
-                read_f32(source_buffer, accessor).unwrap()
+                let (slice, byte_stride) =
+                    read_buffer_with_accessor(&buffer_view_map, &gltf, accessor).unwrap();
+                read_f32(slice, byte_stride, accessor).unwrap()
             },
             |accessor| {
-                let source_buffer =
-                    read_buffer_with_accessor(&buffer_map, &gltf, accessor).unwrap();
-                read_f32x3(source_buffer, accessor).unwrap()
+                let (slice, byte_stride) =
+                    read_buffer_with_accessor(&buffer_view_map, &gltf, accessor).unwrap();
+                read_f32x3(slice, byte_stride, accessor).unwrap()
             },
             |accessor| {
-                let source_buffer =
-                    read_buffer_with_accessor(&buffer_map, &gltf, accessor).unwrap();
-                read_f32x4(source_buffer, accessor).unwrap()
+                let (slice, byte_stride) =
+                    read_buffer_with_accessor(&buffer_view_map, &gltf, accessor).unwrap();
+                read_f32x4(slice, byte_stride, accessor).unwrap()
             },
         );
 
@@ -553,12 +627,8 @@ impl AnimatedModel {
                     .ok_or_else(|| anyhow::anyhow!("Missing inverse bind matrices accessor"))?;
                 let accessor = &gltf.accessors[accessor_index];
 
-                let source_buffer = read_buffer_with_accessor(&buffer_map, &gltf, accessor)?;
-
-                let slice = match source_buffer {
-                    SourceBuffer::Normal { slice, .. } => slice,
-                    _ => panic!(),
-                };
+                let (slice, _byte_stride) =
+                    read_buffer_with_accessor(&buffer_view_map, &gltf, accessor)?;
 
                 let matrices: &[[f32; 16]] = bytemuck::cast_slice(slice);
 
@@ -710,7 +780,7 @@ fn spawn_texture_loading_futures<T: HttpClient>(
     material_bindings: MaterialBindings,
     material_index: usize,
     gltf: Arc<goth_gltf::Gltf>,
-    buffer_map: Arc<HashMap<usize, Vec<u8>>>,
+    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
     context: &Context<T>,
     root_url: &url::Url,
 ) {
@@ -732,7 +802,7 @@ fn spawn_texture_loading_futures<T: HttpClient>(
     // `load_image_from_source_with_followup` as small as possible.
     let image_context = ImageContext {
         gltf,
-        buffer_map,
+        buffer_view_map,
         root_url: root_url.clone(),
         textures_context: textures::Context {
             bind_group_layouts: context.bind_group_layouts.clone(),
@@ -831,7 +901,7 @@ fn spawn_texture_loading_futures<T: HttpClient>(
 #[derive(Clone)]
 struct ImageContext<T> {
     gltf: Arc<goth_gltf::Gltf>,
-    buffer_map: Arc<HashMap<usize, Vec<u8>>>,
+    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
     root_url: url::Url,
     textures_context: textures::Context<T>,
     bind_group_setter: Setter<Arc<wgpu::BindGroup>>,
@@ -900,12 +970,9 @@ async fn load_image_from_gltf<T: HttpClient>(
             .await
         }
     } else if let Some(buffer_view_index) = image.buffer_view {
-        let buffer_view = &context.gltf.buffer_views[buffer_view_index];
-        let bytes = context.buffer_map.get(&buffer_view.buffer).unwrap();
-        let bytes =
-            &bytes[buffer_view.byte_offset..buffer_view.byte_offset + buffer_view.byte_length];
+        let buffer_view_bytes = context.buffer_view_map.get(&buffer_view_index).unwrap();
         load_image_with_mime_type(
-            ImageSource::Bytes(bytes),
+            ImageSource::Bytes(buffer_view_bytes),
             srgb,
             image.mime_type.as_ref().map(|string| &string[..]),
             &context.textures_context,
@@ -981,23 +1048,23 @@ fn signed_short_to_float(short: i16) -> f32 {
     (short as f32 / 32767.0).max(-1.0)
 }
 
-enum SourceBuffer<'a> {
-    Normal {
-        slice: &'a [u8],
-        byte_stride: Option<usize>,
-    },
-    Compressed {
-        slice: &'a [u8],
-        element_count: usize,
-        accessor_range: Range<usize>,
-    },
+fn byte_stride(accessor: &goth_gltf::Accessor, buffer_view: &goth_gltf::BufferView) -> usize {
+    buffer_view
+        .extensions
+        .ext_meshopt_compression
+        .as_ref()
+        .map(|ext| ext.byte_stride)
+        .or(buffer_view.byte_stride)
+        .unwrap_or_else(|| {
+            accessor.component_type.byte_size() * accessor.accessor_type.num_components()
+        })
 }
 
 fn read_buffer_with_accessor<'a>(
-    buffer_map: &'a HashMap<usize, Vec<u8>>,
+    buffer_view_map: &'a HashMap<usize, Vec<u8>>,
     gltf: &'a goth_gltf::Gltf,
     accessor: &goth_gltf::Accessor,
-) -> anyhow::Result<SourceBuffer<'a>> {
+) -> anyhow::Result<(&'a [u8], Option<usize>)> {
     let buffer_view_index = accessor
         .buffer_view
         .ok_or_else(|| anyhow::anyhow!("Accessor is missing buffer view"))?;
@@ -1005,265 +1072,215 @@ fn read_buffer_with_accessor<'a>(
         anyhow::anyhow!("Buffer view index {} is out of range", buffer_view_index)
     })?;
 
-    let buffer = buffer_map
-        .get(&buffer_view.buffer)
-        .ok_or_else(|| anyhow::anyhow!("Buffer index {} is out of range", buffer_view.buffer))?;
+    let start = accessor.byte_offset;
+    let end = start + accessor.count * byte_stride(accessor, buffer_view);
 
-    let start = buffer_view.byte_offset + accessor.byte_offset;
+    let buffer_view_bytes = buffer_view_map.get(&buffer_view_index).ok_or_else(|| {
+        anyhow::anyhow!("Buffer view index {} is out of range", buffer_view_index)
+    })?;
 
-    let end = start + accessor.byte_length(buffer_view);
+    let slice = &buffer_view_bytes[start..end];
 
-    let slice = &buffer[start..end];
+    Ok((slice, buffer_view.byte_stride))
+}
 
+fn read_f32<'a>(
+    slice: &'a [u8],
+    byte_stride: Option<usize>,
+    accessor: &goth_gltf::Accessor,
+) -> anyhow::Result<impl Iterator<Item = f32> + 'a> {
     Ok(
-        if let Some(compression_ext) = &buffer_view.extensions.ext_meshopt_compression {
-            if compression_ext.mode == goth_gltf::extensions::CompressionMode::Triangles {
-                let compressed_buffer =
-                    buffer_map.get(&compression_ext.buffer).ok_or_else(|| {
-                        anyhow::anyhow!("Buffer index {} is out of range", buffer_view.buffer)
-                    })?;
-
-                let accessor_start = accessor.byte_offset / compression_ext.byte_stride;
-
-                SourceBuffer::Compressed {
-                    slice: &compressed_buffer[compression_ext.byte_offset
-                        ..compression_ext.byte_offset + compression_ext.byte_length],
-                    accessor_range: accessor_start..accessor_start + accessor.count,
-                    element_count: compression_ext.count,
-                }
-            } else {
-                SourceBuffer::Normal {
-                    slice,
-                    byte_stride: buffer_view.byte_stride,
-                }
+        match (accessor.component_type, accessor.normalized, byte_stride) {
+            (ComponentType::Float, false, None) => {
+                let slice: &[f32] = bytemuck::cast_slice(slice);
+                slice.iter().copied()
             }
-        } else {
-            SourceBuffer::Normal {
-                slice,
-                byte_stride: buffer_view.byte_stride,
+            other => {
+                return Err(anyhow::anyhow!(
+                "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
+                std::line!(),
+                other
+            ))
             }
         },
     )
 }
 
-fn read_f32<'a>(
-    source_buffer: SourceBuffer<'a>,
-    accessor: &goth_gltf::Accessor,
-) -> anyhow::Result<impl Iterator<Item = f32> + 'a> {
-    Ok(match source_buffer {
-        SourceBuffer::Normal { slice, byte_stride } => {
-            match (accessor.component_type, accessor.normalized, byte_stride) {
-                (ComponentType::Float, false, None) => {
-                    let slice: &[f32] = bytemuck::cast_slice(slice);
-                    slice.into_iter().copied()
-                }
-                other => {
-                    return Err(anyhow::anyhow!(
-                "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
-                std::line!(),
-                other
-            ))
-                }
-            }
-        }
-        _ => todo!(),
-    })
-}
-
 fn read_f32x3<'a>(
-    source_buffer: SourceBuffer<'a>,
+    slice: &'a [u8],
+    byte_stride: Option<usize>,
     accessor: &goth_gltf::Accessor,
 ) -> anyhow::Result<impl Iterator<Item = [f32; 3]> + 'a> {
-    Ok(match source_buffer {
-        SourceBuffer::Normal { slice, byte_stride } => {
-            match (accessor.component_type, accessor.normalized, byte_stride) {
-                (ComponentType::Float, false, None | Some(12)) => {
-                    let slice: &[f32] = bytemuck::cast_slice(slice);
-                    Either::Left(Either::Left(
-                        slice.chunks(3).map(|slice| slice.try_into().unwrap()),
-                    ))
-                }
-                (ComponentType::UnsignedShort, false, Some(8)) => {
-                    let slice: &[u16] = bytemuck::cast_slice(slice);
-                    Either::Left(Either::Right(
-                        slice
-                            .chunks(4)
-                            .map(move |slice| std::array::from_fn(|i| slice[i] as f32)),
-                    ))
-                }
-                (ComponentType::UnsignedShort, true, Some(8)) => {
-                    let slice: &[u16] = bytemuck::cast_slice(slice);
-                    Either::Right(Either::Left(slice.chunks(4).map(|slice| {
-                        std::array::from_fn(|i| unsigned_short_to_float(slice[i]))
-                    })))
-                }
-                (ComponentType::Byte, true, Some(4)) => {
-                    let slice: &[i8] = bytemuck::cast_slice(slice);
-                    Either::Right(Either::Right(slice.chunks(4).map(move |slice| {
-                        std::array::from_fn(|i| signed_byte_to_float(slice[i]))
-                    })))
-                }
-                other => {
-                    return Err(anyhow::anyhow!(
+    Ok(
+        match (accessor.component_type, accessor.normalized, byte_stride) {
+            (ComponentType::Float, false, None | Some(12)) => {
+                let slice: &[f32] = bytemuck::cast_slice(slice);
+                Either::Left(Either::Left(
+                    slice.chunks(3).map(|slice| slice.try_into().unwrap()),
+                ))
+            }
+            (ComponentType::UnsignedShort, false, Some(8)) => {
+                let slice: &[u16] = bytemuck::cast_slice(slice);
+                Either::Left(Either::Right(
+                    slice
+                        .chunks(4)
+                        .map(move |slice| std::array::from_fn(|i| slice[i] as f32)),
+                ))
+            }
+            (ComponentType::UnsignedShort, true, Some(8)) => {
+                let slice: &[u16] = bytemuck::cast_slice(slice);
+                Either::Right(Either::Left(slice.chunks(4).map(|slice| {
+                    std::array::from_fn(|i| unsigned_short_to_float(slice[i]))
+                })))
+            }
+            (ComponentType::Byte, true, Some(4)) => {
+                Either::Right(Either::Right(slice.chunks(4).map(move |slice| {
+                    std::array::from_fn(|i| signed_byte_to_float(slice[i] as i8))
+                })))
+            }
+            other => {
+                return Err(anyhow::anyhow!(
                 "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
                 std::line!(),
                 other
             ))
-                }
             }
-        }
-        _ => todo!(),
-    })
+        },
+    )
 }
 
 fn read_f32x2<'a>(
-    source_buffer: SourceBuffer<'a>,
+    slice: &'a [u8],
+    byte_stride: Option<usize>,
     accessor: &goth_gltf::Accessor,
 ) -> anyhow::Result<impl Iterator<Item = [f32; 2]> + 'a> {
-    Ok(match source_buffer {
-        SourceBuffer::Normal { slice, byte_stride } => {
-            match (accessor.component_type, accessor.normalized, byte_stride) {
-                (ComponentType::Float, false, None | Some(8)) => {
-                    let slice: &[[f32; 2]] = bytemuck::cast_slice(slice);
-                    Either::Left(slice.into_iter().copied())
-                }
-                (ComponentType::UnsignedShort, true, Some(4)) => {
-                    let slice: &[u16] = bytemuck::cast_slice(slice);
-                    Either::Right(slice.chunks(2).map(move |slice| {
+    Ok(
+        match (accessor.component_type, accessor.normalized, byte_stride) {
+            (ComponentType::Float, false, None | Some(8)) => {
+                let slice: &[[f32; 2]] = bytemuck::cast_slice(slice);
+                Either::Left(slice.iter().copied())
+            }
+            (ComponentType::UnsignedShort, true, Some(4)) => {
+                let slice: &[u16] = bytemuck::cast_slice(slice);
+                Either::Right(
+                    slice.chunks(2).map(move |slice| {
                         std::array::from_fn(|i| unsigned_short_to_float(slice[i]))
-                    }))
-                }
-                other => {
-                    return Err(anyhow::anyhow!(
+                    }),
+                )
+            }
+            other => {
+                return Err(anyhow::anyhow!(
                 "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
                 std::line!(),
                 other
             ))
-                }
             }
-        }
-        _ => todo!(),
-    })
+        },
+    )
 }
 
 fn read_f32x4<'a>(
-    source_buffer: SourceBuffer<'a>,
+    slice: &'a [u8],
+    byte_stride: Option<usize>,
     accessor: &goth_gltf::Accessor,
 ) -> anyhow::Result<impl Iterator<Item = [f32; 4]> + 'a> {
-    Ok(match source_buffer {
-        SourceBuffer::Normal { slice, byte_stride } => {
-            match (accessor.component_type, accessor.normalized, byte_stride) {
-                (ComponentType::Float, false, None) => {
-                    let slice: &[f32] = bytemuck::cast_slice(slice);
-                    Either::Left(Either::Left(
-                        slice
-                            .chunks(4)
-                            .map(|slice| std::array::from_fn(|i| slice[i])),
-                    ))
-                }
-                (ComponentType::UnsignedByte, true, Some(4)) => {
-                    Either::Left(Either::Right(slice.chunks(4).map(move |slice| {
-                        std::array::from_fn(|i| unsigned_byte_to_float(slice[i]))
-                    })))
-                }
-                (ComponentType::Short, true, None) => {
-                    let slice: &[[i16; 4]] = bytemuck::cast_slice(slice);
-                    Either::Right(
-                        slice
-                            .into_iter()
-                            .map(|slice| std::array::from_fn(|i| signed_short_to_float(slice[i]))),
-                    )
-                }
-                other => {
-                    return Err(anyhow::anyhow!(
+    Ok(
+        match (accessor.component_type, accessor.normalized, byte_stride) {
+            (ComponentType::Float, false, None) => {
+                let slice: &[f32] = bytemuck::cast_slice(slice);
+                Either::Left(Either::Left(
+                    slice
+                        .chunks(4)
+                        .map(|slice| std::array::from_fn(|i| slice[i])),
+                ))
+            }
+            (ComponentType::UnsignedByte, true, Some(4)) => {
+                Either::Left(Either::Right(slice.chunks(4).map(move |slice| {
+                    std::array::from_fn(|i| unsigned_byte_to_float(slice[i]))
+                })))
+            }
+            (ComponentType::Short, true, None) => {
+                let slice: &[[i16; 4]] = bytemuck::cast_slice(slice);
+                Either::Right(
+                    slice
+                        .iter()
+                        .map(|slice| std::array::from_fn(|i| signed_short_to_float(slice[i]))),
+                )
+            }
+            other => {
+                return Err(anyhow::anyhow!(
                 "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
                 std::line!(),
                 other
             ))
-                }
             }
-        }
-        _ => todo!(),
-    })
+        },
+    )
 }
 
 fn read_u32<'a>(
-    source_buffer: SourceBuffer<'a>,
+    slice: &'a [u8],
+    byte_stride: Option<usize>,
     accessor: &goth_gltf::Accessor,
 ) -> anyhow::Result<impl Iterator<Item = u32> + 'a> {
-    Ok(match source_buffer {
-        SourceBuffer::Normal { slice, byte_stride } => {
-            match (accessor.component_type, accessor.normalized, byte_stride) {
-                (ComponentType::UnsignedShort, false, None) => {
-                    let slice: &[u16] = bytemuck::cast_slice(slice);
-                    Either::Left(Either::Left(slice.into_iter().map(|&i| i as u32)))
-                }
-                (ComponentType::UnsignedInt, false, None) => {
-                    let slice: &[u32] = bytemuck::cast_slice(slice);
-                    Either::Left(Either::Right(slice.into_iter().copied()))
-                }
-                other => {
-                    return Err(anyhow::anyhow!(
-                    "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
-                    std::line!(),
-                    other
-                ))
-                }
+    Ok(
+        match (accessor.component_type, accessor.normalized, byte_stride) {
+            (ComponentType::UnsignedShort, false, None) => {
+                let slice: &[u16] = bytemuck::cast_slice(slice);
+                Either::Left(slice.iter().map(|&i| i as u32))
             }
-        }
-        SourceBuffer::Compressed {
-            slice,
-            accessor_range,
-            element_count,
-        } => Either::Right({
-            meshopt_decoder::TriangleIterator::new(slice, element_count)
-                .unwrap()
-                .flatten()
-                .skip(accessor_range.start)
-                .take(accessor_range.len())
-        }),
-    })
-}
-
-fn read_u32x4<'a>(
-    source_buffer: SourceBuffer<'a>,
-    accessor: &goth_gltf::Accessor,
-) -> anyhow::Result<impl Iterator<Item = [u32; 4]> + 'a> {
-    Ok(match source_buffer {
-        SourceBuffer::Normal { slice, byte_stride } => {
-            match (accessor.component_type, accessor.normalized, byte_stride) {
-                (ComponentType::UnsignedByte, false, Some(4) | None) => slice
-                    .chunks(4)
-                    .map(|slice| std::array::from_fn(|i| slice[i] as u32)),
-                other => {
-                    return Err(anyhow::anyhow!(
+            (ComponentType::UnsignedInt, false, None) => {
+                let slice: &[u32] = bytemuck::cast_slice(slice);
+                Either::Right(slice.iter().copied())
+            }
+            other => {
+                return Err(anyhow::anyhow!(
                 "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
                 std::line!(),
                 other
             ))
-                }
             }
-        }
-        _ => todo!(),
-    })
+        },
+    )
+}
+
+fn read_u32x4<'a>(
+    slice: &'a [u8],
+    byte_stride: Option<usize>,
+    accessor: &goth_gltf::Accessor,
+) -> anyhow::Result<impl Iterator<Item = [u32; 4]> + 'a> {
+    Ok(
+        match (accessor.component_type, accessor.normalized, byte_stride) {
+            (ComponentType::UnsignedByte, false, Some(4) | None) => slice
+                .chunks(4)
+                .map(|slice| std::array::from_fn(|i| slice[i] as u32)),
+            other => {
+                return Err(anyhow::anyhow!(
+                "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
+                std::line!(),
+                other
+            ))
+            }
+        },
+    )
 }
 
 struct PrimitiveReader<'a> {
     gltf: &'a goth_gltf::Gltf,
     primitive: &'a goth_gltf::Primitive,
-    buffer_map: &'a HashMap<usize, Vec<u8>>,
+    buffer_view_map: &'a HashMap<usize, Vec<u8>>,
 }
 
 impl<'a> PrimitiveReader<'a> {
     fn new(
         gltf: &'a goth_gltf::Gltf,
         primitive: &'a goth_gltf::Primitive,
-        buffer_map: &'a HashMap<usize, Vec<u8>>,
+        buffer_view_map: &'a HashMap<usize, Vec<u8>>,
     ) -> Self {
         Self {
             gltf,
             primitive,
-            buffer_map,
+            buffer_view_map,
         }
     }
 
@@ -1277,9 +1294,10 @@ impl<'a> PrimitiveReader<'a> {
             self.gltf.accessors.get(accessor_index).ok_or_else(|| {
                 anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
             })?;
-        let source_buffer = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+        let (slice, byte_stride) =
+            read_buffer_with_accessor(self.buffer_view_map, self.gltf, accessor)?;
 
-        Ok(Some(read_u32(source_buffer, accessor)?))
+        Ok(Some(read_u32(slice, byte_stride, accessor)?))
     }
 
     fn read_positions(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 3]> + '_>> {
@@ -1292,9 +1310,10 @@ impl<'a> PrimitiveReader<'a> {
             self.gltf.accessors.get(accessor_index).ok_or_else(|| {
                 anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
             })?;
-        let source_buffer = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+        let (slice, byte_stride) =
+            read_buffer_with_accessor(self.buffer_view_map, self.gltf, accessor)?;
 
-        Ok(Some(read_f32x3(source_buffer, accessor)?))
+        Ok(Some(read_f32x3(slice, byte_stride, accessor)?))
     }
 
     fn read_normals(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 3]> + '_>> {
@@ -1307,9 +1326,10 @@ impl<'a> PrimitiveReader<'a> {
             self.gltf.accessors.get(accessor_index).ok_or_else(|| {
                 anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
             })?;
-        let source_buffer = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+        let (slice, byte_stride) =
+            read_buffer_with_accessor(self.buffer_view_map, self.gltf, accessor)?;
 
-        Ok(Some(read_f32x3(source_buffer, accessor)?))
+        Ok(Some(read_f32x3(slice, byte_stride, accessor)?))
     }
 
     fn read_uvs(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 2]> + '_>> {
@@ -1322,9 +1342,10 @@ impl<'a> PrimitiveReader<'a> {
             self.gltf.accessors.get(accessor_index).ok_or_else(|| {
                 anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
             })?;
-        let source_buffer = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+        let (slice, byte_stride) =
+            read_buffer_with_accessor(self.buffer_view_map, self.gltf, accessor)?;
 
-        Ok(Some(read_f32x2(source_buffer, accessor)?))
+        Ok(Some(read_f32x2(slice, byte_stride, accessor)?))
     }
 
     fn read_joints(&self) -> anyhow::Result<Option<impl Iterator<Item = [u32; 4]> + '_>> {
@@ -1338,9 +1359,10 @@ impl<'a> PrimitiveReader<'a> {
                 anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
             })?;
 
-        let source_buffer = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+        let (slice, byte_stride) =
+            read_buffer_with_accessor(self.buffer_view_map, self.gltf, accessor)?;
 
-        Ok(Some(read_u32x4(source_buffer, accessor)?))
+        Ok(Some(read_u32x4(slice, byte_stride, accessor)?))
     }
 
     fn read_weights(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 4]> + '_>> {
@@ -1353,8 +1375,9 @@ impl<'a> PrimitiveReader<'a> {
             self.gltf.accessors.get(accessor_index).ok_or_else(|| {
                 anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
             })?;
-        let source_buffer = read_buffer_with_accessor(self.buffer_map, self.gltf, accessor)?;
+        let (slice, byte_stride) =
+            read_buffer_with_accessor(self.buffer_view_map, self.gltf, accessor)?;
 
-        Ok(Some(read_f32x4(source_buffer, accessor)?))
+        Ok(Some(read_f32x4(slice, byte_stride, accessor)?))
     }
 }

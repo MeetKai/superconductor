@@ -383,11 +383,9 @@ pub(super) async fn load_image_with_mime_type<T: HttpClient>(
     match (mime_type, source.extension()) {
         (Some("image/ktx2"), _) | (_, Some("ktx2")) => match source {
             ImageSource::Url(url) => load_ktx2_async(context, &url, srgb, |_| {}).await,
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Loading ktx2 images from embedded bytes is currently unsupported"
-                ))
-            }
+            _ => Err(anyhow::anyhow!(
+                "Loading ktx2 images from embedded bytes is currently unsupported"
+            )),
         },
         _ => {
             let (image, _size) = load_image_crate_image(

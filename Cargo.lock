@@ -1671,6 +1671,7 @@ dependencies = [
 [[package]]
 name = "meshopt-decoder"
 version = "0.1.0"
+source = "git+https://github.com/expenses/meshopt-decoder?rev=159a450f20348f624cbc81a6182b62fc56879750#159a450f20348f624cbc81a6182b62fc56879750"
 dependencies = [
  "leb128",
 ]
