@@ -2633,7 +2633,6 @@ dependencies = [
  "bevy_ecs",
  "futures",
  "js-sys",
- "leb128",
  "log",
  "renderer-core",
  "surf",
