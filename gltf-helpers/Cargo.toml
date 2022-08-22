@@ -9,4 +9,4 @@ bytemuck = { version = "1.9.1", features = ["derive"] }
 glam = { version = "0.20.3", features = ["bytemuck"] }
 log = "0.4.16"
 ordered-float = "2.10.0"
-goth-gltf = { path = "../../../goth-gltf"}
+goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "ae5a02f72f88b08b1f9d38502f0d6b1bd530e974" }

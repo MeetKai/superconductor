@@ -31,7 +31,7 @@ arc-swap = "1.5.0"
 basis-universal = { git = "https://github.com/expenses/basis-universal-rs", rev = "d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610" }
 async-std = "1.12.0"
 futures = "0.3.21"
-goth-gltf = { path = "../../../goth-gltf"}
+goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "ae5a02f72f88b08b1f9d38502f0d6b1bd530e974" }
 either = "1.7.0"
 meshopt-decoder = { git = "https://github.com/expenses/meshopt-decoder", rev = "159a450f20348f624cbc81a6182b62fc56879750" }
 
