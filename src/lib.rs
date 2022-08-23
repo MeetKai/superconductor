@@ -23,7 +23,6 @@ pub use winit;
 pub use renderer_core::{
     assets::{textures, HttpClient},
     glam::Vec3,
-    utils::Swappable,
 };
 
 use components::Instance;

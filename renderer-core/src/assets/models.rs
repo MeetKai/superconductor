@@ -2,11 +2,8 @@ use super::materials::MaterialBindings;
 use super::textures::{self, load_image_with_mime_type, ImageSource};
 use super::HttpClient;
 use crate::permutations;
-use crate::{
-    spawn,
-    utils::{Setter, Swappable},
-    BindGroupLayouts, Texture,
-};
+use crate::{spawn, BindGroupLayouts, Texture};
+use arc_swap::ArcSwap;
 use glam::{Mat2, Mat4, UVec4, Vec2, Vec3, Vec4};
 use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
@@ -151,19 +148,17 @@ fn collect_primitives<
             &staging_primitive.material_settings,
         );
 
-        let bind_group = Swappable::new(Arc::new(
+        let bind_group = Arc::new(ArcSwap::from_pointee(
             material_bindings.create_initial_bind_group(&context.device, &context.texture_settings),
         ));
 
-        let bind_group_setter = bind_group.setter.clone();
-
         primitives.push(Primitive {
             index_buffer_range: collect(staging_buffers, &staging_primitive.buffers),
-            bind_group,
+            bind_group: bind_group.clone(),
         });
 
         spawn_texture_loading_futures(
-            bind_group_setter,
+            bind_group,
             material_bindings,
             staging_primitive.material_index,
             gltf.clone(),
@@ -677,7 +672,7 @@ struct StagingPrimitive<T> {
 
 pub struct Primitive {
     pub index_buffer_range: Range<u32>,
-    pub bind_group: Swappable<Arc<wgpu::BindGroup>>,
+    pub bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
 }
 
 #[derive(Default)]
@@ -779,7 +774,7 @@ impl AnimatedStagingBuffers {
 }
 
 fn spawn_texture_loading_futures<T: HttpClient>(
-    bind_group_setter: Setter<Arc<wgpu::BindGroup>>,
+    bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
     material_bindings: MaterialBindings,
     material_index: usize,
     gltf: Arc<goth_gltf::Gltf>,
@@ -815,7 +810,7 @@ fn spawn_texture_loading_futures<T: HttpClient>(
             pipelines: context.pipelines.clone(),
             settings: context.texture_settings.clone(),
         },
-        bind_group_setter,
+        bind_group,
         material_bindings: Arc::new(material_bindings),
     };
 
@@ -888,7 +883,7 @@ fn spawn_texture_loading_futures<T: HttpClient>(
                 emission: emission_texture?,
             };
 
-            image_context.bind_group_setter.set(Arc::new(
+            image_context.bind_group.store(Arc::new(
                 image_context.material_bindings.create_bind_group(
                     &image_context.textures_context.device,
                     &image_context.textures_context.settings,
@@ -907,7 +902,7 @@ struct ImageContext<T> {
     buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
     root_url: url::Url,
     textures_context: textures::Context<T>,
-    bind_group_setter: Setter<Arc<wgpu::BindGroup>>,
+    bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
     material_bindings: Arc<MaterialBindings>,
 }
 
@@ -927,7 +922,13 @@ async fn load_image_from_gltf<T: HttpClient>(
         }
     };
 
-    let source = match texture.source {
+    let source = match texture
+        .extensions
+        .khr_texture_basisu
+        .as_ref()
+        .map(|ext| ext.source)
+        .or(texture.source)
+    {
         Some(source) => source,
         None => return Err(anyhow::anyhow!("Texture {} has no source", texture_index)),
     };

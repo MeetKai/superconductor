@@ -10,14 +10,12 @@ use crate::resources::{
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
-    arc_swap::ArcSwap,
+    arc_swap::{ArcSwap, ArcSwapOption},
     assets::{textures, HttpClient},
     bytemuck, create_main_bind_group,
     crevice::std140::AsStd140,
     ibl::IblResources,
-    shared_structs, spawn,
-    utils::{Setter, Swappable},
-    GpuInstance, Texture,
+    shared_structs, spawn, GpuInstance, Texture,
 };
 use std::sync::Arc;
 
@@ -353,18 +351,16 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
         }],
     });
 
-    let main_bind_group = Swappable::new(create_main_bind_group(
+    let main_bind_group = Arc::new(ArcSwap::from_pointee(create_main_bind_group(
         device,
         &ibl_resources,
         &uniform_buffer,
         &clamp_sampler,
         bind_group_layouts,
-    ));
-
-    let main_bind_group_setter = main_bind_group.setter.clone();
+    )));
 
     commands.insert_resource(UniformBuffer(uniform_buffer.clone()));
-    commands.insert_resource(MainBindGroup(main_bind_group));
+    commands.insert_resource(MainBindGroup(main_bind_group.clone()));
     commands.insert_resource(ClampSampler(clamp_sampler.clone()));
     commands.insert_resource(ibl_resources.clone());
 
@@ -402,13 +398,13 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
             Ok((lut_texture, _size)) => {
                 ibl_resources.lut.store(lut_texture);
 
-                main_bind_group_setter.set(create_main_bind_group(
+                main_bind_group.store(Arc::new(create_main_bind_group(
                     &textures_context.device,
                     &ibl_resources,
                     &uniform_buffer,
                     &clamp_sampler,
                     &textures_context.bind_group_layouts,
-                ));
+                )));
 
                 Ok(())
             }
@@ -467,7 +463,7 @@ pub(crate) fn update_ibl_resources<T: HttpClient>(
         None => return,
     };
 
-    let main_bind_group_setter = main_bind_group.0.setter.clone();
+    let main_bind_group = main_bind_group.0.clone();
 
     let device = &device.0;
     let queue = &queue.0;
@@ -503,13 +499,13 @@ pub(crate) fn update_ibl_resources<T: HttpClient>(
                     &ibl_data.padded_sphere_harmonics_bytes,
                 );
 
-                main_bind_group_setter.set(create_main_bind_group(
+                main_bind_group.store(Arc::new(create_main_bind_group(
                     &textures_context.device,
                     &ibl_resources,
                     &uniform_buffer,
                     &clamp_sampler,
                     &textures_context.bind_group_layouts,
-                ));
+                )));
 
                 Ok(())
             }
@@ -711,7 +707,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
         let index_buffer = index_buffer.0.clone();
         let texture_settings = texture_settings.clone();
 
-        let model_setter = Setter(Default::default());
+        let model_setter = Arc::new(ArcSwapOption::empty());
 
         commands
             .entity(entity)
@@ -740,7 +736,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
 
                 match result {
                     Ok(model) => {
-                        model_setter.set(model);
+                        model_setter.store(Some(Arc::new(model)));
 
                         Ok(())
                     }
@@ -761,7 +757,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
         let index_buffer = index_buffer.0.clone();
         let texture_settings = texture_settings.clone();
 
-        let model_setter = Setter(Default::default());
+        let model_setter = Arc::new(ArcSwapOption::empty());
 
         commands
             .entity(entity)
@@ -791,7 +787,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
 
                 match result {
                     Ok(model) => {
-                        model_setter.set(model);
+                        model_setter.store(Some(Arc::new(model)));
                         Ok(())
                     }
                     Err(error) => Err(anyhow::anyhow!(
@@ -813,21 +809,17 @@ pub(crate) fn finish_loading_models(
     mut commands: Commands,
 ) {
     static_models.for_each(|(entity, pending_model)| {
-        if let Some(mut lock) = pending_model.0 .0.try_lock() {
-            if let Some(loaded_model) = lock.take() {
-                commands.entity(entity).insert(Model(loaded_model));
-            }
+        if let Some(loaded_model) = pending_model.0.swap(None) {
+            commands.entity(entity).insert(Model(loaded_model));
         }
     });
 
     animated_models.for_each(|(entity, pending_model)| {
-        if let Some(mut lock) = pending_model.0 .0.try_lock() {
-            if let Some(loaded_model) = lock.take() {
-                commands
-                    .entity(entity)
-                    .insert(AnimatedModel(loaded_model))
-                    .insert(JointBuffer::new(&device.0, &bind_group_layouts.0));
-            }
+        if let Some(loaded_model) = pending_model.0.swap(None) {
+            commands
+                .entity(entity)
+                .insert(AnimatedModel(loaded_model))
+                .insert(JointBuffer::new(&device.0, &bind_group_layouts.0));
         }
     })
 }

@@ -40,7 +40,7 @@ pub(crate) fn render_desktop(
     device: Res<Device>,
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
-    mut main_bind_group: ResMut<MainBindGroup>,
+    main_bind_group: Res<MainBindGroup>,
     skybox_uniform_bind_group: Res<SkyboxUniformBindGroup>,
     surface_frame_view: Res<SurfaceFrameView>,
     mut intermediate_depth_framebuffer: ResMut<resources::IntermediateDepthFramebuffer>,
@@ -51,15 +51,15 @@ pub(crate) fn render_desktop(
         Res<InstanceBuffer>,
         Res<LineBuffer>,
     ),
-    mut static_models: Query<(&mut Model, &InstanceRange)>,
-    mut animated_models: Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
+    static_models: Query<(&Model, &InstanceRange)>,
+    animated_models: Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>,
     mut static_model_bind_groups: Local<ModelBindGroups>,
     mut animated_model_bind_groups: Local<ModelBindGroups>,
 ) {
     let device = &device.0;
     let queue = &queue.0;
     let pipelines = &pipelines.0;
-    let main_bind_group = main_bind_group.0.get();
+    let main_bind_group = main_bind_group.0.load();
 
     let vertex_buffers = vertex_buffers.0.buffers.load();
     let animated_vertex_buffers = animated_vertex_buffers.0.buffers.load();
@@ -82,8 +82,8 @@ pub(crate) fn render_desktop(
         },
     );
 
-    static_model_bind_groups.collect(&mut static_models);
-    animated_model_bind_groups.collect_animated(&mut animated_models);
+    static_model_bind_groups.collect(&static_models);
+    animated_model_bind_groups.collect_animated(&animated_models);
 
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("command encoder"),
@@ -118,7 +118,7 @@ pub(crate) fn render_desktop(
         &animated_vertex_buffers,
         &index_buffer,
         &instance_buffer.0.buffer,
-        main_bind_group,
+        &main_bind_group,
         &skybox_uniform_bind_group.0,
         pipelines,
         &static_models,
@@ -141,7 +141,7 @@ pub(crate) fn render(
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
     bind_group_layouts: Res<resources::BindGroupLayouts>,
-    mut main_bind_group: ResMut<MainBindGroup>,
+    main_bind_group: Res<MainBindGroup>,
     skybox_uniform_bind_group: Res<SkyboxUniformBindGroup>,
     mut intermediate_color_framebuffer: ResMut<resources::IntermediateColorFramebuffer>,
     mut intermediate_depth_framebuffer: ResMut<resources::IntermediateDepthFramebuffer>,
@@ -155,8 +155,8 @@ pub(crate) fn render(
         Res<InstanceBuffer>,
         Res<LineBuffer>,
     ),
-    mut static_models: Query<(&mut Model, &InstanceRange)>,
-    mut animated_models: Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
+    static_models: Query<(&Model, &InstanceRange)>,
+    animated_models: Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>,
     (mut static_model_bind_groups, mut animated_model_bind_groups): (
         Local<ModelBindGroups>,
         Local<ModelBindGroups>,
@@ -168,7 +168,7 @@ pub(crate) fn render(
     let queue = &queue.0;
     let pipelines = &pipelines.0;
     let bind_group_layouts = &bind_group_layouts.0;
-    let main_bind_group = main_bind_group.0.get();
+    let main_bind_group = main_bind_group.0.load();
 
     let vertex_buffers = vertex_buffers.0.buffers.load();
     let animated_vertex_buffers = animated_vertex_buffers.0.buffers.load();
@@ -279,8 +279,8 @@ pub(crate) fn render(
         ))
     };
 
-    static_model_bind_groups.collect(&mut static_models);
-    animated_model_bind_groups.collect_animated(&mut animated_models);
+    static_model_bind_groups.collect(&static_models);
+    animated_model_bind_groups.collect_animated(&animated_models);
 
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("command encoder"),
@@ -364,8 +364,8 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usiz
     render_pass: &mut wgpu::RenderPass<'a>,
     vertex_buffers: &'a RawVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
     animated_vertex_buffers: &'a RawAnimatedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
-    static_models: &'a Query<(&mut Model, &InstanceRange)>,
-    animated_models: &'a Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
+    static_models: &'a Query<(&Model, &InstanceRange)>,
+    animated_models: &'a Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>,
     static_model_bind_groups: &'a ModelBindGroups,
     animated_model_bind_groups: &'a ModelBindGroups,
     pipelines: &'a permutations::ModelTypes<permutations::FaceSides<wgpu::RenderPipeline>>,
@@ -422,8 +422,8 @@ fn render_everything<'a>(
     main_bind_group: &'a wgpu::BindGroup,
     skybox_uniform_bind_group: &'a wgpu::BindGroup,
     pipelines: &'a renderer_core::Pipelines,
-    static_models: &'a Query<(&mut Model, &InstanceRange)>,
-    animated_models: &'a Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
+    static_models: &'a Query<(&Model, &InstanceRange)>,
+    animated_models: &'a Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>,
     static_model_bind_groups: &'a ModelBindGroups,
     animated_model_bind_groups: &'a ModelBindGroups,
     line_buffer: &'a VecGpuBuffer<LineVertex>,
@@ -483,20 +483,20 @@ fn render_everything<'a>(
 // The model bind groups for the current frame
 #[derive(Default)]
 pub struct ModelBindGroups {
-    bind_groups: Vec<Arc<wgpu::BindGroup>>,
+    bind_groups: Vec<arc_swap::Guard<Arc<wgpu::BindGroup>>>,
     // We use a `Vec` of offsets here to avoid needing a `Vec<Vec<Arc<wgpu::BindGroup>>>`
     // This means we can just clear the `Vec`s instead of re-allocating.
     offsets: Vec<usize>,
 }
 
 impl ModelBindGroups {
-    fn collect(&mut self, query: &mut Query<(&mut Model, &InstanceRange)>) {
+    fn collect(&mut self, query: &Query<(&Model, &InstanceRange)>) {
         self.bind_groups.clear();
         self.offsets.clear();
 
         // This is mutable because it involves potentially swapping out the dummy bind groups
         // for loaded ones.
-        query.for_each_mut(|(mut model, _)| {
+        query.for_each(|(model, _)| {
             self.offsets.push(self.bind_groups.len());
 
             // Todo: we could do a check if the model has any instances here
@@ -507,22 +507,19 @@ impl ModelBindGroups {
                 model
                     .0
                     .primitives
-                    .iter_mut()
-                    .map(|primitive| primitive.bind_group.get().clone()),
+                    .iter()
+                    .map(|primitive| primitive.bind_group.load()),
             );
         })
     }
 
-    fn collect_animated(
-        &mut self,
-        query: &mut Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
-    ) {
+    fn collect_animated(&mut self, query: &Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>) {
         self.bind_groups.clear();
         self.offsets.clear();
 
         // This is mutable because it involves potentially swapping out the dummy bind groups
         // for loaded ones.
-        query.for_each_mut(|(mut model, ..)| {
+        query.for_each(|(model, ..)| {
             self.offsets.push(self.bind_groups.len());
 
             // Todo: we could do a check if the model has any instances here
@@ -533,20 +530,23 @@ impl ModelBindGroups {
                 model
                     .0
                     .primitives
-                    .iter_mut()
-                    .map(|primitive| primitive.bind_group.get().clone()),
+                    .iter()
+                    .map(|primitive| primitive.bind_group.load()),
             );
         })
     }
 
-    fn bind_groups_for_model(&self, model_index: usize) -> &[Arc<wgpu::BindGroup>] {
+    fn bind_groups_for_model(
+        &self,
+        model_index: usize,
+    ) -> &[arc_swap::Guard<Arc<wgpu::BindGroup>>] {
         &self.bind_groups[self.offsets[model_index]..]
     }
 }
 
 fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     render_pass: &mut wgpu::RenderPass<'a>,
-    models: &Query<(&mut Model, &InstanceRange)>,
+    models: &Query<(&Model, &InstanceRange)>,
     model_bind_groups: &'a ModelBindGroups,
     primitive_range_getter: G,
 ) {
@@ -576,7 +576,7 @@ fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
 
 fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     render_pass: &mut wgpu::RenderPass<'a>,
-    models: &'a Query<(&mut AnimatedModel, &JointBuffer, &InstanceRange)>,
+    models: &'a Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>,
     model_bind_groups: &'a ModelBindGroups,
     primitive_range_getter: G,
 ) {

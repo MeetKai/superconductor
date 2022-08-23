@@ -1,5 +1,5 @@
-use renderer_core::utils::Swappable;
 use renderer_core::{
+    arc_swap::ArcSwap,
     glam::{Mat4, Quat, Vec3},
     GpuInstance, LineVertex,
 };
@@ -26,7 +26,7 @@ pub struct Pipelines(pub Arc<renderer_core::Pipelines>);
 pub struct BindGroupLayouts(pub Arc<renderer_core::BindGroupLayouts>);
 
 pub(crate) struct UniformBuffer(pub(crate) Arc<wgpu::Buffer>);
-pub(crate) struct MainBindGroup(pub(crate) Swappable<wgpu::BindGroup>);
+pub(crate) struct MainBindGroup(pub(crate) Arc<ArcSwap<wgpu::BindGroup>>);
 pub(crate) struct SkyboxUniformBuffer(pub(crate) wgpu::Buffer);
 pub(crate) struct SkyboxUniformBindGroup(pub(crate) wgpu::BindGroup);
 

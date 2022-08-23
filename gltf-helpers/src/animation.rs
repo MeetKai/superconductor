@@ -25,7 +25,7 @@ where
             let mut rotation_channels: Vec<Channel<Quat>> = Vec::new();
             let mut scale_channels: Vec<Channel<f32>> = Vec::new();
 
-            for (channel_index, channel) in animation.channels.iter().enumerate() {
+            for channel in &animation.channels {
                 let sampler = &animation.samplers[channel.sampler];
 
                 let input_accessor = &gltf.accessors[sampler.input];

@@ -1,8 +1,9 @@
 use bevy_ecs::prelude::{Component, Entity};
+use renderer_core::arc_swap::ArcSwapOption;
 use renderer_core::assets::models;
 use renderer_core::shared_structs::JointTransform;
-use renderer_core::utils::Setter;
 use std::ops::Range;
+use std::sync::Arc;
 
 #[derive(Component)]
 pub struct Instance(pub renderer_core::Instance);
@@ -11,16 +12,16 @@ pub struct Instance(pub renderer_core::Instance);
 pub struct InstanceOf(pub Entity);
 
 #[derive(Component)]
-pub struct PendingModel(pub Setter<models::Model>);
+pub struct PendingModel(pub Arc<ArcSwapOption<models::Model>>);
 
 #[derive(Component)]
-pub struct Model(pub models::Model);
+pub struct Model(pub Arc<models::Model>);
 
 #[derive(Component)]
-pub struct PendingAnimatedModel(pub Setter<models::AnimatedModel>);
+pub struct PendingAnimatedModel(pub Arc<ArcSwapOption<models::AnimatedModel>>);
 
 #[derive(Component)]
-pub struct AnimatedModel(pub models::AnimatedModel);
+pub struct AnimatedModel(pub Arc<models::AnimatedModel>);
 
 #[derive(Component)]
 pub struct Instances(pub Vec<renderer_core::GpuInstance>);
