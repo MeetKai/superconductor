@@ -321,7 +321,7 @@ pub(crate) fn render(
         &animated_vertex_buffers,
         &index_buffer,
         &instance_buffer.0.buffer,
-        main_bind_group,
+        &main_bind_group,
         &skybox_uniform_bind_group.0,
         pipelines,
         &static_models,
@@ -349,7 +349,7 @@ pub(crate) fn render(
 
         render_pass.set_pipeline(&pipelines.tonemap);
 
-        render_pass.set_bind_group(0, main_bind_group, &[]);
+        render_pass.set_bind_group(0, &main_bind_group, &[]);
         render_pass.set_bind_group(1, composite_bind_group, &[]);
 
         render_pass.draw(0..3, 0..1);
