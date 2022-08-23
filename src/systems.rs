@@ -1,6 +1,7 @@
 use crate::components::{
     AnimatedModel, AnimatedModelUrl, AnimationJoints, AnimationState, Instance, InstanceOf,
-    InstanceRange, Instances, JointBuffer, Model, ModelUrl, PendingAnimatedModel, PendingModel,
+    InstanceRange, Instances, JointBuffer, JointBuffers, JointsOffset, Model, ModelUrl,
+    PendingAnimatedModel, PendingModel,
 };
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, Camera, ClampSampler, CompositeBindGroup, Device,
@@ -48,9 +49,13 @@ pub(crate) fn clear_instance_buffers(
     query.for_each_mut(|mut instances| instances.0.clear());
 }
 
-pub(crate) fn clear_joint_buffers(mut query: Query<&mut JointBuffer>) {
-    query.for_each_mut(|mut joint_buffer| {
-        joint_buffer.staging.clear();
+pub(crate) fn clear_joint_buffers(mut query: Query<&mut JointBuffers>) {
+    query.for_each_mut(|mut joint_buffers| {
+        joint_buffers.next_buffer = 0;
+
+        for joint_buffer in &mut joint_buffers.buffers {
+            joint_buffer.staging.clear();
+        }
     })
 }
 
@@ -111,23 +116,48 @@ pub(crate) fn sample_animations(
     })
 }
 
-pub(crate) fn upload_joint_buffers(query: Query<&JointBuffer>, queue: Res<Queue>) {
-    query.for_each(|joint_buffer| {
-        queue.0.write_buffer(
-            &joint_buffer.buffer,
-            0,
-            bytemuck::cast_slice(&joint_buffer.staging),
-        );
+pub(crate) fn upload_joint_buffers(query: Query<&JointBuffers>, queue: Res<Queue>) {
+    query.for_each(|joint_buffers| {
+        for joint_buffer in &joint_buffers.buffers[..joint_buffers.next_buffer + 1] {
+            queue.0.write_buffer(
+                &joint_buffer.buffer,
+                0,
+                bytemuck::cast_slice(&joint_buffer.staging),
+            );
+        }
     })
 }
 
 pub(crate) fn push_joints(
-    mut instance_query: Query<(&InstanceOf, &mut AnimationJoints)>,
-    mut model_query: Query<(&AnimatedModel, &mut JointBuffer)>,
+    mut instance_query: Query<(Entity, &InstanceOf, &mut AnimationJoints)>,
+    mut model_query: Query<(&AnimatedModel, &mut JointBuffers)>,
+    device: Res<Device>,
+    bind_group_layouts: Res<BindGroupLayouts>,
+    mut commands: Commands,
 ) {
-    instance_query.for_each_mut(|(instance_of, mut animation_joints)| {
+    instance_query.for_each_mut(|(entity, instance_of, mut animation_joints)| {
         match model_query.get_mut(instance_of.0) {
-            Ok((animated_model, mut joint_buffer)) => {
+            Ok((animated_model, mut joint_buffers)) => {
+                if joint_buffers.buffers[joint_buffers.next_buffer]
+                    .staging
+                    .remaining_capacity()
+                    < animated_model.0.num_joints() as usize
+                {
+                    joint_buffers.next_buffer += 1;
+
+                    if joint_buffers.next_buffer >= joint_buffers.buffers.len() {
+                        joint_buffers
+                            .buffers
+                            .push(JointBuffer::new(&device.0, &bind_group_layouts.0));
+                    }
+                }
+
+                commands.entity(entity).insert(JointsOffset(
+                    joint_buffers.buffers[joint_buffers.next_buffer]
+                        .staging
+                        .len() as u32,
+                ));
+
                 'joint_loop: for joint in animation_joints
                     .0
                     .iter(
@@ -146,7 +176,9 @@ pub(crate) fn push_joints(
                         )
                     })
                 {
-                    if let Err(error) = joint_buffer.staging.try_push(joint) {
+                    let next_buffer = joint_buffers.next_buffer;
+
+                    if let Err(error) = joint_buffers.buffers[next_buffer].staging.try_push(joint) {
                         log::warn!("Got an error when pushing joints: {}", error);
                         break 'joint_loop;
                     }
@@ -200,22 +232,17 @@ pub(crate) fn push_debug_joints_to_lines_buffer(
 
 // Here would be a good place to do culling.
 pub(crate) fn push_entity_instances(
-    mut instance_query: Query<(&InstanceOf, &Instance)>,
-    mut model_query: Query<(&mut Instances, Option<&AnimatedModel>)>,
+    mut instance_query: Query<(&InstanceOf, &Instance, Option<&JointsOffset>)>,
+    mut model_query: Query<&mut Instances>,
 ) {
-    instance_query.for_each_mut(|(instance_of, instance)| {
+    instance_query.for_each_mut(|(instance_of, instance, joints_offset)| {
         match model_query.get_mut(instance_of.0) {
-            Ok((mut instances, animated_model)) => {
-                let instance_index = instances.0.len() as u32;
-                let num_joints = animated_model
-                    .map(|animated_model| animated_model.0.num_joints())
-                    .unwrap_or(0);
-
+            Ok(mut instances) => {
                 instances.0.push(GpuInstance {
                     position: instance.0.position,
                     scale: instance.0.scale,
                     rotation: instance.0.rotation,
-                    joints_offset: instance_index * num_joints,
+                    joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
                     _padding: Default::default(),
                 });
             }
@@ -819,7 +846,7 @@ pub(crate) fn finish_loading_models(
             commands
                 .entity(entity)
                 .insert(AnimatedModel(loaded_model))
-                .insert(JointBuffer::new(&device.0, &bind_group_layouts.0));
+                .insert(JointBuffers::new(&device.0, &bind_group_layouts.0));
         }
     })
 }

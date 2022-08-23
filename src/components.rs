@@ -35,7 +35,27 @@ pub struct ModelUrl(pub url::Url);
 #[derive(Component)]
 pub struct AnimatedModelUrl(pub url::Url);
 
+#[derive(Component, Debug)]
+pub struct JointsOffset(pub u32);
+
 #[derive(Component)]
+pub struct JointBuffers {
+    pub next_buffer: usize,
+    pub buffers: Vec<JointBuffer>,
+}
+
+impl JointBuffers {
+    pub fn new(
+        device: &wgpu::Device,
+        bind_group_layouts: &renderer_core::BindGroupLayouts,
+    ) -> Self {
+        Self {
+            next_buffer: 0,
+            buffers: vec![JointBuffer::new(device, bind_group_layouts)],
+        }
+    }
+}
+
 pub struct JointBuffer {
     pub staging: arrayvec::ArrayVec<JointTransform, { JointTransform::MAX_COUNT }>,
     pub buffer: wgpu::Buffer,

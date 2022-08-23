@@ -9,7 +9,7 @@ use renderer_core::{
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::components::{AnimatedModel, InstanceRange, JointBuffer, Model};
+use crate::components::{AnimatedModel, InstanceRange, JointBuffers, Model};
 use bevy_ecs::prelude::{Local, Query, Res, ResMut};
 use renderer_core::assets::models::PrimitiveRanges;
 #[cfg(feature = "wasm")]
@@ -52,7 +52,7 @@ pub(crate) fn render_desktop(
         Res<LineBuffer>,
     ),
     static_models: Query<(&Model, &InstanceRange)>,
-    animated_models: Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>,
+    animated_models: Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>,
     mut static_model_bind_groups: Local<ModelBindGroups>,
     mut animated_model_bind_groups: Local<ModelBindGroups>,
 ) {
@@ -156,7 +156,7 @@ pub(crate) fn render(
         Res<LineBuffer>,
     ),
     static_models: Query<(&Model, &InstanceRange)>,
-    animated_models: Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>,
+    animated_models: Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>,
     (mut static_model_bind_groups, mut animated_model_bind_groups): (
         Local<ModelBindGroups>,
         Local<ModelBindGroups>,
@@ -365,7 +365,7 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usiz
     vertex_buffers: &'a RawVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
     animated_vertex_buffers: &'a RawAnimatedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
     static_models: &'a Query<(&Model, &InstanceRange)>,
-    animated_models: &'a Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>,
+    animated_models: &'a Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>,
     static_model_bind_groups: &'a ModelBindGroups,
     animated_model_bind_groups: &'a ModelBindGroups,
     pipelines: &'a permutations::ModelTypes<permutations::FaceSides<wgpu::RenderPipeline>>,
@@ -423,7 +423,7 @@ fn render_everything<'a>(
     skybox_uniform_bind_group: &'a wgpu::BindGroup,
     pipelines: &'a renderer_core::Pipelines,
     static_models: &'a Query<(&Model, &InstanceRange)>,
-    animated_models: &'a Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>,
+    animated_models: &'a Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>,
     static_model_bind_groups: &'a ModelBindGroups,
     animated_model_bind_groups: &'a ModelBindGroups,
     line_buffer: &'a VecGpuBuffer<LineVertex>,
@@ -513,7 +513,7 @@ impl ModelBindGroups {
         })
     }
 
-    fn collect_animated(&mut self, query: &Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>) {
+    fn collect_animated(&mut self, query: &Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>) {
         self.bind_groups.clear();
         self.offsets.clear();
 
@@ -576,11 +576,11 @@ fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
 
 fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     render_pass: &mut wgpu::RenderPass<'a>,
-    models: &'a Query<(&AnimatedModel, &JointBuffer, &InstanceRange)>,
+    models: &'a Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>,
     model_bind_groups: &'a ModelBindGroups,
     primitive_range_getter: G,
 ) {
-    for (model_index, (model, joint_buffer, instance_range)) in models.iter().enumerate() {
+    for (model_index, (model, joint_buffers, instance_range)) in models.iter().enumerate() {
         // Don't issue commands for models with no (visible) instances.
         if !instance_range.0.is_empty() {
             // Get the range of primtives we're rendering
@@ -591,16 +591,29 @@ fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
             // And their associated material bind groups
             let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range];
 
-            render_pass.set_bind_group(2, &joint_buffer.bind_group, &[]);
-
             for (primitive, bind_group) in primitives.iter().zip(bind_groups) {
                 render_pass.set_bind_group(1, bind_group, &[]);
 
-                render_pass.draw_indexed(
-                    primitive.index_buffer_range.clone(),
-                    0,
-                    instance_range.0.clone(),
-                );
+                let mut joint_buffer_index = 0;
+                let mut instance_offset = instance_range.0.start;
+
+                while instance_offset < instance_range.0.end {
+                    let end = (instance_offset + model.0.max_instances_per_joint_buffer())
+                        .min(instance_range.0.end);
+
+                    if let Some(joint_buffer) = joint_buffers.buffers.get(joint_buffer_index) {
+                        render_pass.set_bind_group(2, &joint_buffer.bind_group, &[]);
+
+                        render_pass.draw_indexed(
+                            primitive.index_buffer_range.clone(),
+                            0,
+                            instance_offset..end,
+                        );
+                    }
+
+                    instance_offset = end;
+                    joint_buffer_index += 1;
+                }
             }
         }
     }

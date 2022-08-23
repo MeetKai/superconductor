@@ -662,6 +662,10 @@ impl AnimatedModel {
     pub fn num_joints(&self) -> u32 {
         self.animation_data.joint_indices_to_node_indices.len() as u32
     }
+
+    pub fn max_instances_per_joint_buffer(&self) -> u32 {
+        shared_structs::JointTransform::MAX_COUNT as u32 / self.num_joints()
+    }
 }
 
 struct StagingPrimitive<T> {
