@@ -25,4 +25,5 @@ async-std = "1.12.0"
 [features]
 default = ["native"]
 wasm = ["superconductor/wasm"]
+webgl = ["wasm", "superconductor/webgl"]
 native = ["superconductor/native"]

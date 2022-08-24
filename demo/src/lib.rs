@@ -11,7 +11,7 @@ use superconductor::{
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen(start)]
-pub fn main() {
+pub fn wasm_main() {
     console_error_panic_hook::set_once();
     console_log::init_with_level(log::Level::Info).unwrap();
     wasm_bindgen_futures::spawn_local(run());
@@ -21,10 +21,10 @@ pub async fn run() {
     #[cfg(feature = "wasm")]
     basis_universal_wasm::wasm_init().await;
 
-    #[cfg(feature = "wasm")]
+    #[cfg(feature = "webgl")]
     let mode = select_mode_via_buttons().await;
 
-    #[cfg(not(feature = "wasm"))]
+    #[cfg(not(feature = "webgl"))]
     let mode = Mode::Desktop;
 
     let initialised_state = superconductor::initialise(mode).await;
@@ -51,34 +51,35 @@ impl SuperconductorPlugin {
 
 impl Plugin for SuperconductorPlugin {
     fn build(&self, app: &mut App) {
-        let model = app
+        /*let model = app
             .world
             .spawn()
             .insert(components::ModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/ferris/ferris.gltf").unwrap(),
+                url::Url::parse("http://localhost:8000/assets/models/bistro/bistro_bc7_cc.gltf")
+                    .unwrap(),
             ))
             .insert(components::Instances(Default::default()))
             .insert(components::InstanceRange(Default::default()))
             .id();
 
         app.world
-            .spawn()
-            .insert(components::InstanceOf(model))
-            .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::new(1.0, 1.0, -2.0),
-                1.0,
-                Default::default(),
-            )))
-            .insert(Spinning);
+        .spawn()
+        .insert(components::InstanceOf(model))
+        .insert(components::Instance(renderer_core::Instance::new(
+            Vec3::new(1.0, 1.0, -2.0),
+            1.0,
+            Default::default(),
+        )))
+        .insert(Spinning);*/
 
-        app.world
-            .spawn()
-            .insert(components::InstanceOf(model))
-            .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::new(-1.0, 1.0, -2.0),
-                1.0,
-                Default::default(),
-            )));
+        /*app.world
+        .spawn()
+        .insert(components::InstanceOf(model))
+        .insert(components::Instance(renderer_core::Instance::new(
+            Vec3::new(-1.0, 1.0, -2.0),
+            1.0,
+            Default::default(),
+        )));*/
 
         let helmet = app
             .world
@@ -90,32 +91,21 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::InstanceRange(Default::default()))
             .id();
 
-        app.world
-            .spawn()
-            .insert(components::InstanceOf(helmet))
-            .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::new(0.0, 1.0, -3.0),
-                0.5,
-                Default::default(),
-            )))
-            .insert(components::AnimationState {
-                time: 0.5,
-                animation_index: 1,
-            });
-
-        for i in 0..10 {
-            app.world
-                .spawn()
-                .insert(components::InstanceOf(helmet))
-                .insert(components::Instance(renderer_core::Instance::new(
-                    Vec3::new(1.0 + i as f32, 1.0, -4.0 - i as f32),
-                    0.5 + (i as f32 * 0.05),
-                    Default::default(),
-                )))
-                .insert(components::AnimationState {
-                    time: i as f32 / 10.0,
-                    animation_index: i,
-                });
+        for j in 0..20 {
+            for i in 0..20 {
+                app.world
+                    .spawn()
+                    .insert(components::InstanceOf(helmet))
+                    .insert(components::Instance(renderer_core::Instance::new(
+                        Vec3::new(i as f32, 0.0, j as f32),
+                        1.0, // + (i as f32 * 0.05),
+                        Default::default(),
+                    )))
+                    .insert(components::AnimationState {
+                        time: 0.0,
+                        animation_index: i % 10,
+                    });
+            }
         }
 
         let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()
@@ -137,7 +127,7 @@ impl Plugin for SuperconductorPlugin {
         plugin.build(app);
 
         app.insert_resource(NewIblCubemap(Some(
-            url::Url::parse("http://localhost:8000/assets/cubemaps/lodge.ktx2").unwrap(),
+            url::Url::parse("http://localhost:8000/assets/cubemaps/helipad.ktx2").unwrap(),
         )));
     }
 }
@@ -176,7 +166,7 @@ fn animate_vrms(
     })
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "webgl")]
 pub async fn select_mode_via_buttons() -> superconductor::Mode {
     use futures::FutureExt;
 
@@ -195,7 +185,7 @@ pub async fn select_mode_via_buttons() -> superconductor::Mode {
     }
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "webgl")]
 async fn button_click_future(button: &web_sys::HtmlButtonElement) {
     wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, _reject| {
         button.set_onclick(Some(&resolve))
@@ -204,7 +194,7 @@ async fn button_click_future(button: &web_sys::HtmlButtonElement) {
     .unwrap();
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "webgl")]
 fn create_button(text: &str) -> web_sys::HtmlButtonElement {
     use wasm_bindgen::JsCast;
 

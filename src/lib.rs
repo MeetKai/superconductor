@@ -137,7 +137,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
 
         rendering_stage = match self.mode {
             Mode::Desktop => rendering_stage.with_system(systems::rendering::render_desktop),
-            #[cfg(feature = "wasm")]
+            #[cfg(feature = "webgl")]
             _ => rendering_stage.with_system(systems::rendering::render),
         };
 
@@ -163,15 +163,15 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
-    #[cfg(feature = "wasm")]
+    #[cfg(feature = "webgl")]
     Vr,
-    #[cfg(feature = "wasm")]
+    #[cfg(feature = "webgl")]
     Ar,
     Desktop,
 }
 
 pub enum ModeSpecificState {
-    #[cfg(feature = "wasm")]
+    #[cfg(feature = "webgl")]
     Xr {
         session: web_sys::XrSession,
         reference_space: web_sys::XrReferenceSpace,
@@ -192,15 +192,15 @@ pub struct InitialisedState {
 
 pub async fn initialise(mode: Mode) -> InitialisedState {
     match mode {
-        #[cfg(feature = "wasm")]
+        #[cfg(feature = "webgl")]
         Mode::Vr => initialise_xr(web_sys::XrSessionMode::ImmersiveVr).await,
-        #[cfg(feature = "wasm")]
+        #[cfg(feature = "webgl")]
         Mode::Ar => initialise_xr(web_sys::XrSessionMode::ImmersiveAr).await,
         Mode::Desktop => initialise_desktop().await,
     }
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "webgl")]
 pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState {
     let canvas = renderer_core::Canvas::default();
     let webgl2_context =
@@ -397,7 +397,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
         .insert_resource(initialised_state.pipeline_options);
 
     match initialised_state.mode_specific {
-        #[cfg(feature = "wasm")]
+        #[cfg(feature = "webgl")]
         ModeSpecificState::Xr {
             session,
             reference_space,
@@ -476,7 +476,11 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                             app.world.get_resource_mut::<WindowChanges>()
                         {
                             if let Some(cursor_grab) = window_changes.cursor_grab {
-                                if let Err(error) = window.set_cursor_grab(cursor_grab) {
+                                if let Err(error) = window.set_cursor_grab(if cursor_grab {
+                                    winit::window::CursorGrabMode::Locked
+                                } else {
+                                    winit::window::CursorGrabMode::None
+                                }) {
                                     log::error!(
                                         "Got an error when trying to set the cursor grab: {}",
                                         error

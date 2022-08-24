@@ -137,7 +137,7 @@ impl Default for Canvas {
 #[cfg(feature = "wasm")]
 unsafe impl raw_window_handle::HasRawWindowHandle for Canvas {
     fn raw_window_handle(&self) -> raw_window_handle::RawWindowHandle {
-        let mut web = raw_window_handle::WebHandle::empty();
+        let mut web = raw_window_handle::WebWindowHandle::empty();
         web.id = self.id;
 
         raw_window_handle::RawWindowHandle::Web(web)
@@ -145,6 +145,13 @@ unsafe impl raw_window_handle::HasRawWindowHandle for Canvas {
 }
 
 #[cfg(feature = "wasm")]
+unsafe impl raw_window_handle::HasRawDisplayHandle for Canvas {
+    fn raw_display_handle(&self) -> raw_window_handle::RawDisplayHandle {
+        raw_window_handle::RawDisplayHandle::Web(raw_window_handle::WebDisplayHandle::empty())
+    }
+}
+
+#[cfg(feature = "webgl")]
 pub fn create_view_from_device_framebuffer(
     device: &wgpu::Device,
     framebuffer: web_sys::WebGlFramebuffer,
