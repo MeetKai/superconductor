@@ -11,7 +11,7 @@ raw-window-handle = "0.5.0"
 wasm-bindgen = { version = "0.2.82", features = ["serde-serialize"] }
 glow = "0.11.2"
 wgpu = { version = "0.13.0", features = ["spirv"] }
-wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "d0e694833600605bd449f4cb54f01fca6b1e56d6" }
+wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "ba1a98a02ea820777e1bd44b0123bf2645311da2" }
 log = "0.4.17"
 glam = { version = "0.20", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }

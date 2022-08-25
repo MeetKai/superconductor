@@ -1828,8 +1828,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f50357e1167a3ab92d6b3c7f4bf5f7fd13fde3f4b28bf0d5ea07b5100fdb6c0"
+source = "git+https://github.com/expenses/naga?rev=acd43c45f5ee586f4d4bf1f0bede8550c9f9576a#acd43c45f5ee586f4d4bf1f0bede8550c9f9576a"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -3282,7 +3281,7 @@ dependencies = [
 [[package]]
 name = "wgpu"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?rev=d0e694833600605bd449f4cb54f01fca6b1e56d6#d0e694833600605bd449f4cb54f01fca6b1e56d6"
+source = "git+https://github.com/expenses/wgpu?rev=ba1a98a02ea820777e1bd44b0123bf2645311da2#ba1a98a02ea820777e1bd44b0123bf2645311da2"
 dependencies = [
  "arrayvec 0.7.2",
  "js-sys",
@@ -3302,7 +3301,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?rev=d0e694833600605bd449f4cb54f01fca6b1e56d6#d0e694833600605bd449f4cb54f01fca6b1e56d6"
+source = "git+https://github.com/expenses/wgpu?rev=ba1a98a02ea820777e1bd44b0123bf2645311da2#ba1a98a02ea820777e1bd44b0123bf2645311da2"
 dependencies = [
  "arrayvec 0.7.2",
  "bit-vec",
@@ -3326,7 +3325,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?rev=d0e694833600605bd449f4cb54f01fca6b1e56d6#d0e694833600605bd449f4cb54f01fca6b1e56d6"
+source = "git+https://github.com/expenses/wgpu?rev=ba1a98a02ea820777e1bd44b0123bf2645311da2#ba1a98a02ea820777e1bd44b0123bf2645311da2"
 dependencies = [
  "android_system_properties",
  "arrayvec 0.7.2",
@@ -3364,7 +3363,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?rev=d0e694833600605bd449f4cb54f01fca6b1e56d6#d0e694833600605bd449f4cb54f01fca6b1e56d6"
+source = "git+https://github.com/expenses/wgpu?rev=ba1a98a02ea820777e1bd44b0123bf2645311da2#ba1a98a02ea820777e1bd44b0123bf2645311da2"
 dependencies = [
  "bitflags",
 ]

@@ -85,14 +85,14 @@ impl Plugin for SuperconductorPlugin {
             .world
             .spawn()
             .insert(components::AnimatedModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/squid6.glb").unwrap(),
+                url::Url::parse("http://localhost:8000/assets/models/fire_giant.glb").unwrap(),
             ))
             .insert(components::Instances(Default::default()))
             .insert(components::InstanceRange(Default::default()))
             .id();
 
-        for j in 0..20 {
-            for i in 0..20 {
+        for j in 0..10 {
+            for i in 0..1 {
                 app.world
                     .spawn()
                     .insert(components::InstanceOf(helmet))

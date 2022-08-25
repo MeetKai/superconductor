@@ -263,7 +263,7 @@ impl Pipelines {
                 push_constant_ranges: &[],
             });
 
-        let bc6h_decompression_target = wgpu::TextureFormat::Rg11b10Float;
+        let bc6h_decompression_target = wgpu::TextureFormat::Rgba16Float;
 
         let blit_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
