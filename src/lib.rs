@@ -102,7 +102,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
             Mode::Desktop => {
                 buffer_resetting_stage.with_system(systems::set_desktop_uniform_buffers)
             }
-            #[cfg(feature = "wasm")]
+            #[cfg(feature = "webgl")]
             _ => buffer_resetting_stage.with_system(systems::update_uniform_buffers),
         };
 

@@ -1,5 +1,5 @@
 use super::HttpClient;
-use crate::{spawn, Texture};
+use crate::{spawn, Texture, pipelines::BC6H_DECOMPRESSION_TARGET_FORMAT};
 use std::borrow::Cow;
 use std::io::Read;
 use std::num::NonZeroU32;
@@ -152,7 +152,7 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
         format: if bc6h_supported {
             wgpu::TextureFormat::Bc6hRgbUfloat
         } else {
-            wgpu::TextureFormat::Rgba16Float
+            BC6H_DECOMPRESSION_TARGET_FORMAT
         },
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
     };
@@ -228,7 +228,7 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
                             mip_level_count: 1,
                             sample_count: 1,
                             dimension: wgpu::TextureDimension::D2,
-                            format: wgpu::TextureFormat::Rgba16Float,
+                            format: BC6H_DECOMPRESSION_TARGET_FORMAT,
                             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                                 | wgpu::TextureUsages::COPY_SRC,
                         });

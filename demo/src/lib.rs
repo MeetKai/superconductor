@@ -51,12 +51,11 @@ impl SuperconductorPlugin {
 
 impl Plugin for SuperconductorPlugin {
     fn build(&self, app: &mut App) {
-        /*let model = app
+        let model = app
             .world
             .spawn()
             .insert(components::ModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/bistro/bistro_bc7_cc.gltf")
-                    .unwrap(),
+                url::Url::parse("http://localhost:8000/assets/models/ferris/ferris.gltf").unwrap(),
             ))
             .insert(components::Instances(Default::default()))
             .insert(components::InstanceRange(Default::default()))
@@ -70,16 +69,16 @@ impl Plugin for SuperconductorPlugin {
             1.0,
             Default::default(),
         )))
-        .insert(Spinning);*/
+            .insert(Spinning);
 
-        /*app.world
+        app.world
         .spawn()
         .insert(components::InstanceOf(model))
         .insert(components::Instance(renderer_core::Instance::new(
             Vec3::new(-1.0, 1.0, -2.0),
             1.0,
             Default::default(),
-        )));*/
+            )));
 
         let helmet = app
             .world

@@ -601,6 +601,8 @@ pub(crate) fn set_desktop_uniform_buffers(
 
     let projection_view = perspective_matrix * camera.view_matrix();
 
+    let is_webgpu = cfg!(all(feature = "wasm", not(feature = "webgl")));
+
     let uniforms = renderer_core::shared_structs::Uniforms {
         left_projection_view: projection_view.into(),
         right_projection_view: projection_view.into(),
@@ -608,7 +610,8 @@ pub(crate) fn set_desktop_uniform_buffers(
         right_eye_position: camera.position,
         flip_viewport: false as u32,
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
-        inline_srgb: false as u32,
+        // Rendering to a srgb surface should be possible at some point, but doesn't currently seem to be.
+        inline_srgb: is_webgpu as u32,
     };
 
     queue.write_buffer(
@@ -631,7 +634,7 @@ pub(crate) fn set_desktop_uniform_buffers(
     );
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "webgl")]
 pub(crate) fn update_uniform_buffers(
     pose: bevy_ecs::prelude::NonSend<web_sys::XrViewerPose>,
     pipeline_options: Res<renderer_core::PipelineOptions>,

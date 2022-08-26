@@ -2,6 +2,7 @@ use crate::bind_group_layouts::BindGroupLayouts;
 use crate::permutations;
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+pub const BC6H_DECOMPRESSION_TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 pub struct PipelineOptions {
     pub multiview: Option<std::num::NonZeroU32>,
@@ -263,8 +264,6 @@ impl Pipelines {
                 push_constant_ranges: &[],
             });
 
-        let bc6h_decompression_target = wgpu::TextureFormat::Rgba16Float;
-
         let blit_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layouts.sampled_texture],
@@ -469,7 +468,7 @@ impl Pipelines {
                         "../../compiled-shaders/bc6.spv"
                     )),
                     entry_point: "main",
-                    targets: &[Some(bc6h_decompression_target.into())],
+                    targets: &[Some(BC6H_DECOMPRESSION_TARGET_FORMAT.into())],
                 }),
                 primitive: Default::default(),
                 depth_stencil: None,

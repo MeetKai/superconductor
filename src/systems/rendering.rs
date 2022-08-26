@@ -95,7 +95,7 @@ pub(crate) fn render_desktop(
             view: &surface_frame_view.view,
             resolve_target: None,
             ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::RED),
+                load: wgpu::LoadOp::Load,
                 store: true,
             },
         })],
@@ -427,7 +427,7 @@ fn render_everything<'a>(
 
     render_pass.set_bind_group(0, main_bind_group, &[]);
 
-    /*render_mode(
+    render_mode(
         render_pass,
         vertex_buffers,
         animated_vertex_buffers,
@@ -449,7 +449,7 @@ fn render_everything<'a>(
         animated_model_bind_groups,
         &pipelines.pbr.alpha_clipped,
         |primitive_ranges| primitive_ranges.alpha_clipped.clone(),
-    );*/
+    );
 
     if line_buffer.len() > 0 {
         render_pass.set_pipeline(&pipelines.line);
@@ -461,7 +461,7 @@ fn render_everything<'a>(
     render_pass.set_bind_group(1, skybox_uniform_bind_group, &[]);
     render_pass.draw(0..3, 0..1);
 
-    /*render_mode(
+    render_mode(
         render_pass,
         vertex_buffers,
         animated_vertex_buffers,
@@ -471,7 +471,7 @@ fn render_everything<'a>(
         animated_model_bind_groups,
         &pipelines.pbr.alpha_blended,
         |primitive_ranges| primitive_ranges.alpha_blended.clone(),
-    );*/
+    );
 }
 
 // The model bind groups for the current frame
