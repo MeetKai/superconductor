@@ -1,5 +1,5 @@
 use super::HttpClient;
-use crate::{spawn, Texture, pipelines::BC6H_DECOMPRESSION_TARGET_FORMAT};
+use crate::{pipelines::BC6H_DECOMPRESSION_TARGET_FORMAT, spawn, Texture};
 use std::borrow::Cow;
 use std::io::Read;
 use std::num::NonZeroU32;

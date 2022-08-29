@@ -476,15 +476,26 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                             app.world.get_resource_mut::<WindowChanges>()
                         {
                             if let Some(cursor_grab) = window_changes.cursor_grab {
-                                if let Err(error) = window.set_cursor_grab(if cursor_grab {
-                                    winit::window::CursorGrabMode::Locked
+                                if cursor_grab {
+                                    // Try both methods of grabbing the cursor.
+                                    let result = window
+                                        .set_cursor_grab(winit::window::CursorGrabMode::Locked)
+                                        .or_else(|_| {
+                                            window.set_cursor_grab(
+                                                winit::window::CursorGrabMode::Confined,
+                                            )
+                                        });
+
+                                    if let Err(error) = result {
+                                        log::error!(
+                                            "Got an error when trying to set the cursor grab: {}",
+                                            error
+                                        );
+                                    }
                                 } else {
-                                    winit::window::CursorGrabMode::None
-                                }) {
-                                    log::error!(
-                                        "Got an error when trying to set the cursor grab: {}",
-                                        error
-                                    );
+                                    // This can't fail.
+                                    let _ =
+                                        window.set_cursor_grab(winit::window::CursorGrabMode::None);
                                 }
                             }
 

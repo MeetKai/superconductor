@@ -2,7 +2,11 @@ use crate::bind_group_layouts::BindGroupLayouts;
 use crate::permutations;
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+// `Rg11b10Float` isn't supported in WebGPU yet.
+#[cfg(all(features = "wasm", not(feature = "webgl")))]
 pub const BC6H_DECOMPRESSION_TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+#[cfg(not(all(features = "wasm", not(feature = "webgl"))))]
+pub const BC6H_DECOMPRESSION_TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg11b10Float;
 
 pub struct PipelineOptions {
     pub multiview: Option<std::num::NonZeroU32>,

@@ -3281,7 +3281,7 @@ dependencies = [
 [[package]]
 name = "wgpu"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?rev=b1b085c7ab466580b7bf76afab9cd1051d846955#b1b085c7ab466580b7bf76afab9cd1051d846955"
+source = "git+https://github.com/expenses/wgpu?branch=wgsl-entry-point-sanitisation#b1b085c7ab466580b7bf76afab9cd1051d846955"
 dependencies = [
  "arrayvec 0.7.2",
  "js-sys",
@@ -3301,7 +3301,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?rev=b1b085c7ab466580b7bf76afab9cd1051d846955#b1b085c7ab466580b7bf76afab9cd1051d846955"
+source = "git+https://github.com/expenses/wgpu?branch=wgsl-entry-point-sanitisation#b1b085c7ab466580b7bf76afab9cd1051d846955"
 dependencies = [
  "arrayvec 0.7.2",
  "bit-vec",
@@ -3325,7 +3325,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?rev=b1b085c7ab466580b7bf76afab9cd1051d846955#b1b085c7ab466580b7bf76afab9cd1051d846955"
+source = "git+https://github.com/expenses/wgpu?branch=wgsl-entry-point-sanitisation#b1b085c7ab466580b7bf76afab9cd1051d846955"
 dependencies = [
  "android_system_properties",
  "arrayvec 0.7.2",
@@ -3363,7 +3363,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "0.13.0"
-source = "git+https://github.com/expenses/wgpu?rev=b1b085c7ab466580b7bf76afab9cd1051d846955#b1b085c7ab466580b7bf76afab9cd1051d846955"
+source = "git+https://github.com/expenses/wgpu?branch=wgsl-entry-point-sanitisation#b1b085c7ab466580b7bf76afab9cd1051d846955"
 dependencies = [
  "bitflags",
 ]
