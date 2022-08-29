@@ -18,12 +18,12 @@ futures = "0.3.21"
 wgpu = "0.13.0"
 anyhow = "1.0.58"
 url = "2.2.2"
-winit = "0.26.1"
+winit = "0.27.2"
 arrayvec = "0.7.2"
 surf = { version = "2.3.2", default-features = false }
 
 [dependencies.web-sys]
-version = "0.3.58"
+version = "=0.3.58"
 features = [
     "HtmlButtonElement",
     "Document",
@@ -47,6 +47,7 @@ features = [
 
 [features]
 wasm = ["renderer-core/wasm", "surf/wasm-client"]
+webgl = ["wasm", "renderer-core/webgl"]
 native = ["surf/curl-client"]
 
 [workspace]
@@ -60,8 +61,8 @@ members = [
 
 [patch.crates-io]
 glow = { git = "https://github.com/grovesNL/glow", rev = "11853d28ae64fbd7db5c856fe8b92a4a20fded94" }
-wgpu = { git = "https://github.com/expenses/wgpu", rev = "2d8a9ee4b29975ccfc9a893447fb44355ffd7044" }
-wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "2d8a9ee4b29975ccfc9a893447fb44355ffd7044" }
+wgpu = { git = "https://github.com/expenses/wgpu", rev = "8112eda46aa17d67a7c7562eed844411a929a18c" }
+wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "8112eda46aa17d67a7c7562eed844411a929a18c" }
 
 [profile.dev]
 debug = true

@@ -11,7 +11,7 @@ use superconductor::{
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen(start)]
-pub fn main() {
+pub fn wasm_main() {
     console_error_panic_hook::set_once();
     console_log::init_with_level(log::Level::Info).unwrap();
     wasm_bindgen_futures::spawn_local(run());
@@ -21,10 +21,10 @@ pub async fn run() {
     #[cfg(feature = "wasm")]
     basis_universal_wasm::wasm_init().await;
 
-    #[cfg(feature = "wasm")]
+    #[cfg(feature = "webgl")]
     let mode = select_mode_via_buttons().await;
 
-    #[cfg(not(feature = "wasm"))]
+    #[cfg(not(feature = "webgl"))]
     let mode = Mode::Desktop;
 
     let initialised_state = superconductor::initialise(mode).await;
@@ -176,7 +176,7 @@ fn animate_vrms(
     })
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "webgl")]
 pub async fn select_mode_via_buttons() -> superconductor::Mode {
     use futures::FutureExt;
 
@@ -195,7 +195,7 @@ pub async fn select_mode_via_buttons() -> superconductor::Mode {
     }
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "webgl")]
 async fn button_click_future(button: &web_sys::HtmlButtonElement) {
     wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, _reject| {
         button.set_onclick(Some(&resolve))
@@ -204,7 +204,7 @@ async fn button_click_future(button: &web_sys::HtmlButtonElement) {
     .unwrap();
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "webgl")]
 fn create_button(text: &str) -> web_sys::HtmlButtonElement {
     use wasm_bindgen::JsCast;
 

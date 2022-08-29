@@ -12,7 +12,7 @@ use std::sync::Arc;
 use crate::components::{AnimatedModel, InstanceRange, JointBuffers, Model};
 use bevy_ecs::prelude::{Local, Query, Res, ResMut};
 use renderer_core::assets::models::PrimitiveRanges;
-#[cfg(feature = "wasm")]
+#[cfg(feature = "webgl")]
 use renderer_core::create_view_from_device_framebuffer;
 
 fn bind_static_vertex_buffers<'a>(
@@ -105,10 +105,7 @@ pub(crate) fn render_desktop(
                 load: wgpu::LoadOp::Clear(1.0),
                 store: true,
             }),
-            stencil_ops: Some(wgpu::Operations {
-                load: wgpu::LoadOp::Clear(0),
-                store: true,
-            }),
+            stencil_ops: None,
         }),
     });
 
@@ -134,7 +131,7 @@ pub(crate) fn render_desktop(
 }
 
 #[allow(clippy::too_many_arguments)]
-#[cfg(feature = "wasm")]
+#[cfg(feature = "webgl")]
 pub(crate) fn render(
     frame: bevy_ecs::prelude::NonSend<web_sys::XrFrame>,
     device: Res<Device>,
@@ -308,10 +305,7 @@ pub(crate) fn render(
                 load: wgpu::LoadOp::Clear(1.0),
                 store: true,
             }),
-            stencil_ops: Some(wgpu::Operations {
-                load: wgpu::LoadOp::Clear(0),
-                store: true,
-            }),
+            stencil_ops: None,
         }),
     });
 

@@ -7,11 +7,11 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-raw-window-handle = "0.4.3"
-wasm-bindgen = { version = "0.2.80", features = ["serde-serialize"] }
+raw-window-handle = "0.5.0"
+wasm-bindgen = { version = "0.2.82", features = ["serde-serialize"] }
 glow = "0.11.2"
-wgpu = { version = "0.13.0", features = ["spirv", "webgl"] }
-wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "2d8a9ee4b29975ccfc9a893447fb44355ffd7044" }
+wgpu = { version = "0.13.0", features = ["spirv"] }
+wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "8112eda46aa17d67a7c7562eed844411a929a18c" }
 log = "0.4.17"
 glam = { version = "0.20", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }
@@ -33,10 +33,10 @@ async-std = "1.12.0"
 futures = "0.3.21"
 goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "ae5a02f72f88b08b1f9d38502f0d6b1bd530e974" }
 either = "1.7.0"
-meshopt-decoder = { git = "https://github.com/expenses/meshopt-decoder", rev = "159a450f20348f624cbc81a6182b62fc56879750" }
+meshopt-decoder = { git = "https://github.com/expenses/meshopt-decoder", rev = "1d7eb93c61d9acc2583a50cb3ec7032bbffec61e" }
 
 [dependencies.web-sys]
-version = "0.3.58"
+version = "=0.3.58"
 features = [
     "XrSession",
     "XrFrame",
@@ -49,3 +49,4 @@ features = [
 
 [features]
 wasm = ["shared-structs/webgl"]
+webgl = ["wasm", "wgpu/webgl"]
