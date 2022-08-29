@@ -560,28 +560,17 @@ pub(crate) fn set_desktop_uniform_buffers(
     // Adapted from the functions used in
     // https://crates.io/crates/ultraviolet.
     //
-    // Corresponds to `perspective_vk` if `flip` is `true`,
-    // `perspective_wgpu_dx` otherwise.
-    //
-    // todo: wait, why do we need to do this? I thought that wgpu handled viewport conversion
-    // for us.
-    //
-    // Edit: It looks like if we set WGPU_BACKEND=Gl then it's flipped upside down. This doesn't seem right.
+    // Corresponds to `perspective_wgpu_dx`.
     fn create_perspective_matrix(
         vertical_fov: f32,
         aspect_ratio: f32,
         z_near: f32,
         z_far: f32,
-        flip: bool,
     ) -> Mat4 {
         let t = (vertical_fov / 2.0).tan();
         let mut sy = 1.0 / t;
         let sx = sy / aspect_ratio;
         let nmf = z_near - z_far;
-
-        if flip {
-            sy = -sy;
-        }
 
         Mat4::from_cols(
             Vec4::new(sx, 0.0, 0.0, 0.0),
@@ -596,7 +585,6 @@ pub(crate) fn set_desktop_uniform_buffers(
         surface_frame_view.width as f32 / surface_frame_view.height as f32,
         0.001,
         1000.0,
-        cfg!(not(feature = "wasm")),
     );
 
     let projection_view = perspective_matrix * camera.view_matrix();
@@ -612,6 +600,8 @@ pub(crate) fn set_desktop_uniform_buffers(
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
         // Rendering to a srgb surface should be possible at some point, but doesn't currently seem to be.
         inline_srgb: is_webgpu as u32,
+        #[cfg(not(feature = "webgl"))]
+        _padding: 0,
     };
 
     queue.write_buffer(

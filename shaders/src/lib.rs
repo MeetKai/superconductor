@@ -205,7 +205,7 @@ pub fn fragment(
 
     let view_vector = (uniforms.eye_position(view_index) - position).normalize();
 
-    let normal = calculate_normal(normal, uv, view_vector, &normal_texture, front_facing);
+    let normal = calculate_normal(normal, uv, view_vector, &normal_texture, front_facing, material_settings.normal_map_scale);
     let view = glam_pbr::View(view_vector);
 
     let lut_values = glam_pbr::ggx_lut_lookup(
@@ -287,7 +287,7 @@ pub fn fragment_alpha_blended(
 
     let view_vector = (uniforms.eye_position(view_index) - position).normalize();
 
-    let normal = calculate_normal(normal, uv, view_vector, &normal_texture, front_facing);
+    let normal = calculate_normal(normal, uv, view_vector, &normal_texture, front_facing, material_settings.normal_map_scale);
     let view = glam_pbr::View(view_vector);
 
     let lut_values = glam_pbr::ggx_lut_lookup(
@@ -362,7 +362,7 @@ pub fn fragment_alpha_clipped(
 
     let view_vector = (uniforms.eye_position(view_index) - position).normalize();
 
-    let normal = calculate_normal(normal, uv, view_vector, &normal_texture, front_facing);
+    let normal = calculate_normal(normal, uv, view_vector, &normal_texture, front_facing, material_settings.normal_map_scale);
     let view = glam_pbr::View(view_vector);
 
     // We can only do this after we've sampled all textures for naga control flow reasons.
@@ -424,6 +424,7 @@ fn calculate_normal(
     view_vector: Vec3,
     normal_map: &TextureSampler,
     front_facing: bool,
+    normal_map_scale: f32,
 ) -> glam_pbr::Normal {
     let mut normal = interpolated_normal.normalize();
 
@@ -434,12 +435,15 @@ fn calculate_normal(
     let map_normal = normal_map.sample();
     let map_normal = map_normal.truncate();
     let map_normal = map_normal * 255.0 / 127.0 - 128.0 / 127.0;
+    // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_normaltextureinfo_scale
+    let map_normal = (map_normal * Vec3::new(normal_map_scale, normal_map_scale, 1.0)).normalize();
 
     let normal = (compute_cotangent_frame(normal, -view_vector, uv) * map_normal).normalize();
 
     glam_pbr::Normal(normal)
 }
 
+// http://www.thetenthplanet.de/archives/1180
 fn compute_cotangent_frame(normal: Vec3, position: Vec3, uv: Vec2) -> Mat3 {
     // get edge vectors of the pixel triangle
     let delta_pos_1 = spirv_std::arch::ddx_vector(position);

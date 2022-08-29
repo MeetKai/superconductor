@@ -12,6 +12,10 @@ pub struct Uniforms {
     pub right_projection_view: FlatMat4,
     pub left_eye_position: Vec3,
     pub right_eye_position: Vec3,
+    // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
+    // todo: find a nicer way to resolve this.
+    #[cfg(all(not(target_arch = "spirv"), not(feature = "webgl")))]
+    pub _padding: u32,
     pub flip_viewport: u32,
     pub inline_tonemapping: u32,
     pub inline_srgb: u32,
@@ -92,12 +96,12 @@ impl From<Mat4> for FlatMat4 {
 pub struct MaterialSettings {
     pub base_color_factor: Vec4,
     pub emissive_factor: Vec3,
-    // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
-    // todo: find a nicer way to resolve this.
+    // todo: see above.
     #[cfg(all(not(target_arch = "spirv"), not(feature = "webgl")))]
     pub _padding: u32,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
+    pub normal_map_scale: f32,
     pub is_unlit: u32,
 }
 
@@ -110,6 +114,7 @@ impl MaterialSettings {
             _padding: 0,
             metallic_factor: 0.0,
             roughness_factor: 1.0,
+            normal_map_scale: 1.0,
             is_unlit: true as u32,
         }
     }

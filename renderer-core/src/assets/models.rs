@@ -1027,6 +1027,10 @@ impl MaterialInfo {
             metallic_factor: pbr.metallic_factor,
             roughness_factor: pbr.roughness_factor,
             is_unlit: unlit as u32,
+            normal_map_scale: material
+                .normal_texture
+                .map(|info| info.scale)
+                .unwrap_or(1.0),
             // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
             // todo: find a nicer way to resolve this.
             #[cfg(not(feature = "wasm"))]
