@@ -31,11 +31,17 @@ pub struct Context<T> {
     pub texture_settings: textures::Settings,
 }
 
-pub type PrimitiveRanges = permutations::BlendMode<permutations::FaceSides<Range<usize>>>;
+pub type PrimitiveRanges = permutations::BlendMode<permutations::FaceSides<Ranges>>;
+
+#[derive(Clone, Debug)]
+pub struct Ranges {
+    pub indices: Range<u32>,
+    pub primitives: Range<usize>,
+}
 
 // Collect all the buffers for the primitives into one big staging buffer
 // and collect all the primitive ranges into one big vector.
-fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) -> Range<u32>>(
+fn collect_all_primitives<'a, T: HttpClient, B: 'a + CollectableBuffer + Default>(
     context: &Context<T>,
     gltf: Arc<goth_gltf::Gltf>,
     buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
@@ -43,7 +49,6 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
     staging_primitives: &permutations::BlendMode<
         permutations::FaceSides<HashMap<Option<usize>, StagingPrimitive<B>>>,
     >,
-    collect: C,
 ) -> (PrimitiveRanges, Vec<Primitive>, B) {
     let mut primitives = Vec::new();
     let mut staging_buffers = B::default();
@@ -58,7 +63,6 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 gltf.clone(),
                 buffer_view_map.clone(),
                 root_url,
-                &collect,
             ),
             double: collect_primitives(
                 &mut primitives,
@@ -68,7 +72,6 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 gltf.clone(),
                 buffer_view_map.clone(),
                 root_url,
-                &collect,
             ),
         },
         alpha_clipped: permutations::FaceSides {
@@ -80,7 +83,6 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 gltf.clone(),
                 buffer_view_map.clone(),
                 root_url,
-                &collect,
             ),
             double: collect_primitives(
                 &mut primitives,
@@ -90,7 +92,6 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 gltf.clone(),
                 buffer_view_map.clone(),
                 root_url,
-                &collect,
             ),
         },
         alpha_blended: permutations::FaceSides {
@@ -102,7 +103,6 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 gltf.clone(),
                 buffer_view_map.clone(),
                 root_url,
-                &collect,
             ),
             double: collect_primitives(
                 &mut primitives,
@@ -112,7 +112,6 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
                 gltf,
                 buffer_view_map,
                 root_url,
-                &collect,
             ),
         },
     };
@@ -125,9 +124,8 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + Default, C: Fn(&mut B, &B) 
 fn collect_primitives<
     'a,
     T: HttpClient,
-    B: 'a,
+    B: CollectableBuffer + 'a,
     I: std::iter::Iterator<Item = &'a StagingPrimitive<B>>,
-    C: Fn(&mut B, &B) -> Range<u32>,
 >(
     primitives: &mut Vec<Primitive>,
     staging_buffers: &mut B,
@@ -136,9 +134,9 @@ fn collect_primitives<
     gltf: Arc<goth_gltf::Gltf>,
     buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
     root_url: &url::Url,
-    collect: C,
-) -> Range<usize> {
+) -> Ranges {
     let primitives_start = primitives.len();
+    let indices_start = staging_buffers.num_indices();
 
     for staging_primitive in staging_primitives {
         let material_bindings = MaterialBindings::new(
@@ -153,7 +151,7 @@ fn collect_primitives<
         ));
 
         primitives.push(Primitive {
-            index_buffer_range: collect(staging_buffers, &staging_primitive.buffers),
+            index_buffer_range: staging_buffers.collect(&staging_primitive.buffers),
             bind_group: bind_group.clone(),
         });
 
@@ -169,8 +167,12 @@ fn collect_primitives<
     }
 
     let primitives_end = primitives.len();
+    let indices_end = staging_buffers.num_indices();
 
-    primitives_start..primitives_end
+    Ranges {
+        primitives: primitives_start..primitives_end,
+        indices: indices_start..indices_end,
+    }
 }
 
 pub struct AnimatedModelData {
@@ -372,13 +374,12 @@ impl Model {
 
         // Collect all the buffers for the primitives into one big staging buffer
         // and collect all the primitive ranges into one big vector.
-        let (primitive_ranges, mut primitives, mut staging_buffers) = collect_all_primitives(
+        let (mut primitive_ranges, mut primitives, mut staging_buffers) = collect_all_primitives(
             context,
             gltf,
             buffer_view_map,
             root_url,
             &staging_primitives,
-            |a, b| a.collect(b),
         );
 
         let mut command_encoder =
@@ -417,6 +418,15 @@ impl Model {
         for primitive in &mut primitives {
             primitive.index_buffer_range.start += index_buffer_range.start;
             primitive.index_buffer_range.end += index_buffer_range.start;
+        }
+
+        for range in primitive_ranges
+            .iter_mut()
+            .iter_mut()
+            .flat_map(|blend_mode| blend_mode.iter_mut())
+        {
+            range.indices.start += index_buffer_range.start;
+            range.indices.end += index_buffer_range.start;
         }
 
         Ok(Model {
@@ -539,13 +549,12 @@ impl AnimatedModel {
 
         // Collect all the buffers for the primitives into one big staging buffer
         // and collect all the primitive ranges into one big vector.
-        let (primitive_ranges, mut primitives, mut staging_buffers) = collect_all_primitives(
+        let (mut primitive_ranges, mut primitives, mut staging_buffers) = collect_all_primitives(
             context,
             gltf.clone(),
             buffer_view_map.clone(),
             root_url,
             &staging_primitives,
-            |a, b| a.collect(b),
         );
 
         let mut command_encoder =
@@ -586,6 +595,15 @@ impl AnimatedModel {
         for primitive in &mut primitives {
             primitive.index_buffer_range.start += index_buffer_range.start;
             primitive.index_buffer_range.end += index_buffer_range.start;
+        }
+
+        for range in primitive_ranges
+            .iter_mut()
+            .iter_mut()
+            .flat_map(|blend_mode| blend_mode.iter_mut())
+        {
+            range.indices.start += index_buffer_range.start;
+            range.indices.end += index_buffer_range.start;
         }
 
         let animations = read_animations(
@@ -679,6 +697,11 @@ pub struct Primitive {
     pub bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
 }
 
+trait CollectableBuffer {
+    fn collect(&mut self, new: &Self) -> Range<u32>;
+    fn num_indices(&self) -> u32;
+}
+
 #[derive(Default)]
 struct StagingBuffers {
     indices: Vec<u32>,
@@ -688,22 +711,6 @@ struct StagingBuffers {
 }
 
 impl StagingBuffers {
-    fn collect(&mut self, new: &StagingBuffers) -> Range<u32> {
-        let indices_start = self.indices.len() as u32;
-        let num_vertices = self.positions.len() as u32;
-
-        self.indices
-            .extend(new.indices.iter().map(|index| index + num_vertices));
-
-        self.positions.extend_from_slice(&new.positions);
-        self.normals.extend_from_slice(&new.normals);
-        self.uvs.extend_from_slice(&new.uvs);
-
-        let indices_end = self.indices.len() as u32;
-
-        indices_start..indices_end
-    }
-
     fn extend_from_reader(
         &mut self,
         reader: &PrimitiveReader,
@@ -761,6 +768,28 @@ impl StagingBuffers {
     }
 }
 
+impl CollectableBuffer for StagingBuffers {
+    fn collect(&mut self, new: &Self) -> Range<u32> {
+        let indices_start = self.indices.len() as u32;
+        let num_vertices = self.positions.len() as u32;
+
+        self.indices
+            .extend(new.indices.iter().map(|index| index + num_vertices));
+
+        self.positions.extend_from_slice(&new.positions);
+        self.normals.extend_from_slice(&new.normals);
+        self.uvs.extend_from_slice(&new.uvs);
+
+        let indices_end = self.indices.len() as u32;
+
+        indices_start..indices_end
+    }
+
+    fn num_indices(&self) -> u32 {
+        self.indices.len() as u32
+    }
+}
+
 #[derive(Default)]
 struct AnimatedStagingBuffers {
     base: StagingBuffers,
@@ -768,12 +797,16 @@ struct AnimatedStagingBuffers {
     joint_weights: Vec<Vec4>,
 }
 
-impl AnimatedStagingBuffers {
-    fn collect(&mut self, new: &AnimatedStagingBuffers) -> Range<u32> {
+impl CollectableBuffer for AnimatedStagingBuffers {
+    fn collect(&mut self, new: &Self) -> Range<u32> {
         self.joint_indices.extend_from_slice(&new.joint_indices);
         self.joint_weights.extend_from_slice(&new.joint_weights);
 
         self.base.collect(&new.base)
+    }
+
+    fn num_indices(&self) -> u32 {
+        self.base.indices.len() as u32
     }
 }
 

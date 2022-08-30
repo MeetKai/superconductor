@@ -13,6 +13,7 @@ pub struct PipelineOptions {
     pub inline_tonemapping: bool,
     pub framebuffer_format: wgpu::TextureFormat,
     pub flip_viewport: bool,
+    pub depth_prepass: bool,
 }
 
 impl PipelineOptions {
@@ -27,6 +28,7 @@ pub struct Pipelines {
     pub pbr: permutations::BlendMode<
         permutations::ModelTypes<permutations::FaceSides<wgpu::RenderPipeline>>,
     >,
+    pub opaque_depth_prepass: permutations::FaceSides<wgpu::RenderPipeline>,
     pub tonemap: wgpu::RenderPipeline,
     pub skybox: wgpu::RenderPipeline,
     pub bc6h_decompression: wgpu::RenderPipeline,
@@ -86,6 +88,19 @@ impl Pipelines {
             wgpu::VertexBufferLayout {
                 array_stride: std::mem::size_of::<super::GpuInstance>() as u64,
                 attributes: &wgpu::vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Uint32],
+                step_mode: wgpu::VertexStepMode::Instance,
+            },
+        ];
+
+        let stationary_depth_prepass_vertex_buffers = &[
+            wgpu::VertexBufferLayout {
+                array_stride: 3 * 4,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![0 => Float32x3],
+            },
+            wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<super::GpuInstance>() as u64,
+                attributes: &wgpu::vertex_attr_array![1 => Float32x4, 2 => Float32x4],
                 step_mode: wgpu::VertexStepMode::Instance,
             },
         ];
@@ -156,6 +171,16 @@ impl Pipelines {
             buffers: vertex_buffers,
         };
 
+        let stationary_depth_prepass_vertex_state = wgpu::VertexState {
+            module: &device.create_shader_module(if options.multiview.is_none() {
+                wgpu::include_spirv!("../../compiled-shaders/single_view_depth_prepass_vertex.spv")
+            } else {
+                wgpu::include_spirv!("../../compiled-shaders/depth_prepass_vertex.spv")
+            }),
+            entry_point: &format!("{}depth_prepass_vertex", prefix),
+            buffers: stationary_depth_prepass_vertex_buffers,
+        };
+
         let animated_vertex_state = wgpu::VertexState {
             module: &device.create_shader_module(if options.multiview.is_none() {
                 wgpu::include_spirv!("../../compiled-shaders/single_view_animated_vertex.spv")
@@ -170,6 +195,14 @@ impl Pipelines {
             format: DEPTH_FORMAT,
             depth_write_enabled: true,
             depth_compare: wgpu::CompareFunction::Less,
+            bias: wgpu::DepthBiasState::default(),
+            stencil: wgpu::StencilState::default(),
+        };
+
+        let eq_depth_state = wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Equal,
             bias: wgpu::DepthBiasState::default(),
             stencil: wgpu::StencilState::default(),
         };
@@ -303,7 +336,11 @@ impl Pipelines {
                             vertex: vertex_state.clone(),
                             fragment: Some(fragment_opaque.clone()),
                             primitive: backface_culling_primitive_state,
-                            depth_stencil: Some(normal_depth_state.clone()),
+                            depth_stencil: Some(if options.depth_prepass {
+                                eq_depth_state.clone()
+                            } else {
+                                normal_depth_state.clone()
+                            }),
                             multisample: Default::default(),
                             multiview: options.multiview,
                         }),
@@ -313,7 +350,11 @@ impl Pipelines {
                             vertex: vertex_state.clone(),
                             fragment: Some(fragment_opaque.clone()),
                             primitive: double_sided_primitive_state,
-                            depth_stencil: Some(normal_depth_state.clone()),
+                            depth_stencil: Some(if options.depth_prepass {
+                                eq_depth_state
+                            } else {
+                                normal_depth_state.clone()
+                            }),
                             multisample: Default::default(),
                             multiview: options.multiview,
                         }),
@@ -427,12 +468,34 @@ impl Pipelines {
                             vertex: animated_vertex_state.clone(),
                             fragment: Some(fragment_alpha_blended.clone()),
                             primitive: double_sided_primitive_state,
-                            depth_stencil: Some(normal_depth_state),
+                            depth_stencil: Some(normal_depth_state.clone()),
                             multisample: Default::default(),
                             multiview: options.multiview,
                         }),
                     },
                 },
+            },
+            opaque_depth_prepass: permutations::FaceSides {
+                single: device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("opaque stationary depth-prepass single-sided pipeline"),
+                    layout: Some(&uniform_only_pipeline_layout),
+                    vertex: stationary_depth_prepass_vertex_state.clone(),
+                    fragment: None,
+                    primitive: backface_culling_primitive_state,
+                    depth_stencil: Some(normal_depth_state.clone()),
+                    multisample: Default::default(),
+                    multiview: options.multiview,
+                }),
+                double: device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("opaque stationary depth-prepass double-sided pipeline"),
+                    layout: Some(&uniform_only_pipeline_layout),
+                    vertex: stationary_depth_prepass_vertex_state.clone(),
+                    fragment: None,
+                    primitive: double_sided_primitive_state,
+                    depth_stencil: Some(normal_depth_state.clone()),
+                    multisample: Default::default(),
+                    multiview: options.multiview,
+                }),
             },
             tonemap: tonemap_pipeline,
             skybox: device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

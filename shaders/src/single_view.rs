@@ -221,3 +221,21 @@ pub fn tonemap(
 
     *output = linear_to_srgb_approx(linear).extend(1.0)
 }
+
+#[spirv(vertex)]
+pub fn depth_prepass_vertex(
+    position: Vec3,
+    instance_translation_and_scale: Vec4,
+    instance_rotation: glam::Quat,
+    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(position)] builtin_pos: &mut Vec4,
+) {
+    super::depth_prepass_vertex(
+        position,
+        instance_translation_and_scale,
+        instance_rotation,
+        uniforms,
+        builtin_pos,
+        0,
+    )
+}

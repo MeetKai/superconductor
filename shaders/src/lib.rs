@@ -20,8 +20,8 @@ pub type SphereHarmonics = [Vec3; 9];
 mod single_view;
 
 pub use single_view::{
-    animated_vertex as _, fragment as _, fragment_alpha_clipped as _, line_vertex as _,
-    tonemap as _, vertex as _, vertex_skybox as _, fragment_alpha_blended as _,
+    animated_vertex as _, depth_prepass_vertex as _, fragment as _, fragment_alpha_blended as _,
+    fragment_alpha_clipped as _, line_vertex as _, tonemap as _, vertex as _, vertex_skybox as _,
 };
 
 #[spirv(vertex)]
@@ -205,7 +205,14 @@ pub fn fragment(
 
     let view_vector = (uniforms.eye_position(view_index) - position).normalize();
 
-    let normal = calculate_normal(normal, uv, view_vector, &normal_texture, front_facing, material_settings.normal_map_scale);
+    let normal = calculate_normal(
+        normal,
+        uv,
+        view_vector,
+        &normal_texture,
+        front_facing,
+        material_settings.normal_map_scale,
+    );
     let view = glam_pbr::View(view_vector);
 
     let lut_values = glam_pbr::ggx_lut_lookup(
@@ -243,7 +250,6 @@ pub fn fragment(
 
     *output = potentially_tonemap(combined_output, uniforms).extend(1.0);
 }
-
 
 #[spirv(fragment)]
 pub fn fragment_alpha_blended(
@@ -287,7 +293,14 @@ pub fn fragment_alpha_blended(
 
     let view_vector = (uniforms.eye_position(view_index) - position).normalize();
 
-    let normal = calculate_normal(normal, uv, view_vector, &normal_texture, front_facing, material_settings.normal_map_scale);
+    let normal = calculate_normal(
+        normal,
+        uv,
+        view_vector,
+        &normal_texture,
+        front_facing,
+        material_settings.normal_map_scale,
+    );
     let view = glam_pbr::View(view_vector);
 
     let lut_values = glam_pbr::ggx_lut_lookup(
@@ -326,7 +339,6 @@ pub fn fragment_alpha_blended(
     *output = potentially_tonemap(combined_output, uniforms).extend(material_params.alpha);
 }
 
-
 #[spirv(fragment)]
 pub fn fragment_alpha_clipped(
     position: Vec3,
@@ -362,7 +374,14 @@ pub fn fragment_alpha_clipped(
 
     let view_vector = (uniforms.eye_position(view_index) - position).normalize();
 
-    let normal = calculate_normal(normal, uv, view_vector, &normal_texture, front_facing, material_settings.normal_map_scale);
+    let normal = calculate_normal(
+        normal,
+        uv,
+        view_vector,
+        &normal_texture,
+        front_facing,
+        material_settings.normal_map_scale,
+    );
     let view = glam_pbr::View(view_vector);
 
     // We can only do this after we've sampled all textures for naga control flow reasons.
@@ -648,4 +667,24 @@ unsafe fn sample_sphere_harmonics(sphere_harmonics: &SphereHarmonics, normal: Ve
         + index(6) * (3.0 * z * z - 1.0)
         + index(7) * (z * x)
         + index(8) * (x * x - y * y)
+}
+
+#[spirv(vertex)]
+pub fn depth_prepass_vertex(
+    position: Vec3,
+    instance_translation_and_scale: Vec4,
+    instance_rotation: glam::Quat,
+    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(position)] builtin_pos: &mut Vec4,
+    #[spirv(view_index)] view_index: i32,
+) {
+    let instance_scale = instance_translation_and_scale.w;
+    let instance_translation = instance_translation_and_scale.truncate();
+
+    let position = instance_translation + (instance_rotation * instance_scale * position);
+    *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
+
+    if uniforms.flip_viewport != 0 {
+        builtin_pos.y = -builtin_pos.y;
+    }
 }

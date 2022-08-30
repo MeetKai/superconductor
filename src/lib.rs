@@ -229,6 +229,7 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
             framebuffer_format: wgpu::TextureFormat::Rgba8Unorm,
             // As we're doing multiview.
             flip_viewport: false,
+            depth_prepass: false,
         }
     } else {
         renderer_core::PipelineOptions {
@@ -237,6 +238,7 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
             framebuffer_format: wgpu::TextureFormat::Rgba8Unorm,
             // As we're rendering directly to the framebuffer.
             flip_viewport: true,
+            depth_prepass: false,
         }
     };
 
@@ -383,6 +385,7 @@ pub async fn initialise_desktop() -> InitialisedState {
             framebuffer_format: surface.get_supported_formats(&adapter)[0],
             // wgpu handles this for us.
             flip_viewport: false,
+            depth_prepass: false,
         },
         surface,
     }

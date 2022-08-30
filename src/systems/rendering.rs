@@ -3,8 +3,8 @@ use crate::resources::{
     Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
 };
 use renderer_core::{
-    arc_swap, permutations, pipelines::DEPTH_FORMAT, LineVertex, RawAnimatedVertexBuffers,
-    RawVertexBuffers, VecGpuBuffer,
+    arc_swap, assets::models::Ranges, permutations, pipelines::DEPTH_FORMAT, LineVertex,
+    RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
 };
 use std::ops::Range;
 use std::sync::Arc;
@@ -43,6 +43,7 @@ pub(crate) fn render_desktop(
     main_bind_group: Res<MainBindGroup>,
     skybox_uniform_bind_group: Res<SkyboxUniformBindGroup>,
     surface_frame_view: Res<SurfaceFrameView>,
+    pipeline_options: Res<renderer_core::PipelineOptions>,
     mut intermediate_depth_framebuffer: ResMut<resources::IntermediateDepthFramebuffer>,
     (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer, line_buffer): (
         Res<IndexBuffer>,
@@ -89,6 +90,46 @@ pub(crate) fn render_desktop(
         label: Some("command encoder"),
     });
 
+    if pipeline_options.depth_prepass {
+        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("depth prepass render pass"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &depth_attachment.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
+        });
+
+        render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_vertex_buffer(0, vertex_buffers.position.slice(..));
+        render_pass.set_vertex_buffer(1, instance_buffer.0.buffer.slice(..));
+
+        render_pass.set_pipeline(&pipelines.opaque_depth_prepass.single);
+        render_pass.set_bind_group(0, &main_bind_group, &[]);
+
+        static_models.for_each(|(model, instance_range)| {
+            let index_range = model.0.primitive_ranges.opaque.single.indices.clone();
+
+            if !instance_range.0.is_empty() && !index_range.is_empty() {
+                render_pass.draw_indexed(index_range, 0, instance_range.0.clone());
+            }
+        });
+
+        render_pass.set_pipeline(&pipelines.opaque_depth_prepass.double);
+
+        static_models.for_each(|(model, instance_range)| {
+            let index_range = model.0.primitive_ranges.opaque.double.indices.clone();
+
+            if !instance_range.0.is_empty() && !index_range.is_empty() {
+                render_pass.draw_indexed(index_range, 0, instance_range.0.clone());
+            }
+        });
+    }
+
     let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("main render pass"),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -102,7 +143,11 @@ pub(crate) fn render_desktop(
         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
             view: &depth_attachment.view,
             depth_ops: Some(wgpu::Operations {
-                load: wgpu::LoadOp::Clear(1.0),
+                load: if pipeline_options.depth_prepass {
+                    wgpu::LoadOp::Load
+                } else {
+                    wgpu::LoadOp::Clear(1.0)
+                },
                 store: true,
             }),
             stencil_ops: None,
@@ -354,7 +399,7 @@ pub(crate) fn render(
     queue.submit(std::iter::once(command_encoder.finish()));
 }
 
-fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usize>>>(
+fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Ranges>>(
     render_pass: &mut wgpu::RenderPass<'a>,
     vertex_buffers: &'a RawVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
     animated_vertex_buffers: &'a RawAnimatedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
@@ -373,7 +418,7 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usiz
         render_pass,
         static_models,
         static_model_bind_groups,
-        |primitive_ranges| range_getter(primitive_ranges).single,
+        |primitive_ranges| range_getter(primitive_ranges).single.primitives,
     );
 
     render_pass.set_pipeline(&pipelines.stationary.double);
@@ -382,7 +427,7 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usiz
         render_pass,
         static_models,
         static_model_bind_groups,
-        |primitive_ranges| range_getter(primitive_ranges).double,
+        |primitive_ranges| range_getter(primitive_ranges).double.primitives,
     );
 
     bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
@@ -393,7 +438,7 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usiz
         render_pass,
         animated_models,
         animated_model_bind_groups,
-        |primitive_ranges| range_getter(primitive_ranges).single,
+        |primitive_ranges| range_getter(primitive_ranges).single.primitives,
     );
 
     render_pass.set_pipeline(&pipelines.animated.double);
@@ -402,7 +447,7 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Range<usiz
         render_pass,
         animated_models,
         animated_model_bind_groups,
-        |primitive_ranges| range_getter(primitive_ranges).double,
+        |primitive_ranges| range_getter(primitive_ranges).double.primitives,
     );
 }
 

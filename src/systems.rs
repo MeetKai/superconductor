@@ -568,7 +568,7 @@ pub(crate) fn set_desktop_uniform_buffers(
         z_far: f32,
     ) -> Mat4 {
         let t = (vertical_fov / 2.0).tan();
-        let mut sy = 1.0 / t;
+        let sy = 1.0 / t;
         let sx = sy / aspect_ratio;
         let nmf = z_near - z_far;
 
