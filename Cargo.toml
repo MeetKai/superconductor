@@ -61,8 +61,8 @@ members = [
 
 [patch.crates-io]
 glow = { git = "https://github.com/grovesNL/glow", rev = "11853d28ae64fbd7db5c856fe8b92a4a20fded94" }
-wgpu = { git = "https://github.com/expenses/wgpu", rev = "8112eda46aa17d67a7c7562eed844411a929a18c" }
-wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "8112eda46aa17d67a7c7562eed844411a929a18c" }
+wgpu = { git = "https://github.com/expenses/wgpu", rev = "697481ee27556a960effaebb2de9e626b2d63618" }
+wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "697481ee27556a960effaebb2de9e626b2d63618" }
 
 [profile.dev]
 debug = true
