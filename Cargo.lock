@@ -1330,7 +1330,7 @@ dependencies = [
 [[package]]
 name = "goth-gltf"
 version = "0.1.0"
-source = "git+https://github.com/expenses/goth-gltf?rev=ae5a02f72f88b08b1f9d38502f0d6b1bd530e974#ae5a02f72f88b08b1f9d38502f0d6b1bd530e974"
+source = "git+https://github.com/expenses/goth-gltf?rev=584bfe250af13de6e9ea98e1d76d12e4ea92b2f2#584bfe250af13de6e9ea98e1d76d12e4ea92b2f2"
 dependencies = [
  "nanoserde",
 ]

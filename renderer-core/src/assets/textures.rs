@@ -763,9 +763,12 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
     }
     .mip_level_size(down_scaling_level, false);
 
-    if let Ktx2Format::WgpuCompatible(format) = format {
-        starting_extent = starting_extent.physical_size(format);
-    }
+    let wgpu_format = match format {
+        Ktx2Format::Uastc(transcode_target_format) => transcode_target_format.as_wgpu(srgb),
+        Ktx2Format::WgpuCompatible(format) => format,
+    };
+
+    starting_extent = starting_extent.physical_size(wgpu_format);
 
     // We round down the width and height below, but if they're less than 3 then they're rounded down to 0.
     // The smallest block size is 4x4 so we just round the sizes up to that here.
@@ -776,10 +779,7 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         mip_level_count: header.level_count - down_scaling_level,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: match format {
-            Ktx2Format::Uastc(transcode_target_format) => transcode_target_format.as_wgpu(srgb),
-            Ktx2Format::WgpuCompatible(format) => format,
-        },
+        format: wgpu_format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
     };
 

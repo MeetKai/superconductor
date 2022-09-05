@@ -4,6 +4,10 @@ use super::HttpClient;
 use crate::permutations;
 use crate::{spawn, BindGroupLayouts, Texture};
 use arc_swap::ArcSwap;
+use futures::{
+    future::{self, Future},
+    FutureExt,
+};
 use glam::{Mat2, Mat4, UVec4, Vec2, Vec3, Vec4};
 use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
@@ -19,6 +23,7 @@ mod accessors;
 
 use accessors::{read_buffer_with_accessor, read_f32, read_f32x3, read_f32x4, PrimitiveReader};
 
+#[derive(Clone)]
 pub struct Context<T> {
     pub http_client: T,
     pub device: Arc<wgpu::Device>,
@@ -29,6 +34,19 @@ pub struct Context<T> {
     pub index_buffer: Arc<crate::buffers::IndexBuffer>,
     pub pipelines: Arc<crate::Pipelines>,
     pub texture_settings: textures::Settings,
+}
+
+impl<T: Clone> Context<T> {
+    fn textures_context(&self) -> textures::Context<T> {
+        textures::Context {
+            bind_group_layouts: self.bind_group_layouts.clone(),
+            device: self.device.clone(),
+            queue: self.queue.clone(),
+            http_client: self.http_client.clone(),
+            pipelines: self.pipelines.clone(),
+            settings: self.texture_settings.clone(),
+        }
+    }
 }
 
 pub type PrimitiveRanges = permutations::BlendMode<permutations::FaceSides<Ranges>>;
@@ -44,11 +62,8 @@ pub struct Ranges {
 fn collect_all_primitives<'a, T: HttpClient, B: 'a + CollectableBuffer + Default>(
     context: &Context<T>,
     gltf: Arc<goth_gltf::Gltf>,
-    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
-    root_url: &url::Url,
-    staging_primitives: &permutations::BlendMode<
-        permutations::FaceSides<HashMap<Option<usize>, StagingPrimitive<B>>>,
-    >,
+    staging_primitives: &permutations::BlendMode<permutations::FaceSides<Vec<StagingPrimitive<B>>>>,
+    pending_textures: Arc<HashMap<usize, PendingTexture>>,
 ) -> (PrimitiveRanges, Vec<Primitive>, B) {
     let mut primitives = Vec::new();
     let mut staging_buffers = B::default();
@@ -58,60 +73,54 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + CollectableBuffer + Default
             single: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
-                staging_primitives.opaque.single.values(),
+                &staging_primitives.opaque.single,
                 context,
                 gltf.clone(),
-                buffer_view_map.clone(),
-                root_url,
+                pending_textures.clone(),
             ),
             double: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
-                staging_primitives.opaque.double.values(),
+                &staging_primitives.opaque.double,
                 context,
                 gltf.clone(),
-                buffer_view_map.clone(),
-                root_url,
+                pending_textures.clone(),
             ),
         },
         alpha_clipped: permutations::FaceSides {
             single: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
-                staging_primitives.alpha_clipped.single.values(),
+                &staging_primitives.alpha_clipped.single,
                 context,
                 gltf.clone(),
-                buffer_view_map.clone(),
-                root_url,
+                pending_textures.clone(),
             ),
             double: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
-                staging_primitives.alpha_clipped.double.values(),
+                &staging_primitives.alpha_clipped.double,
                 context,
                 gltf.clone(),
-                buffer_view_map.clone(),
-                root_url,
+                pending_textures.clone(),
             ),
         },
         alpha_blended: permutations::FaceSides {
             single: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
-                staging_primitives.alpha_blended.single.values(),
+                &staging_primitives.alpha_blended.single,
                 context,
                 gltf.clone(),
-                buffer_view_map.clone(),
-                root_url,
+                pending_textures.clone(),
             ),
             double: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
-                staging_primitives.alpha_blended.double.values(),
+                &staging_primitives.alpha_blended.double,
                 context,
                 gltf,
-                buffer_view_map,
-                root_url,
+                pending_textures.clone(),
             ),
         },
     };
@@ -125,15 +134,14 @@ fn collect_primitives<
     'a,
     T: HttpClient,
     B: CollectableBuffer + 'a,
-    I: std::iter::Iterator<Item = &'a StagingPrimitive<B>>,
+    I: IntoIterator<Item = &'a StagingPrimitive<B>>,
 >(
     primitives: &mut Vec<Primitive>,
     staging_buffers: &mut B,
     staging_primitives: I,
     context: &Context<T>,
     gltf: Arc<goth_gltf::Gltf>,
-    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
-    root_url: &url::Url,
+    pending_textures: Arc<HashMap<usize, PendingTexture>>,
 ) -> Ranges {
     let primitives_start = primitives.len();
     let indices_start = staging_buffers.num_indices();
@@ -160,9 +168,8 @@ fn collect_primitives<
             material_bindings,
             staging_primitive.material_index,
             gltf.clone(),
-            buffer_view_map.clone(),
             context,
-            root_url,
+            pending_textures.clone(),
         )
     }
 
@@ -188,7 +195,7 @@ async fn collect_buffer_view_map<T: HttpClient>(
     glb_buffer: Option<&[u8]>,
     root_url: &url::Url,
     context: &Context<T>,
-) -> anyhow::Result<HashMap<usize, Vec<u8>>> {
+) -> anyhow::Result<Arc<HashMap<usize, Vec<u8>>>> {
     use std::borrow::Cow;
 
     let mut buffer_map = HashMap::new();
@@ -288,7 +295,7 @@ async fn collect_buffer_view_map<T: HttpClient>(
         }
     }
 
-    Ok(buffer_view_map)
+    Ok(Arc::new(buffer_view_map))
 }
 
 pub struct Model {
@@ -313,9 +320,10 @@ impl Model {
 
         // What we're doing here is essentially collecting all the model primitives that share a meterial together
         // to reduce the number of draw calls.
-        let mut staging_primitives: permutations::BlendMode<
-            permutations::FaceSides<HashMap<_, _>>,
-        > = Default::default();
+        let mut staging_primitives: permutations::BlendMode<permutations::FaceSides<Vec<_>>> =
+            Default::default();
+
+        let mut pending_textures = Default::default();
 
         for (node_index, mesh_index) in gltf
             .nodes
@@ -337,7 +345,7 @@ impl Model {
                 // One thing to keep in mind is that we flip the shading normals according to the gltf spec:
                 // https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html#double-sided
 
-                let primitive_map = match (material.alpha_mode, material.double_sided) {
+                let primitive_vec = match (material.alpha_mode, material.double_sided) {
                     (AlphaMode::Opaque, false) => &mut staging_primitives.opaque.single,
                     (AlphaMode::Opaque, true) => &mut staging_primitives.opaque.double,
 
@@ -352,35 +360,38 @@ impl Model {
 
                 let material_info = MaterialInfo::load(material, &reader);
 
-                let staging_primitive =
-                    primitive_map
-                        .entry(material_index)
-                        .or_insert_with(|| StagingPrimitive {
-                            buffers: StagingBuffers::default(),
-                            material_settings: material_info.settings,
-                            material_index: material_index.unwrap_or(0),
-                        });
+                let mut staging_primitive = StagingPrimitive {
+                    buffers: StagingBuffers::default(),
+                    material_settings: material_info.settings,
+                    material_index: material_index.unwrap_or(0),
+                };
 
                 staging_primitive.buffers.extend_from_reader(
                     &reader,
                     transform,
                     material_info.texture_transform,
                 )?;
+
+                primitive_vec.push(staging_primitive);
+
+                start_loading_material_textures(
+                    &material,
+                    &gltf,
+                    &mut pending_textures,
+                    root_url.clone(),
+                    context.textures_context(),
+                    buffer_view_map.clone(),
+                )?;
             }
         }
 
         let gltf = Arc::new(gltf);
-        let buffer_view_map = Arc::new(buffer_view_map);
+        let pending_textures = Arc::new(pending_textures);
 
         // Collect all the buffers for the primitives into one big staging buffer
         // and collect all the primitive ranges into one big vector.
-        let (mut primitive_ranges, mut primitives, mut staging_buffers) = collect_all_primitives(
-            context,
-            gltf,
-            buffer_view_map,
-            root_url,
-            &staging_primitives,
-        );
+        let (mut primitive_ranges, mut primitives, mut staging_buffers) =
+            collect_all_primitives(context, gltf, &staging_primitives, pending_textures);
 
         let mut command_encoder =
             context
@@ -459,9 +470,10 @@ impl AnimatedModel {
 
         let buffer_view_map = collect_buffer_view_map(&gltf, glb_buffer, root_url, context).await?;
 
-        let mut staging_primitives: permutations::BlendMode<
-            permutations::FaceSides<HashMap<_, _>>,
-        > = Default::default();
+        let mut staging_primitives: permutations::BlendMode<permutations::FaceSides<Vec<_>>> =
+            Default::default();
+
+        let mut pending_textures = Default::default();
 
         for (node_index, mesh_index) in gltf
             .nodes
@@ -482,7 +494,7 @@ impl AnimatedModel {
                 // One thing to keep in mind is that we flip the shading normals according to the gltf spec:
                 // https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html#double-sided
 
-                let primitive_map = match (material.alpha_mode, material.double_sided) {
+                let primitive_vec = match (material.alpha_mode, material.double_sided) {
                     (AlphaMode::Opaque, false) => &mut staging_primitives.opaque.single,
                     (AlphaMode::Opaque, true) => &mut staging_primitives.opaque.double,
 
@@ -497,14 +509,11 @@ impl AnimatedModel {
 
                 let material_info = MaterialInfo::load(material, &reader);
 
-                let staging_primitive =
-                    primitive_map
-                        .entry(material_index)
-                        .or_insert_with(|| StagingPrimitive {
-                            buffers: AnimatedStagingBuffers::default(),
-                            material_settings: material_info.settings,
-                            material_index: material_index.unwrap_or(0),
-                        });
+                let mut staging_primitive = StagingPrimitive {
+                    buffers: AnimatedStagingBuffers::default(),
+                    material_settings: material_info.settings,
+                    material_index: material_index.unwrap_or(0),
+                };
 
                 let num_vertices = staging_primitive.buffers.base.extend_from_reader(
                     &reader,
@@ -541,21 +550,27 @@ impl AnimatedModel {
                         .joint_weights
                         .extend(std::iter::repeat(Vec4::X).take(num_vertices)),
                 };
+
+                primitive_vec.push(staging_primitive);
+
+                start_loading_material_textures(
+                    &material,
+                    &gltf,
+                    &mut pending_textures,
+                    root_url.clone(),
+                    context.textures_context(),
+                    buffer_view_map.clone(),
+                )?;
             }
         }
 
         let gltf = Arc::new(gltf);
-        let buffer_view_map = Arc::new(buffer_view_map);
+        let pending_textures = Arc::new(pending_textures);
 
         // Collect all the buffers for the primitives into one big staging buffer
         // and collect all the primitive ranges into one big vector.
-        let (mut primitive_ranges, mut primitives, mut staging_buffers) = collect_all_primitives(
-            context,
-            gltf.clone(),
-            buffer_view_map.clone(),
-            root_url,
-            &staging_primitives,
-        );
+        let (mut primitive_ranges, mut primitives, mut staging_buffers) =
+            collect_all_primitives(context, gltf.clone(), &staging_primitives, pending_textures);
 
         let mut command_encoder =
             context
@@ -815,9 +830,8 @@ fn spawn_texture_loading_futures<T: HttpClient>(
     material_bindings: MaterialBindings,
     material_index: usize,
     gltf: Arc<goth_gltf::Gltf>,
-    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
     context: &Context<T>,
-    root_url: &url::Url,
+    pending_textures: Arc<HashMap<usize, PendingTexture>>,
 ) {
     let material = match gltf.materials.get(material_index) {
         Some(material) => *material,
@@ -832,34 +846,22 @@ fn spawn_texture_loading_futures<T: HttpClient>(
     };
 
     let pbr = material.pbr_metallic_roughness;
-
-    // This is a little messy. As we're spawning a future for each possible texture I want to make the code that calls
-    // `load_image_from_source_with_followup` as small as possible.
-    let image_context = ImageContext {
-        gltf,
-        buffer_view_map,
-        root_url: root_url.clone(),
-        textures_context: textures::Context {
-            bind_group_layouts: context.bind_group_layouts.clone(),
-            device: context.device.clone(),
-            queue: context.queue.clone(),
-            http_client: context.http_client.clone(),
-            pipelines: context.pipelines.clone(),
-            settings: context.texture_settings.clone(),
-        },
-        bind_group,
-        material_bindings: Arc::new(material_bindings),
-    };
+    let context = context.clone();
 
     spawn({
         async move {
             let albedo_texture = {
-                let image_context = image_context.clone();
+                let pending_textures = pending_textures.clone();
+                let gltf = gltf.clone();
 
                 async move {
                     anyhow::Ok(match pbr.base_color_texture {
                         Some(texture) => {
-                            Some(load_image_from_gltf(texture.index, true, &image_context).await?)
+                            pending_textures
+                                .get(&image_index_from_texture_index(texture.index, &gltf)?)
+                                .unwrap()
+                                .clone()
+                                .await
                         }
                         None => None,
                     })
@@ -867,12 +869,17 @@ fn spawn_texture_loading_futures<T: HttpClient>(
             };
 
             let metallic_roughness_texture = {
-                let image_context = image_context.clone();
+                let pending_textures = pending_textures.clone();
+                let gltf = gltf.clone();
 
                 async move {
                     anyhow::Ok(match pbr.metallic_roughness_texture {
                         Some(texture) => {
-                            Some(load_image_from_gltf(texture.index, false, &image_context).await?)
+                            pending_textures
+                                .get(&image_index_from_texture_index(texture.index, &gltf)?)
+                                .unwrap()
+                                .clone()
+                                .await
                         }
                         None => None,
                     })
@@ -880,12 +887,17 @@ fn spawn_texture_loading_futures<T: HttpClient>(
             };
 
             let normal_texture = {
-                let image_context = image_context.clone();
+                let pending_textures = pending_textures.clone();
+                let gltf = gltf.clone();
 
                 async move {
                     anyhow::Ok(match material.normal_texture {
                         Some(texture) => {
-                            Some(load_image_from_gltf(texture.index, false, &image_context).await?)
+                            pending_textures
+                                .get(&image_index_from_texture_index(texture.index, &gltf)?)
+                                .unwrap()
+                                .clone()
+                                .await
                         }
                         None => None,
                     })
@@ -893,12 +905,17 @@ fn spawn_texture_loading_futures<T: HttpClient>(
             };
 
             let emissive_texture = {
-                let image_context = image_context.clone();
+                let pending_textures = pending_textures.clone();
+                let gltf = gltf.clone();
 
                 async move {
                     anyhow::Ok(match material.emissive_texture {
                         Some(texture) => {
-                            Some(load_image_from_gltf(texture.index, true, &image_context).await?)
+                            pending_textures
+                                .get(&image_index_from_texture_index(texture.index, &gltf)?)
+                                .unwrap()
+                                .clone()
+                                .await
                         }
                         None => None,
                     })
@@ -920,110 +937,190 @@ fn spawn_texture_loading_futures<T: HttpClient>(
                 emission: emission_texture?,
             };
 
-            image_context.bind_group.store(Arc::new(
-                image_context.material_bindings.create_bind_group(
-                    &image_context.textures_context.device,
-                    &image_context.textures_context.settings,
-                    incoming_textures,
-                ),
-            ));
+            bind_group.store(Arc::new(material_bindings.create_bind_group(
+                &context.device,
+                &context.texture_settings,
+                incoming_textures,
+            )));
 
             Ok(())
         }
     });
 }
 
-#[derive(Clone)]
-struct ImageContext<T> {
-    gltf: Arc<goth_gltf::Gltf>,
-    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
-    root_url: url::Url,
-    textures_context: textures::Context<T>,
-    bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
-    material_bindings: Arc<MaterialBindings>,
-}
+type PendingTexture =
+    future::Shared<std::pin::Pin<Box<dyn Future<Output = Option<Arc<Texture>>> + Send + 'static>>>;
 
-async fn load_image_from_gltf<T: HttpClient>(
+fn image_index_from_texture_index(
     texture_index: usize,
-    srgb: bool,
-    context: &ImageContext<T>,
-) -> anyhow::Result<Arc<Texture>> {
-    let texture = match context.gltf.textures.get(texture_index) {
+    gltf: &goth_gltf::Gltf,
+) -> anyhow::Result<usize> {
+    let texture = match gltf.textures.get(texture_index) {
         Some(texture) => texture,
         None => {
             return Err(anyhow::anyhow!(
                 "Texture index {} is out of range of {}",
                 texture_index,
-                context.gltf.textures.len()
+                gltf.textures.len()
             ))
         }
     };
 
-    let source = match texture
+    match texture
         .extensions
         .khr_texture_basisu
         .as_ref()
         .map(|ext| ext.source)
         .or(texture.source)
     {
-        Some(source) => source,
-        None => return Err(anyhow::anyhow!("Texture {} has no source", texture_index)),
-    };
+        Some(source) => Ok(source),
+        None => Err(anyhow::anyhow!("Texture {} has no source", texture_index)),
+    }
+}
 
-    let image = match context.gltf.images.get(source) {
-        Some(image) => image,
+fn start_loading_material_textures<T: HttpClient>(
+    material: &goth_gltf::Material,
+    gltf: &goth_gltf::Gltf,
+    pending_textures: &mut HashMap<usize, PendingTexture>,
+    root_url: url::Url,
+    textures_context: textures::Context<T>,
+    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
+) -> anyhow::Result<()> {
+    if let Some(tex_info) = material.pbr_metallic_roughness.base_color_texture {
+        start_loading_texture(
+            tex_info.index,
+            true,
+            gltf,
+            pending_textures,
+            root_url.clone(),
+            textures_context.clone(),
+            buffer_view_map.clone(),
+        )?;
+    }
+
+    if let Some(tex_info) = material.pbr_metallic_roughness.metallic_roughness_texture {
+        start_loading_texture(
+            tex_info.index,
+            false,
+            gltf,
+            pending_textures,
+            root_url.clone(),
+            textures_context.clone(),
+            buffer_view_map.clone(),
+        )?;
+    }
+
+    if let Some(tex_info) = material.normal_texture {
+        start_loading_texture(
+            tex_info.index,
+            false,
+            gltf,
+            pending_textures,
+            root_url.clone(),
+            textures_context.clone(),
+            buffer_view_map.clone(),
+        )?;
+    }
+
+    if let Some(tex_info) = material.emissive_texture {
+        start_loading_texture(
+            tex_info.index,
+            true,
+            gltf,
+            pending_textures,
+            root_url,
+            textures_context,
+            buffer_view_map,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn start_loading_texture<T: HttpClient>(
+    texture_index: usize,
+    srgb: bool,
+    gltf: &goth_gltf::Gltf,
+    pending_textures: &mut HashMap<usize, PendingTexture>,
+    root_url: url::Url,
+    textures_context: textures::Context<T>,
+    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
+) -> anyhow::Result<()> {
+    let image_index = image_index_from_texture_index(texture_index, gltf)?;
+
+    if pending_textures.contains_key(&image_index) {
+        return Ok(());
+    }
+
+    let image: goth_gltf::Image = match gltf.images.get(image_index) {
+        Some(image) => image.clone(),
         None => {
             return Err(anyhow::anyhow!(
                 "Image index {} is out of range of {}",
-                source,
-                context.gltf.images.len()
+                image_index,
+                gltf.images.len()
             ))
         }
     };
 
-    if let Some(uri) = &image.uri {
-        let url = url::Url::options()
-            .base_url(Some(&context.root_url))
-            .parse(uri)?;
+    let future = async move {
+        if let Some(uri) = &image.uri {
+            let url = url::Url::options().base_url(Some(&root_url)).parse(uri)?;
 
-        if url.scheme() == "data" {
-            let (_mime_type, data) = url
-                .path()
-                .split_once(',')
-                .ok_or_else(|| anyhow::anyhow!("Failed to get data uri seperator"))?;
+            if url.scheme() == "data" {
+                let (_mime_type, data) = url
+                    .path()
+                    .split_once(',')
+                    .ok_or_else(|| anyhow::anyhow!("Failed to get data uri seperator"))?;
 
-            let bytes = base64::decode(data)?;
+                let bytes = base64::decode(data)?;
 
+                load_image_with_mime_type(
+                    ImageSource::Bytes(&bytes),
+                    srgb,
+                    image.mime_type.as_ref().map(|string| &string[..]),
+                    &textures_context,
+                )
+                .await
+            } else {
+                load_image_with_mime_type(
+                    ImageSource::Url(url),
+                    srgb,
+                    image.mime_type.as_ref().map(|string| &string[..]),
+                    &textures_context,
+                )
+                .await
+            }
+        } else if let Some(buffer_view_index) = image.buffer_view {
+            let buffer_view_bytes = buffer_view_map.get(&buffer_view_index).unwrap();
             load_image_with_mime_type(
-                ImageSource::Bytes(&bytes),
+                ImageSource::Bytes(buffer_view_bytes),
                 srgb,
                 image.mime_type.as_ref().map(|string| &string[..]),
-                &context.textures_context,
+                &textures_context,
             )
             .await
         } else {
-            load_image_with_mime_type(
-                ImageSource::Url(url),
-                srgb,
-                image.mime_type.as_ref().map(|string| &string[..]),
-                &context.textures_context,
-            )
-            .await
+            Err(anyhow::anyhow!(
+                "Neither an uri or a buffer view was specified for the image."
+            ))
         }
-    } else if let Some(buffer_view_index) = image.buffer_view {
-        let buffer_view_bytes = context.buffer_view_map.get(&buffer_view_index).unwrap();
-        load_image_with_mime_type(
-            ImageSource::Bytes(buffer_view_bytes),
-            srgb,
-            image.mime_type.as_ref().map(|string| &string[..]),
-            &context.textures_context,
-        )
-        .await
-    } else {
-        Err(anyhow::anyhow!(
-            "Neither an uri or a buffer view was specified for the image."
-        ))
-    }
+    };
+
+    let future = future
+        .map(|result| match result {
+            Ok(texture) => Some(texture),
+            Err(error) => {
+                log::error!("{}", error);
+                None
+            }
+        })
+        .boxed()
+        .shared();
+
+    pending_textures.insert(image_index, future);
+
+    Ok(())
 }
 
 struct MaterialInfo {
