@@ -1,13 +1,10 @@
 use super::materials::MaterialBindings;
-use super::textures::{self, load_image_with_mime_type, ImageSource};
+use super::textures;
 use super::HttpClient;
+use crate::culling::BoundingBox;
 use crate::permutations;
-use crate::{spawn, BindGroupLayouts, Texture};
+use crate::{spawn, BindGroupLayouts};
 use arc_swap::ArcSwap;
-use futures::{
-    future::{self, Future},
-    FutureExt,
-};
 use glam::{Mat2, Mat4, UVec4, Vec2, Vec3, Vec4};
 use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
@@ -20,8 +17,12 @@ use std::ops::Range;
 use std::sync::Arc;
 
 mod accessors;
+mod texture_loading;
 
 use accessors::{read_buffer_with_accessor, read_f32, read_f32x3, read_f32x4, PrimitiveReader};
+use texture_loading::{
+    image_index_from_texture_index, start_loading_all_material_textures, PendingTexture,
+};
 
 #[derive(Clone)]
 pub struct Context<T> {
@@ -161,6 +162,7 @@ fn collect_primitives<
         primitives.push(Primitive {
             index_buffer_range: staging_buffers.collect(&staging_primitive.buffers),
             bind_group: bind_group.clone(),
+            bounding_box: staging_primitive.bounding_box,
         });
 
         spawn_texture_loading_futures(
@@ -313,6 +315,7 @@ impl Model {
         let bytes = context.http_client.fetch_bytes(root_url, None).await?;
 
         let (gltf, glb_buffer) = goth_gltf::Gltf::from_bytes(&bytes)?;
+        let gltf = Arc::new(gltf);
 
         let node_tree = gltf_helpers::NodeTree::new(&gltf);
 
@@ -323,7 +326,12 @@ impl Model {
         let mut staging_primitives: permutations::BlendMode<permutations::FaceSides<Vec<_>>> =
             Default::default();
 
-        let mut pending_textures = Default::default();
+        let pending_textures = Arc::new(start_loading_all_material_textures(
+            &gltf,
+            root_url.clone(),
+            context.textures_context(),
+            buffer_view_map.clone(),
+        )?);
 
         for (node_index, mesh_index) in gltf
             .nodes
@@ -360,33 +368,18 @@ impl Model {
 
                 let material_info = MaterialInfo::load(material, &reader);
 
-                let mut staging_primitive = StagingPrimitive {
-                    buffers: StagingBuffers::default(),
+                let mut buffers = StagingBuffers::default();
+
+                buffers.extend_from_reader(&reader, transform, material_info.texture_transform)?;
+
+                primitive_vec.push(StagingPrimitive {
+                    bounding_box: BoundingBox::new(&buffers.positions),
+                    buffers,
                     material_settings: material_info.settings,
                     material_index: material_index.unwrap_or(0),
-                };
-
-                staging_primitive.buffers.extend_from_reader(
-                    &reader,
-                    transform,
-                    material_info.texture_transform,
-                )?;
-
-                primitive_vec.push(staging_primitive);
-
-                start_loading_material_textures(
-                    &material,
-                    &gltf,
-                    &mut pending_textures,
-                    root_url.clone(),
-                    context.textures_context(),
-                    buffer_view_map.clone(),
-                )?;
+                });
             }
         }
-
-        let gltf = Arc::new(gltf);
-        let pending_textures = Arc::new(pending_textures);
 
         // Collect all the buffers for the primitives into one big staging buffer
         // and collect all the primitive ranges into one big vector.
@@ -465,6 +458,7 @@ impl AnimatedModel {
         let bytes = context.http_client.fetch_bytes(root_url, None).await?;
 
         let (gltf, glb_buffer) = goth_gltf::Gltf::from_bytes(&bytes)?;
+        let gltf = Arc::new(gltf);
 
         let node_tree = gltf_helpers::NodeTree::new(&gltf);
 
@@ -473,7 +467,12 @@ impl AnimatedModel {
         let mut staging_primitives: permutations::BlendMode<permutations::FaceSides<Vec<_>>> =
             Default::default();
 
-        let mut pending_textures = Default::default();
+        let pending_textures = Arc::new(start_loading_all_material_textures(
+            &gltf,
+            root_url.clone(),
+            context.textures_context(),
+            buffer_view_map.clone(),
+        )?);
 
         for (node_index, mesh_index) in gltf
             .nodes
@@ -509,63 +508,45 @@ impl AnimatedModel {
 
                 let material_info = MaterialInfo::load(material, &reader);
 
-                let mut staging_primitive = StagingPrimitive {
-                    buffers: AnimatedStagingBuffers::default(),
-                    material_settings: material_info.settings,
-                    material_index: material_index.unwrap_or(0),
-                };
+                let mut buffers = AnimatedStagingBuffers::default();
 
-                let num_vertices = staging_primitive.buffers.base.extend_from_reader(
+                let num_vertices = buffers.base.extend_from_reader(
                     &reader,
                     Similarity::IDENTITY,
                     material_info.texture_transform,
                 )?;
 
                 match reader.read_joints()? {
-                    Some(joints) => {
-                        staging_primitive
-                            .buffers
-                            .joint_indices
-                            .extend(joints.map(|indices| {
-                                UVec4::new(
-                                    indices[0] as u32,
-                                    indices[1] as u32,
-                                    indices[2] as u32,
-                                    indices[3] as u32,
-                                )
-                            }))
-                    }
-                    None => staging_primitive.buffers.joint_indices.extend(
+                    Some(joints) => buffers.joint_indices.extend(joints.map(|indices| {
+                        UVec4::new(
+                            indices[0] as u32,
+                            indices[1] as u32,
+                            indices[2] as u32,
+                            indices[3] as u32,
+                        )
+                    })),
+                    None => buffers.joint_indices.extend(
                         std::iter::repeat(UVec4::splat(node_index as u32)).take(num_vertices),
                     ),
                 }
 
                 match reader.read_weights()? {
-                    Some(joint_weights) => staging_primitive
-                        .buffers
-                        .joint_weights
-                        .extend(joint_weights.map(Vec4::from)),
-                    None => staging_primitive
-                        .buffers
+                    Some(joint_weights) => {
+                        buffers.joint_weights.extend(joint_weights.map(Vec4::from))
+                    }
+                    None => buffers
                         .joint_weights
                         .extend(std::iter::repeat(Vec4::X).take(num_vertices)),
                 };
 
-                primitive_vec.push(staging_primitive);
-
-                start_loading_material_textures(
-                    &material,
-                    &gltf,
-                    &mut pending_textures,
-                    root_url.clone(),
-                    context.textures_context(),
-                    buffer_view_map.clone(),
-                )?;
+                primitive_vec.push(StagingPrimitive {
+                    bounding_box: BoundingBox::new(&buffers.base.positions),
+                    buffers,
+                    material_settings: material_info.settings,
+                    material_index: material_index.unwrap_or(0),
+                });
             }
         }
-
-        let gltf = Arc::new(gltf);
-        let pending_textures = Arc::new(pending_textures);
 
         // Collect all the buffers for the primitives into one big staging buffer
         // and collect all the primitive ranges into one big vector.
@@ -705,11 +686,13 @@ struct StagingPrimitive<T> {
     buffers: T,
     material_settings: shared_structs::MaterialSettings,
     material_index: usize,
+    bounding_box: BoundingBox,
 }
 
 pub struct Primitive {
     pub index_buffer_range: Range<u32>,
     pub bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
+    pub bounding_box: BoundingBox,
 }
 
 trait CollectableBuffer {
@@ -922,7 +905,7 @@ fn spawn_texture_loading_futures<T: HttpClient>(
                 }
             };
 
-            let (albedo_texture, metallic_roughness_texture, normal_texture, emission_texture) =
+            let (albedo_texture, metallic_roughness_texture, normal_texture, emissive_texture) =
                 futures::future::join4(
                     albedo_texture,
                     metallic_roughness_texture,
@@ -934,7 +917,7 @@ fn spawn_texture_loading_futures<T: HttpClient>(
                 albedo: albedo_texture?,
                 metallic_roughness: metallic_roughness_texture?,
                 normal: normal_texture?,
-                emission: emission_texture?,
+                emissive: emissive_texture?,
             };
 
             bind_group.store(Arc::new(material_bindings.create_bind_group(
@@ -946,181 +929,6 @@ fn spawn_texture_loading_futures<T: HttpClient>(
             Ok(())
         }
     });
-}
-
-type PendingTexture =
-    future::Shared<std::pin::Pin<Box<dyn Future<Output = Option<Arc<Texture>>> + Send + 'static>>>;
-
-fn image_index_from_texture_index(
-    texture_index: usize,
-    gltf: &goth_gltf::Gltf,
-) -> anyhow::Result<usize> {
-    let texture = match gltf.textures.get(texture_index) {
-        Some(texture) => texture,
-        None => {
-            return Err(anyhow::anyhow!(
-                "Texture index {} is out of range of {}",
-                texture_index,
-                gltf.textures.len()
-            ))
-        }
-    };
-
-    match texture
-        .extensions
-        .khr_texture_basisu
-        .as_ref()
-        .map(|ext| ext.source)
-        .or(texture.source)
-    {
-        Some(source) => Ok(source),
-        None => Err(anyhow::anyhow!("Texture {} has no source", texture_index)),
-    }
-}
-
-fn start_loading_material_textures<T: HttpClient>(
-    material: &goth_gltf::Material,
-    gltf: &goth_gltf::Gltf,
-    pending_textures: &mut HashMap<usize, PendingTexture>,
-    root_url: url::Url,
-    textures_context: textures::Context<T>,
-    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
-) -> anyhow::Result<()> {
-    if let Some(tex_info) = material.pbr_metallic_roughness.base_color_texture {
-        start_loading_texture(
-            tex_info.index,
-            true,
-            gltf,
-            pending_textures,
-            root_url.clone(),
-            textures_context.clone(),
-            buffer_view_map.clone(),
-        )?;
-    }
-
-    if let Some(tex_info) = material.pbr_metallic_roughness.metallic_roughness_texture {
-        start_loading_texture(
-            tex_info.index,
-            false,
-            gltf,
-            pending_textures,
-            root_url.clone(),
-            textures_context.clone(),
-            buffer_view_map.clone(),
-        )?;
-    }
-
-    if let Some(tex_info) = material.normal_texture {
-        start_loading_texture(
-            tex_info.index,
-            false,
-            gltf,
-            pending_textures,
-            root_url.clone(),
-            textures_context.clone(),
-            buffer_view_map.clone(),
-        )?;
-    }
-
-    if let Some(tex_info) = material.emissive_texture {
-        start_loading_texture(
-            tex_info.index,
-            true,
-            gltf,
-            pending_textures,
-            root_url,
-            textures_context,
-            buffer_view_map,
-        )?;
-    }
-
-    Ok(())
-}
-
-fn start_loading_texture<T: HttpClient>(
-    texture_index: usize,
-    srgb: bool,
-    gltf: &goth_gltf::Gltf,
-    pending_textures: &mut HashMap<usize, PendingTexture>,
-    root_url: url::Url,
-    textures_context: textures::Context<T>,
-    buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
-) -> anyhow::Result<()> {
-    let image_index = image_index_from_texture_index(texture_index, gltf)?;
-
-    if pending_textures.contains_key(&image_index) {
-        return Ok(());
-    }
-
-    let image: goth_gltf::Image = match gltf.images.get(image_index) {
-        Some(image) => image.clone(),
-        None => {
-            return Err(anyhow::anyhow!(
-                "Image index {} is out of range of {}",
-                image_index,
-                gltf.images.len()
-            ))
-        }
-    };
-
-    let future = async move {
-        if let Some(uri) = &image.uri {
-            let url = url::Url::options().base_url(Some(&root_url)).parse(uri)?;
-
-            if url.scheme() == "data" {
-                let (_mime_type, data) = url
-                    .path()
-                    .split_once(',')
-                    .ok_or_else(|| anyhow::anyhow!("Failed to get data uri seperator"))?;
-
-                let bytes = base64::decode(data)?;
-
-                load_image_with_mime_type(
-                    ImageSource::Bytes(&bytes),
-                    srgb,
-                    image.mime_type.as_ref().map(|string| &string[..]),
-                    &textures_context,
-                )
-                .await
-            } else {
-                load_image_with_mime_type(
-                    ImageSource::Url(url),
-                    srgb,
-                    image.mime_type.as_ref().map(|string| &string[..]),
-                    &textures_context,
-                )
-                .await
-            }
-        } else if let Some(buffer_view_index) = image.buffer_view {
-            let buffer_view_bytes = buffer_view_map.get(&buffer_view_index).unwrap();
-            load_image_with_mime_type(
-                ImageSource::Bytes(buffer_view_bytes),
-                srgb,
-                image.mime_type.as_ref().map(|string| &string[..]),
-                &textures_context,
-            )
-            .await
-        } else {
-            Err(anyhow::anyhow!(
-                "Neither an uri or a buffer view was specified for the image."
-            ))
-        }
-    };
-
-    let future = future
-        .map(|result| match result {
-            Ok(texture) => Some(texture),
-            Err(error) => {
-                log::error!("{}", error);
-                None
-            }
-        })
-        .boxed()
-        .shared();
-
-    pending_textures.insert(image_index, future);
-
-    Ok(())
 }
 
 struct MaterialInfo {

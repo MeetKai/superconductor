@@ -16,7 +16,7 @@ All models use indexed geometry and store vertex positions, uvs and normals. Ani
 
 Models are considered to be made up of what I've named primitives. All geometry in a primitive share a glTF material and store the textures, sampler and material settings (such as the base colour factor) in a bind group, as well as the geometry indices for the the primitive.
 
-All primitives store albedo, metallic-roughness, normal and emission textures, even if the texture was not specified in the glTF. 1x1 dummy textures are used until a specified texture is loaded in to replace it.
+All primitives store albedo, metallic-roughness, normal and emissive textures, even if the texture was not specified in the glTF. 1x1 dummy textures are used until a specified texture is loaded in to replace it.
 
 ### Textures
 

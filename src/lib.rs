@@ -22,6 +22,7 @@ pub use winit;
 
 pub use renderer_core::{
     assets::{textures, HttpClient},
+    culling::CullingFrustum,
     glam::Vec3,
 };
 
@@ -72,6 +73,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
         app.insert_resource(LutUrl(
             url::Url::parse("http://localhost:8000/assets/lut_ggx.png").unwrap(),
         ));
+        app.insert_resource(CullingFrustum::default());
 
         app.add_startup_stage(
             StartupStage::PipelineCreation,
@@ -121,6 +123,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
                 .with_system(systems::push_joints)
                 // For debugging joints
                 //.with_system(systems::push_debug_joints_to_lines_buffer)
+                //.with_system(systems::push_debug_bounding_boxes_to_lines_buffer)
         );
 
         app.add_stage_after(

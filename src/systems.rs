@@ -15,6 +15,7 @@ use renderer_core::{
     assets::{textures, HttpClient},
     bytemuck, create_main_bind_group,
     crevice::std140::AsStd140,
+    culling::CullingFrustum,
     ibl::IblResources,
     shared_structs, spawn, GpuInstance, Texture,
 };
@@ -193,11 +194,11 @@ pub(crate) fn push_joints(
 
 pub(crate) fn push_debug_joints_to_lines_buffer(
     instance_query: Query<(&InstanceOf, &AnimationJoints, &Instance)>,
-    mut model_query: Query<&AnimatedModel>,
+    model_query: Query<&AnimatedModel>,
     mut line_buffer: ResMut<LineBuffer>,
 ) {
     instance_query.for_each(|(instance_of, animation_joints, instance)| {
-        match model_query.get_mut(instance_of.0) {
+        match model_query.get(instance_of.0) {
             Ok(animated_model) => {
                 for (id, (start, end)) in animation_joints
                     .0
@@ -225,6 +226,30 @@ pub(crate) fn push_debug_joints_to_lines_buffer(
                     "Got an error when pushing joints to the lines buffer for debugging: {}",
                     error
                 );
+            }
+        }
+    })
+}
+
+pub(crate) fn push_debug_bounding_boxes_to_lines_buffer(
+    instance_query: Query<(&InstanceOf, &Instance)>,
+    model_query: Query<&Model>,
+    mut line_buffer: ResMut<LineBuffer>,
+) {
+    instance_query.for_each(|(instance_of, instance)| {
+        if let Ok(model) = model_query.get(instance_of.0) {
+            for (primitive_id, primitive) in model.0.primitives.iter().enumerate() {
+                let vertices =
+                    primitive
+                        .bounding_box
+                        .line_points()
+                        .map(|point| renderer_core::LineVertex {
+                            position: instance.0.position
+                                + (instance.0.rotation * instance.0.scale * point),
+                            colour_id: primitive_id as u32,
+                        });
+
+                line_buffer.staging.extend_from_slice(&vertices);
             }
         }
     })
@@ -552,6 +577,7 @@ pub(crate) fn set_desktop_uniform_buffers(
     skybox_uniform_buffer: Res<SkyboxUniformBuffer>,
     surface_frame_view: Res<SurfaceFrameView>,
     camera: Res<Camera>,
+    mut culling_frustum: ResMut<CullingFrustum>,
 ) {
     let queue = &queue.0;
 
@@ -581,6 +607,12 @@ pub(crate) fn set_desktop_uniform_buffers(
     }
 
     let perspective_matrix = create_perspective_matrix(
+        59.0_f32.to_radians(),
+        surface_frame_view.width as f32 / surface_frame_view.height as f32,
+        0.001,
+        1000.0,
+    );
+    *culling_frustum = CullingFrustum::new(
         59.0_f32.to_radians(),
         surface_frame_view.width as f32 / surface_frame_view.height as f32,
         0.001,

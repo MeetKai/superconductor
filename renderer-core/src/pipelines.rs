@@ -492,7 +492,7 @@ impl Pipelines {
                     vertex: stationary_depth_prepass_vertex_state.clone(),
                     fragment: None,
                     primitive: double_sided_primitive_state,
-                    depth_stencil: Some(normal_depth_state.clone()),
+                    depth_stencil: Some(normal_depth_state),
                     multisample: Default::default(),
                     multiview: options.multiview,
                 }),

@@ -33,7 +33,7 @@ pub struct Textures<T> {
     pub albedo: T,
     pub normal: T,
     pub metallic_roughness: T,
-    pub emission: T,
+    pub emissive: T,
 }
 
 pub struct MaterialBindings {
@@ -59,7 +59,7 @@ impl MaterialBindings {
         Self {
             bind_group_layouts,
             single_pixel_textures: Textures {
-                emission: load_single_pixel_image(
+                emissive: load_single_pixel_image(
                     device,
                     queue,
                     wgpu::TextureFormat::Rgba8UnormSrgb,
@@ -100,7 +100,7 @@ impl MaterialBindings {
                 albedo: None,
                 normal: None,
                 metallic_roughness: None,
-                emission: None,
+                emissive: None,
             },
         )
     }
@@ -151,9 +151,9 @@ impl MaterialBindings {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::TextureView(
-                        match &incoming_textures.emission {
-                            Some(emission) => &emission.view,
-                            None => &self.single_pixel_textures.emission.view,
+                        match &incoming_textures.emissive {
+                            Some(emissive) => &emissive.view,
+                            None => &self.single_pixel_textures.emissive.view,
                         },
                     ),
                 },

@@ -1,5 +1,6 @@
 mod bind_group_layouts;
 mod buffers;
+pub mod culling;
 
 pub mod assets;
 pub mod ibl;

@@ -1,10 +1,15 @@
 use crate::resources::{
-    self, AnimatedVertexBuffers, Device, IndexBuffer, InstanceBuffer, LineBuffer, MainBindGroup,
-    Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
+    self, AnimatedVertexBuffers, Camera, Device, IndexBuffer, InstanceBuffer, LineBuffer,
+    MainBindGroup, Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
 };
 use renderer_core::{
-    arc_swap, assets::models::Ranges, permutations, pipelines::DEPTH_FORMAT, LineVertex,
-    RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
+    arc_swap,
+    assets::models::Ranges,
+    culling::{self, CullingFrustum},
+    glam::Mat4,
+    permutations,
+    pipelines::DEPTH_FORMAT,
+    LineVertex, RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
 };
 use std::ops::Range;
 use std::sync::Arc;
@@ -35,11 +40,21 @@ fn bind_animated_vertex_buffers<'a>(
     render_pass.set_vertex_buffer(5, vertex_buffers.joint_weights.slice(..));
 }
 
+type ModelQuery<'world, 'state, 'component> =
+    Query<'world, 'state, (&'component Model, &'component InstanceRange)>;
+type AnimatedModelQuery<'world, 'state, 'component> = Query<
+    'world,
+    'state,
+    (
+        &'component AnimatedModel,
+        &'component JointBuffers,
+        &'component InstanceRange,
+    ),
+>;
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_desktop(
-    device: Res<Device>,
-    queue: Res<Queue>,
-    pipelines: Res<Pipelines>,
+    (device, queue, pipelines): (Res<Device>, Res<Queue>, Res<Pipelines>),
     main_bind_group: Res<MainBindGroup>,
     skybox_uniform_bind_group: Res<SkyboxUniformBindGroup>,
     surface_frame_view: Res<SurfaceFrameView>,
@@ -52,8 +67,10 @@ pub(crate) fn render_desktop(
         Res<InstanceBuffer>,
         Res<LineBuffer>,
     ),
-    static_models: Query<(&Model, &InstanceRange)>,
-    animated_models: Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>,
+    culling_frustum: Res<CullingFrustum>,
+    camera: Res<Camera>,
+    static_models: ModelQuery,
+    animated_models: AnimatedModelQuery,
     mut static_model_bind_groups: Local<ModelBindGroups>,
     mut animated_model_bind_groups: Local<ModelBindGroups>,
 ) {
@@ -156,18 +173,22 @@ pub(crate) fn render_desktop(
 
     render_everything(
         &mut render_pass,
-        &vertex_buffers,
-        &animated_vertex_buffers,
-        &index_buffer,
-        &instance_buffer.0.buffer,
-        &main_bind_group,
-        &skybox_uniform_bind_group.0,
-        pipelines,
+        Context {
+            vertex_buffers: &vertex_buffers,
+            animated_vertex_buffers: &animated_vertex_buffers,
+            index_buffer: &index_buffer,
+            instance_buffer: &instance_buffer.0.buffer,
+            main_bind_group: &main_bind_group,
+            skybox_uniform_bind_group: &skybox_uniform_bind_group.0,
+            pipelines,
+            static_model_bind_groups: &static_model_bind_groups,
+            animated_model_bind_groups: &animated_model_bind_groups,
+            line_buffer: &line_buffer.buffer,
+            culling_frustum: &culling_frustum,
+            view_matrix: camera.view_matrix(),
+        },
         &static_models,
         &animated_models,
-        &static_model_bind_groups,
-        &animated_model_bind_groups,
-        &line_buffer.buffer,
     );
 
     drop(render_pass);
@@ -179,9 +200,7 @@ pub(crate) fn render_desktop(
 #[cfg(feature = "webgl")]
 pub(crate) fn render(
     frame: bevy_ecs::prelude::NonSend<web_sys::XrFrame>,
-    device: Res<Device>,
-    queue: Res<Queue>,
-    pipelines: Res<Pipelines>,
+    (device, queue, pipelines): (Res<Device>, Res<Queue>, Res<Pipelines>),
     bind_group_layouts: Res<resources::BindGroupLayouts>,
     main_bind_group: Res<MainBindGroup>,
     skybox_uniform_bind_group: Res<SkyboxUniformBindGroup>,
@@ -197,8 +216,9 @@ pub(crate) fn render(
         Res<InstanceBuffer>,
         Res<LineBuffer>,
     ),
-    static_models: Query<(&Model, &InstanceRange)>,
-    animated_models: Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>,
+    (culling_frustum, camera): (Res<CullingFrustum>, Res<Camera>),
+    static_models: ModelQuery,
+    animated_models: AnimatedModelQuery,
     (mut static_model_bind_groups, mut animated_model_bind_groups): (
         Local<ModelBindGroups>,
         Local<ModelBindGroups>,
@@ -356,18 +376,22 @@ pub(crate) fn render(
 
     render_everything(
         &mut render_pass,
-        &vertex_buffers,
-        &animated_vertex_buffers,
-        &index_buffer,
-        &instance_buffer.0.buffer,
-        &main_bind_group,
-        &skybox_uniform_bind_group.0,
-        pipelines,
+        Context {
+            vertex_buffers: &vertex_buffers,
+            animated_vertex_buffers: &animated_vertex_buffers,
+            index_buffer: &index_buffer,
+            instance_buffer: &instance_buffer.0.buffer,
+            main_bind_group: &main_bind_group,
+            skybox_uniform_bind_group: &skybox_uniform_bind_group.0,
+            pipelines,
+            static_model_bind_groups: &static_model_bind_groups,
+            animated_model_bind_groups: &animated_model_bind_groups,
+            line_buffer: &line_buffer.buffer,
+            culling_frustum: &culling_frustum,
+            view_matrix: camera.view_matrix(),
+        },
         &static_models,
         &animated_models,
-        &static_model_bind_groups,
-        &animated_model_bind_groups,
-        &line_buffer.buffer,
     );
 
     drop(render_pass);
@@ -401,23 +425,22 @@ pub(crate) fn render(
 
 fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Ranges>>(
     render_pass: &mut wgpu::RenderPass<'a>,
-    vertex_buffers: &'a RawVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
-    animated_vertex_buffers: &'a RawAnimatedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
-    static_models: &'a Query<(&Model, &InstanceRange)>,
-    animated_models: &'a Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>,
-    static_model_bind_groups: &'a ModelBindGroups,
-    animated_model_bind_groups: &'a ModelBindGroups,
+    context: &Context<'a>,
+    static_models: &'a ModelQuery,
+    animated_models: &'a AnimatedModelQuery,
     pipelines: &'a permutations::ModelTypes<permutations::FaceSides<wgpu::RenderPipeline>>,
     range_getter: R,
 ) {
-    bind_static_vertex_buffers(render_pass, vertex_buffers);
+    bind_static_vertex_buffers(render_pass, context.vertex_buffers);
 
     render_pass.set_pipeline(&pipelines.stationary.single);
 
     render_all_primitives(
         render_pass,
         static_models,
-        static_model_bind_groups,
+        context.static_model_bind_groups,
+        context.culling_frustum,
+        context.view_matrix,
         |primitive_ranges| range_getter(primitive_ranges).single.primitives,
     );
 
@@ -426,18 +449,20 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Ranges>>(
     render_all_primitives(
         render_pass,
         static_models,
-        static_model_bind_groups,
+        context.static_model_bind_groups,
+        context.culling_frustum,
+        context.view_matrix,
         |primitive_ranges| range_getter(primitive_ranges).double.primitives,
     );
 
-    bind_animated_vertex_buffers(render_pass, animated_vertex_buffers);
+    bind_animated_vertex_buffers(render_pass, context.animated_vertex_buffers);
 
     render_pass.set_pipeline(&pipelines.animated.single);
 
     render_all_animated_primitives(
         render_pass,
         animated_models,
-        animated_model_bind_groups,
+        context.animated_model_bind_groups,
         |primitive_ranges| range_getter(primitive_ranges).single.primitives,
     );
 
@@ -446,14 +471,12 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Ranges>>(
     render_all_animated_primitives(
         render_pass,
         animated_models,
-        animated_model_bind_groups,
+        context.animated_model_bind_groups,
         |primitive_ranges| range_getter(primitive_ranges).double.primitives,
     );
 }
 
-#[allow(clippy::too_many_arguments)]
-fn render_everything<'a>(
-    render_pass: &mut wgpu::RenderPass<'a>,
+struct Context<'a> {
     vertex_buffers: &'a RawVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
     animated_vertex_buffers: &'a RawAnimatedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
     index_buffer: &'a wgpu::Buffer,
@@ -461,60 +484,59 @@ fn render_everything<'a>(
     main_bind_group: &'a wgpu::BindGroup,
     skybox_uniform_bind_group: &'a wgpu::BindGroup,
     pipelines: &'a renderer_core::Pipelines,
-    static_models: &'a Query<(&Model, &InstanceRange)>,
-    animated_models: &'a Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>,
     static_model_bind_groups: &'a ModelBindGroups,
     animated_model_bind_groups: &'a ModelBindGroups,
     line_buffer: &'a VecGpuBuffer<LineVertex>,
-) {
-    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-    render_pass.set_vertex_buffer(3, instance_buffer.slice(..));
+    culling_frustum: &'a CullingFrustum,
+    view_matrix: Mat4,
+}
 
-    render_pass.set_bind_group(0, main_bind_group, &[]);
+#[allow(clippy::too_many_arguments)]
+fn render_everything<'a>(
+    render_pass: &mut wgpu::RenderPass<'a>,
+    context: Context<'a>,
+    static_models: &'a ModelQuery,
+    animated_models: &'a AnimatedModelQuery,
+) {
+    render_pass.set_index_buffer(context.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+    render_pass.set_vertex_buffer(3, context.instance_buffer.slice(..));
+
+    render_pass.set_bind_group(0, context.main_bind_group, &[]);
 
     render_mode(
         render_pass,
-        vertex_buffers,
-        animated_vertex_buffers,
+        &context,
         static_models,
         animated_models,
-        static_model_bind_groups,
-        animated_model_bind_groups,
-        &pipelines.pbr.opaque,
+        &context.pipelines.pbr.opaque,
         |primitive_ranges| primitive_ranges.opaque.clone(),
     );
 
     render_mode(
         render_pass,
-        vertex_buffers,
-        animated_vertex_buffers,
+        &context,
         static_models,
         animated_models,
-        static_model_bind_groups,
-        animated_model_bind_groups,
-        &pipelines.pbr.alpha_clipped,
+        &context.pipelines.pbr.alpha_clipped,
         |primitive_ranges| primitive_ranges.alpha_clipped.clone(),
     );
 
-    if line_buffer.len() > 0 {
-        render_pass.set_pipeline(&pipelines.line);
-        render_pass.set_vertex_buffer(0, line_buffer.buffer.slice(..));
-        render_pass.draw(0..line_buffer.len(), 0..1);
+    if context.line_buffer.len() > 0 {
+        render_pass.set_pipeline(&context.pipelines.line);
+        render_pass.set_vertex_buffer(0, context.line_buffer.buffer.slice(..));
+        render_pass.draw(0..context.line_buffer.len(), 0..1);
     }
 
-    render_pass.set_pipeline(&pipelines.skybox);
-    render_pass.set_bind_group(1, skybox_uniform_bind_group, &[]);
+    render_pass.set_pipeline(&context.pipelines.skybox);
+    render_pass.set_bind_group(1, context.skybox_uniform_bind_group, &[]);
     render_pass.draw(0..3, 0..1);
 
     render_mode(
         render_pass,
-        vertex_buffers,
-        animated_vertex_buffers,
+        &context,
         static_models,
         animated_models,
-        static_model_bind_groups,
-        animated_model_bind_groups,
-        &pipelines.pbr.alpha_blended,
+        &context.pipelines.pbr.alpha_blended,
         |primitive_ranges| primitive_ranges.alpha_blended.clone(),
     );
 }
@@ -585,8 +607,10 @@ impl ModelBindGroups {
 
 fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     render_pass: &mut wgpu::RenderPass<'a>,
-    models: &Query<(&Model, &InstanceRange)>,
+    models: &ModelQuery,
     model_bind_groups: &'a ModelBindGroups,
+    culling_frustum: &'a CullingFrustum,
+    view_matrix: Mat4,
     primitive_range_getter: G,
 ) {
     for (model_index, (model, instance_range)) in models.iter().enumerate() {
@@ -601,13 +625,21 @@ fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
             let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range];
 
             for (primitive, bind_group) in primitives.iter().zip(bind_groups) {
-                render_pass.set_bind_group(1, bind_group, &[]);
-
-                render_pass.draw_indexed(
-                    primitive.index_buffer_range.clone(),
-                    0,
-                    instance_range.0.clone(),
+                let passed_culling_check = culling::test_using_separating_axis_theorem(
+                    culling_frustum,
+                    view_matrix,
+                    &primitive.bounding_box,
                 );
+
+                if passed_culling_check {
+                    render_pass.set_bind_group(1, bind_group, &[]);
+
+                    render_pass.draw_indexed(
+                        primitive.index_buffer_range.clone(),
+                        0,
+                        instance_range.0.clone(),
+                    );
+                }
             }
         }
     }
@@ -615,7 +647,7 @@ fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
 
 fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     render_pass: &mut wgpu::RenderPass<'a>,
-    models: &'a Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>,
+    models: &'a AnimatedModelQuery,
     model_bind_groups: &'a ModelBindGroups,
     primitive_range_getter: G,
 ) {

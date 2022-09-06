@@ -131,7 +131,7 @@ impl<'a> TextureSampler<'a> {
 struct ExtendedMaterialParams {
     base: glam_pbr::MaterialParams,
     alpha: f32,
-    emission: Vec3,
+    emissive: Vec3,
 }
 
 impl ExtendedMaterialParams {
@@ -142,7 +142,7 @@ impl ExtendedMaterialParams {
         material_settings: &MaterialSettings,
     ) -> Self {
         let albedo = albedo_texture.sample() * material_settings.base_color_factor;
-        let emission = emissive_texture.sample().truncate() * material_settings.emissive_factor;
+        let emissive = emissive_texture.sample().truncate() * material_settings.emissive_factor;
 
         let metallic_roughness = metallic_roughness_texture.sample();
         let metallic = metallic_roughness.z * material_settings.metallic_factor;
@@ -158,7 +158,7 @@ impl ExtendedMaterialParams {
                 specular_factor: 1.0,
             },
             alpha: albedo.w,
-            emission,
+            emissive,
         }
     }
 }
@@ -246,7 +246,7 @@ pub fn fragment(
         },
     );
 
-    let combined_output = diffuse_output + specular_output + material_params.emission;
+    let combined_output = diffuse_output + specular_output + material_params.emissive;
 
     *output = potentially_tonemap(combined_output, uniforms).extend(1.0);
 }
@@ -334,7 +334,7 @@ pub fn fragment_alpha_blended(
         },
     );
 
-    let combined_output = diffuse_output + specular_output + material_params.emission;
+    let combined_output = diffuse_output + specular_output + material_params.emissive;
 
     *output = potentially_tonemap(combined_output, uniforms).extend(material_params.alpha);
 }
@@ -427,7 +427,7 @@ pub fn fragment_alpha_clipped(
         },
     );
 
-    let combined_output = diffuse_output + specular_output + material_params.emission;
+    let combined_output = diffuse_output + specular_output + material_params.emissive;
 
     *output = potentially_tonemap(combined_output, uniforms).extend(1.0);
 }
