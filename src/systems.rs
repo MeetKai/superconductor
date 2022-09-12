@@ -684,7 +684,7 @@ pub(crate) fn set_desktop_uniform_buffers(
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
         // Rendering to a srgb surface should be possible at some point, but doesn't currently seem to be.
         inline_srgb: is_webgpu as u32,
-        #[cfg(not(feature = "webgl"))]
+        #[cfg(not(feature = "wasm"))]
         _padding: 0,
     };
 
