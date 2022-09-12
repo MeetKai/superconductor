@@ -45,6 +45,8 @@ pub(crate) struct IntermediateColorFramebuffer(pub(crate) CachedFramebuffer);
 pub(crate) struct CompositeBindGroup(pub(crate) Option<wgpu::BindGroup>);
 pub(crate) struct ClampSampler(pub(crate) Arc<wgpu::Sampler>);
 
+pub(crate) struct IsVr(pub(crate) bool);
+
 #[derive(Default)]
 pub(crate) struct CachedFramebuffer {
     inner: Option<ResourceWithSize<renderer_core::Texture>>,

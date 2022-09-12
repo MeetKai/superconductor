@@ -5,7 +5,7 @@ use crate::components::{
 };
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, Camera, ClampSampler, CompositeBindGroup, Device,
-    IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer,
+    IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer, IsVr,
     LineBuffer, LutUrl, MainBindGroup, NewIblCubemap, Pipelines, Queue, SkyboxUniformBindGroup,
     SkyboxUniformBuffer, SurfaceFrameView, UniformBuffer, VertexBuffers,
 };
@@ -255,9 +255,9 @@ pub(crate) fn push_debug_bounding_boxes_to_lines_buffer(
     })
 }
 
-// Here would be a good place to do culling.
 pub(crate) fn push_entity_instances(
     camera: Res<Camera>,
+    is_vr: Res<IsVr>,
     culling_frustum: Res<CullingFrustum>,
     mut instance_query: Query<(&InstanceOf, &Instance, Option<&JointsOffset>)>,
     mut model_query: Query<(&mut Instances, Option<&Model>, Option<&AnimatedModel>)>,
@@ -271,8 +271,11 @@ pub(crate) fn push_entity_instances(
                     instances.reserve(model.0.primitives.len());
 
                     for (primitive_id, primitive) in model.0.primitives.iter().enumerate() {
-                        let passed_culling_check =
-                            renderer_core::culling::test_using_separating_axis_theorem(
+                        // todo: the culling method we're currently using doesn't really work with vr.
+                        // A better solution is to probably use bounding spheres like in
+                        // https://github.com/leetvr/hotham/blob/90692aeb80b449b0f833e92ec0f6c073b4faea39/hotham/src/resources/render_context.rs#L229-L258.
+                        let passed_culling_check = is_vr.0
+                            || renderer_core::culling::test_using_separating_axis_theorem(
                                 &culling_frustum,
                                 view_matrix,
                                 instance.0.position,
@@ -299,7 +302,8 @@ pub(crate) fn push_entity_instances(
                 } else if let Some(animated_model) = animated_model {
                     instances.reserve(animated_model.0.primitives.len());
 
-                    for (primitive_id, primitive) in animated_model.0.primitives.iter().enumerate() {
+                    for (primitive_id, primitive) in animated_model.0.primitives.iter().enumerate()
+                    {
                         instances.insert(
                             primitive_id,
                             GpuInstance {

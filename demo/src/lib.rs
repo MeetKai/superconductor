@@ -57,8 +57,8 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::ModelUrl(
                 url::Url::parse("http://localhost:8000/assets/models/ferris/ferris.gltf").unwrap(),
             ))
-            .insert(components::Instances(Default::default()))
-            .insert(components::InstanceRange(Default::default()))
+            .insert(components::Instances::default())
+            .insert(components::InstanceRanges::default())
             .id();
 
         app.world
@@ -86,8 +86,8 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::AnimatedModelUrl(
                 url::Url::parse("http://localhost:8000/assets/models/squid6.glb").unwrap(),
             ))
-            .insert(components::Instances(Default::default()))
-            .insert(components::InstanceRange(Default::default()))
+            .insert(components::Instances::default())
+            .insert(components::InstanceRanges::default())
             .id();
 
         app.world

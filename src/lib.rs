@@ -145,22 +145,6 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
         };
 
         app.add_stage_after(Stage::BufferUploading, Stage::Rendering, rendering_stage);
-
-        app.world
-            .spawn()
-            .insert(Instance(renderer_core::Instance::new(
-                Vec3::new(1.0, 1.0, -2.0),
-                1.0,
-                Default::default(),
-            )));
-
-        app.world
-            .spawn()
-            .insert(Instance(renderer_core::Instance::new(
-                Vec3::new(-1.0, 1.0, -2.0),
-                1.0,
-                Default::default(),
-            )));
     }
 }
 
@@ -178,6 +162,7 @@ pub enum ModeSpecificState {
     Xr {
         session: web_sys::XrSession,
         reference_space: web_sys::XrReferenceSpace,
+        is_vr: bool,
     },
     Desktop {
         window: Window,
@@ -316,6 +301,7 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         mode_specific: ModeSpecificState::Xr {
             session: xr_session,
             reference_space: xr_reference_space,
+            is_vr: xr_mode == web_sys::XrSessionMode::ImmersiveVr,
         },
         device,
         queue,
@@ -407,7 +393,10 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
         ModeSpecificState::Xr {
             session,
             reference_space,
+            is_vr,
         } => {
+            app.insert_resource(resources::IsVr(is_vr));
+
             renderer_core::run_rendering_loop(&session, move |time, frame| {
                 let pose = match frame.get_viewer_pose(&reference_space) {
                     Some(pose) => pose,
@@ -423,6 +412,8 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
             });
         }
         ModeSpecificState::Desktop { window, event_loop } => {
+            app.insert_resource(resources::IsVr(false));
+
             let size = window.inner_size();
 
             let mut config = wgpu::SurfaceConfiguration {
