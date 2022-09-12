@@ -5,7 +5,7 @@ use renderer_core::shared_structs::JointTransform;
 use std::ops::Range;
 use std::sync::Arc;
 
-#[derive(Component)]
+#[derive(Component, Debug, Clone, Copy)]
 pub struct Instance(pub renderer_core::Instance);
 
 #[derive(Component)]
@@ -23,11 +23,31 @@ pub struct PendingAnimatedModel(pub Arc<ArcSwapOption<models::AnimatedModel>>);
 #[derive(Component)]
 pub struct AnimatedModel(pub Arc<models::AnimatedModel>);
 
-#[derive(Component)]
-pub struct Instances(pub Vec<renderer_core::GpuInstance>);
+#[derive(Component, Default)]
+pub struct Instances {
+    pub inner: Vec<Vec<renderer_core::GpuInstance>>,
+}
 
-#[derive(Component)]
-pub struct InstanceRange(pub Range<u32>);
+impl Instances {
+    pub fn clear(&mut self) {
+        for primitive_instances in &mut self.inner {
+            primitive_instances.clear();
+        }
+    }
+
+    pub fn reserve(&mut self, capacity: usize) {
+        while self.inner.len() <= capacity {
+            self.inner.push(Vec::new());
+        }
+    }
+
+    pub fn insert(&mut self, primitive_id: usize, instance: renderer_core::GpuInstance) {
+        self.inner[primitive_id].push(instance);
+    }
+}
+
+#[derive(Component, Default)]
+pub struct InstanceRanges(pub Vec<Range<u32>>);
 
 #[derive(Component)]
 pub struct ModelUrl(pub url::Url);

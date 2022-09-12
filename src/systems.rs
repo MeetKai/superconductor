@@ -1,6 +1,6 @@
 use crate::components::{
     AnimatedModel, AnimatedModelUrl, AnimationJoints, AnimationState, Instance, InstanceOf,
-    InstanceRange, Instances, JointBuffer, JointBuffers, JointsOffset, Model, ModelUrl,
+    InstanceRanges, Instances, JointBuffer, JointBuffers, JointsOffset, Model, ModelUrl,
     PendingAnimatedModel, PendingModel,
 };
 use crate::resources::{
@@ -47,7 +47,7 @@ pub(crate) fn clear_instance_buffers(
 ) {
     instance_buffer.0.clear();
 
-    query.for_each_mut(|mut instances| instances.0.clear());
+    query.for_each_mut(|mut instances| instances.clear());
 }
 
 pub(crate) fn clear_joint_buffers(mut query: Query<&mut JointBuffers>) {
@@ -257,19 +257,61 @@ pub(crate) fn push_debug_bounding_boxes_to_lines_buffer(
 
 // Here would be a good place to do culling.
 pub(crate) fn push_entity_instances(
+    camera: Res<Camera>,
+    culling_frustum: Res<CullingFrustum>,
     mut instance_query: Query<(&InstanceOf, &Instance, Option<&JointsOffset>)>,
-    mut model_query: Query<&mut Instances>,
+    mut model_query: Query<(&mut Instances, Option<&Model>, Option<&AnimatedModel>)>,
 ) {
+    let view_matrix = camera.view_matrix();
+
     instance_query.for_each_mut(|(instance_of, instance, joints_offset)| {
         match model_query.get_mut(instance_of.0) {
-            Ok(mut instances) => {
-                instances.0.push(GpuInstance {
-                    position: instance.0.position,
-                    scale: instance.0.scale,
-                    rotation: instance.0.rotation,
-                    joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
-                    _padding: Default::default(),
-                });
+            Ok((mut instances, model, animated_model)) => {
+                if let Some(model) = model {
+                    instances.reserve(model.0.primitives.len());
+
+                    for (primitive_id, primitive) in model.0.primitives.iter().enumerate() {
+                        let passed_culling_check =
+                            renderer_core::culling::test_using_separating_axis_theorem(
+                                &culling_frustum,
+                                view_matrix,
+                                instance.0.position,
+                                instance.0.rotation,
+                                instance.0.scale,
+                                &primitive.bounding_box,
+                            );
+
+                        if !passed_culling_check {
+                            continue;
+                        }
+
+                        instances.insert(
+                            primitive_id,
+                            GpuInstance {
+                                position: instance.0.position,
+                                scale: instance.0.scale,
+                                rotation: instance.0.rotation,
+                                joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
+                                _padding: Default::default(),
+                            },
+                        );
+                    }
+                } else if let Some(animated_model) = animated_model {
+                    instances.reserve(animated_model.0.primitives.len());
+
+                    for (primitive_id, primitive) in animated_model.0.primitives.iter().enumerate() {
+                        instances.insert(
+                            primitive_id,
+                            GpuInstance {
+                                position: instance.0.position,
+                                scale: instance.0.scale,
+                                rotation: instance.0.rotation,
+                                joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
+                                _padding: Default::default(),
+                            },
+                        );
+                    }
+                }
             }
             Err(error) => {
                 log::warn!("Got an error when pushing an instance: {}", error);
@@ -282,7 +324,7 @@ pub(crate) fn upload_instances(
     device: Res<Device>,
     queue: Res<Queue>,
     mut instance_buffer: ResMut<InstanceBuffer>,
-    mut query: Query<(&Instances, &mut InstanceRange)>,
+    mut query: Query<(&Instances, &mut InstanceRanges)>,
 ) {
     let mut command_encoder = device
         .0
@@ -290,11 +332,17 @@ pub(crate) fn upload_instances(
             label: Some("command encoder"),
         });
 
-    query.for_each_mut(|(instances, mut instance_range)| {
-        instance_range.0 =
-            instance_buffer
-                .0
-                .push(&instances.0, &device.0, &queue.0, &mut command_encoder);
+    query.for_each_mut(|(instances, mut instance_ranges)| {
+        instance_ranges.0.clear();
+
+        for primitive_instances in &instances.inner {
+            instance_ranges.0.push(instance_buffer.0.push(
+                primitive_instances,
+                &device.0,
+                &queue.0,
+                &mut command_encoder,
+            ));
+        }
     });
 
     queue.0.submit(std::iter::once(command_encoder.finish()));

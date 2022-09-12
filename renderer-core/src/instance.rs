@@ -17,6 +17,7 @@ pub struct GpuInstance {
     pub _padding: [u32; 3],
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Instance {
     pub position: Vec3,
     pub scale: f32,

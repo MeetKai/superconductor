@@ -1,20 +1,15 @@
 use crate::resources::{
-    self, AnimatedVertexBuffers, Camera, Device, IndexBuffer, InstanceBuffer, LineBuffer,
-    MainBindGroup, Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
+    self, AnimatedVertexBuffers, Device, IndexBuffer, InstanceBuffer, LineBuffer, MainBindGroup,
+    Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
 };
 use renderer_core::{
-    arc_swap,
-    assets::models::Ranges,
-    culling::{self, CullingFrustum},
-    glam::Mat4,
-    permutations,
-    pipelines::DEPTH_FORMAT,
-    LineVertex, RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
+    arc_swap, assets::models::Ranges, permutations, pipelines::DEPTH_FORMAT, LineVertex,
+    RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
 };
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::components::{AnimatedModel, InstanceRange, JointBuffers, Model};
+use crate::components::{AnimatedModel, InstanceRanges, JointBuffers, Model};
 use bevy_ecs::prelude::{Local, Query, Res, ResMut};
 use renderer_core::assets::models::PrimitiveRanges;
 #[cfg(feature = "webgl")]
@@ -41,14 +36,14 @@ fn bind_animated_vertex_buffers<'a>(
 }
 
 type ModelQuery<'world, 'state, 'component> =
-    Query<'world, 'state, (&'component Model, &'component InstanceRange)>;
+    Query<'world, 'state, (&'component Model, &'component InstanceRanges)>;
 type AnimatedModelQuery<'world, 'state, 'component> = Query<
     'world,
     'state,
     (
         &'component AnimatedModel,
         &'component JointBuffers,
-        &'component InstanceRange,
+        &'component InstanceRanges,
     ),
 >;
 
@@ -67,8 +62,6 @@ pub(crate) fn render_desktop(
         Res<InstanceBuffer>,
         Res<LineBuffer>,
     ),
-    culling_frustum: Res<CullingFrustum>,
-    camera: Res<Camera>,
     static_models: ModelQuery,
     animated_models: AnimatedModelQuery,
     mut static_model_bind_groups: Local<ModelBindGroups>,
@@ -107,6 +100,7 @@ pub(crate) fn render_desktop(
         label: Some("command encoder"),
     });
 
+    // todo: most likely currently broken.
     if pipeline_options.depth_prepass {
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("depth prepass render pass"),
@@ -128,21 +122,23 @@ pub(crate) fn render_desktop(
         render_pass.set_pipeline(&pipelines.opaque_depth_prepass.single);
         render_pass.set_bind_group(0, &main_bind_group, &[]);
 
-        static_models.for_each(|(model, instance_range)| {
+        static_models.for_each(|(model, instance_ranges)| {
             let index_range = model.0.primitive_ranges.opaque.single.indices.clone();
+            let instance_range = &instance_ranges.0[0];
 
-            if !instance_range.0.is_empty() && !index_range.is_empty() {
-                render_pass.draw_indexed(index_range, 0, instance_range.0.clone());
+            if !instance_range.is_empty() && !index_range.is_empty() {
+                render_pass.draw_indexed(index_range, 0, instance_range.clone());
             }
         });
 
         render_pass.set_pipeline(&pipelines.opaque_depth_prepass.double);
 
-        static_models.for_each(|(model, instance_range)| {
+        static_models.for_each(|(model, instance_ranges)| {
             let index_range = model.0.primitive_ranges.opaque.double.indices.clone();
+            let instance_range = &instance_ranges.0[0];
 
-            if !instance_range.0.is_empty() && !index_range.is_empty() {
-                render_pass.draw_indexed(index_range, 0, instance_range.0.clone());
+            if !instance_range.is_empty() && !index_range.is_empty() {
+                render_pass.draw_indexed(index_range, 0, instance_range.clone());
             }
         });
     }
@@ -184,8 +180,6 @@ pub(crate) fn render_desktop(
             static_model_bind_groups: &static_model_bind_groups,
             animated_model_bind_groups: &animated_model_bind_groups,
             line_buffer: &line_buffer.buffer,
-            culling_frustum: &culling_frustum,
-            view_matrix: camera.view_matrix(),
         },
         &static_models,
         &animated_models,
@@ -216,7 +210,6 @@ pub(crate) fn render(
         Res<InstanceBuffer>,
         Res<LineBuffer>,
     ),
-    (culling_frustum, camera): (Res<CullingFrustum>, Res<Camera>),
     static_models: ModelQuery,
     animated_models: AnimatedModelQuery,
     (mut static_model_bind_groups, mut animated_model_bind_groups): (
@@ -387,8 +380,6 @@ pub(crate) fn render(
             static_model_bind_groups: &static_model_bind_groups,
             animated_model_bind_groups: &animated_model_bind_groups,
             line_buffer: &line_buffer.buffer,
-            culling_frustum: &culling_frustum,
-            view_matrix: camera.view_matrix(),
         },
         &static_models,
         &animated_models,
@@ -439,8 +430,6 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Ranges>>(
         render_pass,
         static_models,
         context.static_model_bind_groups,
-        context.culling_frustum,
-        context.view_matrix,
         |primitive_ranges| range_getter(primitive_ranges).single.primitives,
     );
 
@@ -450,8 +439,6 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Ranges>>(
         render_pass,
         static_models,
         context.static_model_bind_groups,
-        context.culling_frustum,
-        context.view_matrix,
         |primitive_ranges| range_getter(primitive_ranges).double.primitives,
     );
 
@@ -487,8 +474,6 @@ struct Context<'a> {
     static_model_bind_groups: &'a ModelBindGroups,
     animated_model_bind_groups: &'a ModelBindGroups,
     line_buffer: &'a VecGpuBuffer<LineVertex>,
-    culling_frustum: &'a CullingFrustum,
-    view_matrix: Mat4,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -551,7 +536,7 @@ pub struct ModelBindGroups {
 }
 
 impl ModelBindGroups {
-    fn collect(&mut self, query: &Query<(&Model, &InstanceRange)>) {
+    fn collect(&mut self, query: &ModelQuery) {
         self.bind_groups.clear();
         self.offsets.clear();
 
@@ -574,7 +559,7 @@ impl ModelBindGroups {
         })
     }
 
-    fn collect_animated(&mut self, query: &Query<(&AnimatedModel, &JointBuffers, &InstanceRange)>) {
+    fn collect_animated(&mut self, query: &AnimatedModelQuery) {
         self.bind_groups.clear();
         self.offsets.clear();
 
@@ -609,38 +594,37 @@ fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     render_pass: &mut wgpu::RenderPass<'a>,
     models: &ModelQuery,
     model_bind_groups: &'a ModelBindGroups,
-    culling_frustum: &'a CullingFrustum,
-    view_matrix: Mat4,
     primitive_range_getter: G,
 ) {
-    for (model_index, (model, instance_range)) in models.iter().enumerate() {
-        // Don't issue commands for models with no (visible) instances.
-        if !instance_range.0.is_empty() {
-            // Get the range of primtives we're rendering
-            let range = primitive_range_getter(&model.0.primitive_ranges);
+    for (model_index, (model, instance_ranges)) in models.iter().enumerate() {
+        if instance_ranges.0.is_empty() {
+            continue;
+        }
 
-            // Get the primitives we're rendering
-            let primitives = &model.0.primitives[range.clone()];
-            // And their associated material bind groups
-            let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range];
+        // Get the range of primtives we're rendering
+        let range = primitive_range_getter(&model.0.primitive_ranges);
 
-            for (primitive, bind_group) in primitives.iter().zip(bind_groups) {
-                let passed_culling_check = culling::test_using_separating_axis_theorem(
-                    culling_frustum,
-                    view_matrix,
-                    &primitive.bounding_box,
-                );
+        // Get the primitives we're rendering
+        let primitives = &model.0.primitives[range.clone()];
+        // And their associated material bind groups
+        let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range.clone()];
 
-                if passed_culling_check {
-                    render_pass.set_bind_group(1, bind_group, &[]);
+        let instance_ranges = &instance_ranges.0[range];
 
-                    render_pass.draw_indexed(
-                        primitive.index_buffer_range.clone(),
-                        0,
-                        instance_range.0.clone(),
-                    );
-                }
+        for ((primitive, bind_group), instance_range) in
+            primitives.iter().zip(bind_groups).zip(instance_ranges)
+        {
+            if instance_range.is_empty() {
+                continue;
             }
+
+            render_pass.set_bind_group(1, bind_group, &[]);
+
+            render_pass.draw_indexed(
+                primitive.index_buffer_range.clone(),
+                0,
+                instance_range.clone(),
+            );
         }
     }
 }
@@ -651,40 +635,45 @@ fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     model_bind_groups: &'a ModelBindGroups,
     primitive_range_getter: G,
 ) {
-    for (model_index, (model, joint_buffers, instance_range)) in models.iter().enumerate() {
-        // Don't issue commands for models with no (visible) instances.
-        if !instance_range.0.is_empty() {
-            // Get the range of primtives we're rendering
-            let range = primitive_range_getter(&model.0.primitive_ranges);
+    for (model_index, (model, joint_buffers, instance_ranges)) in models.iter().enumerate() {
+        if instance_ranges.0.is_empty() {
+            continue;
+        }
 
-            // Get the primitives we're rendering
-            let primitives = &model.0.primitives[range.clone()];
-            // And their associated material bind groups
-            let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range];
+        // Get the range of primtives we're rendering
+        let range = primitive_range_getter(&model.0.primitive_ranges);
 
-            for (primitive, bind_group) in primitives.iter().zip(bind_groups) {
-                render_pass.set_bind_group(1, bind_group, &[]);
+        // Get the primitives we're rendering
+        let primitives = &model.0.primitives[range.clone()];
+        // And their associated material bind groups
+        let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range.clone()];
 
-                let mut joint_buffer_index = 0;
-                let mut instance_offset = instance_range.0.start;
+        let instance_ranges = &instance_ranges.0[range];
 
-                while instance_offset < instance_range.0.end {
-                    let end = (instance_offset + model.0.max_instances_per_joint_buffer())
-                        .min(instance_range.0.end);
+        for ((primitive, bind_group), instance_range) in
+            primitives.iter().zip(bind_groups).zip(instance_ranges)
+        {
+            render_pass.set_bind_group(1, bind_group, &[]);
 
-                    if let Some(joint_buffer) = joint_buffers.buffers.get(joint_buffer_index) {
-                        render_pass.set_bind_group(2, &joint_buffer.bind_group, &[]);
+            let mut joint_buffer_index = 0;
+            let mut instance_offset = instance_range.start;
 
-                        render_pass.draw_indexed(
-                            primitive.index_buffer_range.clone(),
-                            0,
-                            instance_offset..end,
-                        );
-                    }
+            while instance_offset < instance_range.end {
+                let end = (instance_offset + model.0.max_instances_per_joint_buffer())
+                    .min(instance_range.end);
 
-                    instance_offset = end;
-                    joint_buffer_index += 1;
+                if let Some(joint_buffer) = joint_buffers.buffers.get(joint_buffer_index) {
+                    render_pass.set_bind_group(2, &joint_buffer.bind_group, &[]);
+
+                    render_pass.draw_indexed(
+                        primitive.index_buffer_range.clone(),
+                        0,
+                        instance_offset..end,
+                    );
                 }
+
+                instance_offset = end;
+                joint_buffer_index += 1;
             }
         }
     }
