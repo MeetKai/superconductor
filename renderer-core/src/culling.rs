@@ -1,4 +1,4 @@
-use glam::{vec3, Mat4, Quat, Vec3};
+use glam::{vec3, Mat4, Vec3};
 
 #[derive(Debug, Clone, Copy)]
 pub struct BoundingBox {
@@ -77,9 +77,7 @@ impl CullingFrustum {
 pub fn test_using_separating_axis_theorem(
     frustum: &CullingFrustum,
     vs_transform: Mat4,
-    instance_translation: Vec3,
-    instance_rotation: Quat,
-    instance_scale: f32,
+    similarity: gltf_helpers::Similarity,
     aabb: &BoundingBox,
 ) -> bool {
     // Near, far
@@ -99,11 +97,8 @@ pub fn test_using_separating_axis_theorem(
 
     // Transform corners
     // This only translates to our OBB if our transform is affine
-    let corners = corners.map(|corner| {
-        let corner = instance_translation + (instance_rotation * instance_scale * corner);
-
-        (vs_transform * corner.extend(1.0)).truncate()
-    });
+    let corners =
+        corners.map(|corner| (vs_transform * (similarity * corner).extend(1.0)).truncate());
 
     struct OrientatedBoundingBox {
         center: Vec3,

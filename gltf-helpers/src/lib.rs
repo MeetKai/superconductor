@@ -17,6 +17,14 @@ impl Similarity {
         rotation: Quat::IDENTITY,
     };
 
+    pub fn new(translation: Vec3, scale: f32, rotation: Quat) -> Self {
+        Self {
+            translation,
+            rotation,
+            scale,
+        }
+    }
+
     pub fn as_mat4(self) -> Mat4 {
         Mat4::from_translation(self.translation)
             * Mat4::from_mat3(Mat3::from_quat(self.rotation))
@@ -67,6 +75,12 @@ impl Similarity {
     }
 }
 
+impl Default for Similarity {
+    fn default() -> Self {
+        Self::IDENTITY
+    }
+}
+
 impl Mul<Similarity> for Similarity {
     type Output = Self;
 
@@ -83,7 +97,7 @@ impl Mul<Vec3> for Similarity {
     type Output = Vec3;
 
     fn mul(self, vector: Vec3) -> Vec3 {
-        self.translation + (self.scale * (self.rotation * vector))
+        self.translation + (self.rotation * (self.scale * vector))
     }
 }
 

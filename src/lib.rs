@@ -26,7 +26,6 @@ pub use renderer_core::{
     glam::Vec3,
 };
 
-use components::Instance;
 use resources::{
     Camera, Device, EventQueue, LutUrl, NewIblCubemap, Queue, SurfaceFrameView, WindowChanges,
 };

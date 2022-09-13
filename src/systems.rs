@@ -205,17 +205,13 @@ pub(crate) fn push_debug_joints_to_lines_buffer(
                     .iter_lines(&animated_model.0.animation_data.depth_first_nodes)
                     .enumerate()
                 {
-                    let start =
-                        instance.0.position + (instance.0.rotation * instance.0.scale * start);
-                    let end = instance.0.position + (instance.0.rotation * instance.0.scale * end);
-
                     line_buffer.staging.extend_from_slice(&[
                         renderer_core::LineVertex {
-                            position: start,
+                            position: instance.0 * start,
                             colour_id: id as u32,
                         },
                         renderer_core::LineVertex {
-                            position: end,
+                            position: instance.0 * end,
                             colour_id: id as u32,
                         },
                     ]);
@@ -244,7 +240,7 @@ pub(crate) fn push_debug_bounding_boxes_to_lines_buffer(
                         .bounding_box
                         .line_points()
                         .map(|point| renderer_core::LineVertex {
-                            position: instance.0.position
+                            position: instance.0.translation
                                 + (instance.0.rotation * instance.0.scale * point),
                             colour_id: primitive_id as u32,
                         });
@@ -278,9 +274,7 @@ pub(crate) fn push_entity_instances(
                             || renderer_core::culling::test_using_separating_axis_theorem(
                                 &culling_frustum,
                                 view_matrix,
-                                instance.0.position,
-                                instance.0.rotation,
-                                instance.0.scale,
+                                instance.0,
                                 &primitive.bounding_box,
                             );
 
@@ -291,9 +285,7 @@ pub(crate) fn push_entity_instances(
                         instances.insert(
                             primitive_id,
                             GpuInstance {
-                                position: instance.0.position,
-                                scale: instance.0.scale,
-                                rotation: instance.0.rotation,
+                                similarity: instance.0,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
                                 _padding: Default::default(),
                             },
@@ -307,9 +299,7 @@ pub(crate) fn push_entity_instances(
                         instances.insert(
                             primitive_id,
                             GpuInstance {
-                                position: instance.0.position,
-                                scale: instance.0.scale,
-                                rotation: instance.0.rotation,
+                                similarity: instance.0,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
                                 _padding: Default::default(),
                             },
@@ -734,31 +724,32 @@ pub(crate) fn update_uniform_buffers(
     let left_projection_view: renderer_core::shared_structs::FlatMat4 =
         (left_proj * left_inv).into();
 
-    let left_instance = renderer_core::Instance::from_transform(left_view.transform(), 0.0);
+    let left_instance =
+        renderer_core::instance::instance_from_transform(left_view.transform(), 0.0);
 
-    let (right_projection_view, right_proj, right_instance) = if let Some(right_view) =
-        views_iter.next()
-    {
-        let right_view: web_sys::XrView = right_view.into();
+    let (right_projection_view, right_proj, right_instance) =
+        if let Some(right_view) = views_iter.next() {
+            let right_view: web_sys::XrView = right_view.into();
 
-        let right_proj = parse_matrix(right_view.projection_matrix());
-        let right_inv = parse_matrix(right_view.transform().matrix()).inverse();
+            let right_proj = parse_matrix(right_view.projection_matrix());
+            let right_inv = parse_matrix(right_view.transform().matrix()).inverse();
 
-        let right_projection_view: renderer_core::shared_structs::FlatMat4 =
-            (right_proj * right_inv).into();
+            let right_projection_view: renderer_core::shared_structs::FlatMat4 =
+                (right_proj * right_inv).into();
 
-        let right_instance = renderer_core::Instance::from_transform(right_view.transform(), 0.0);
+            let right_instance =
+                renderer_core::instance::instance_from_transform(right_view.transform(), 0.0);
 
-        (right_projection_view, right_proj, right_instance)
-    } else {
-        Default::default()
-    };
+            (right_projection_view, right_proj, right_instance)
+        } else {
+            Default::default()
+        };
 
     let uniforms = renderer_core::shared_structs::Uniforms {
         left_projection_view,
         right_projection_view,
-        left_eye_position: left_instance.position,
-        right_eye_position: right_instance.position,
+        left_eye_position: left_instance.translation,
+        right_eye_position: right_instance.translation,
         flip_viewport: pipeline_options.flip_viewport as u32,
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
         inline_srgb: true as u32,

@@ -41,7 +41,7 @@ pub fn vertex(
     let instance_scale = instance_translation_and_scale.w;
     let instance_translation = instance_translation_and_scale.truncate();
 
-    let position = instance_translation + (instance_rotation * instance_scale * position);
+    let position = instance_translation + (instance_rotation * (instance_scale * position));
     *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
     *out_position = position;
     *out_normal = instance_rotation * normal;
@@ -96,7 +96,7 @@ pub fn animated_vertex(
             + (joint_transforms.index_unchecked(global_joint_indices.w as usize).rotation * normal * joint_weights.w)
     };
 
-    let position = instance_translation + (instance_rotation * instance_scale * position);
+    let position = instance_translation + (instance_rotation * (instance_scale * position));
 
     *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
     *out_position = position;
@@ -681,7 +681,7 @@ pub fn depth_prepass_vertex(
     let instance_scale = instance_translation_and_scale.w;
     let instance_translation = instance_translation_and_scale.truncate();
 
-    let position = instance_translation + (instance_rotation * instance_scale * position);
+    let position = instance_translation + (instance_rotation * (instance_scale * position));
     *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
 
     if uniforms.flip_viewport != 0 {

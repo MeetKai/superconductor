@@ -10,52 +10,22 @@ pub struct LineVertex {
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(C)]
 pub struct GpuInstance {
-    pub position: Vec3,
-    pub scale: f32,
-    pub rotation: glam::Quat,
+    pub similarity: gltf_helpers::Similarity,
     pub joints_offset: u32,
     pub _padding: [u32; 3],
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Instance {
-    pub position: Vec3,
-    pub scale: f32,
-    pub rotation: glam::Quat,
-}
-
-impl Instance {
-    pub fn new(position: Vec3, scale: f32, rotation: glam::Quat) -> Self {
-        Self {
-            position,
-            scale,
-            rotation,
-        }
-    }
-
-    #[cfg(feature = "wasm")]
-    pub fn from_transform(transform: web_sys::XrRigidTransform, scale: f32) -> Self {
-        let rotation = transform.orientation();
-
-        let rotation =
-            glam::DQuat::from_xyzw(rotation.x(), rotation.y(), rotation.z(), rotation.w());
-        Self {
-            position: transform_to_position_vec3(&transform),
-            rotation: rotation.as_f32(),
-            scale,
-        }
-    }
-}
-
-impl Default for Instance {
-    fn default() -> Self {
-        Self::new(Vec3::ZERO, 1.0, glam::Quat::IDENTITY)
-    }
-}
+pub type Instance = gltf_helpers::Similarity;
 
 #[cfg(feature = "wasm")]
-fn transform_to_position_vec3(transform: &web_sys::XrRigidTransform) -> Vec3 {
+pub fn instance_from_transform(transform: web_sys::XrRigidTransform, scale: f32) -> Instance {
+    let rotation = transform.orientation();
     let position = transform.position();
-    let position = glam::DVec3::new(position.x(), position.y(), position.z());
-    position.as_vec3()
+
+    Instance {
+        translation: glam::DVec3::new(position.x(), position.y(), position.z()).as_vec3(),
+        rotation: glam::DQuat::from_xyzw(rotation.x(), rotation.y(), rotation.z(), rotation.w())
+            .as_f32(),
+        scale,
+    }
 }
