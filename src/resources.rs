@@ -1,5 +1,6 @@
 use renderer_core::{
     arc_swap::ArcSwap,
+    culling::{BoundingSphereCullingParams, CullingFrustum},
     glam::{Mat4, Quat, Vec3},
     GpuInstance, LineVertex,
 };
@@ -44,8 +45,6 @@ pub(crate) struct IntermediateDepthFramebuffer(pub(crate) CachedFramebuffer);
 pub(crate) struct IntermediateColorFramebuffer(pub(crate) CachedFramebuffer);
 pub(crate) struct CompositeBindGroup(pub(crate) Option<wgpu::BindGroup>);
 pub(crate) struct ClampSampler(pub(crate) Arc<wgpu::Sampler>);
-
-pub(crate) struct IsVr(pub(crate) bool);
 
 #[derive(Default)]
 pub(crate) struct CachedFramebuffer {
@@ -123,5 +122,25 @@ impl Default for Camera {
             position: Vec3::new(0.0, 1.75, 0.0),
             rotation: Quat::IDENTITY,
         }
+    }
+}
+
+#[derive(Default)]
+pub struct CullingParams {
+    pub bounding_sphere_params: BoundingSphereParams,
+    pub frustum: Option<CullingFrustum>,
+}
+
+pub enum BoundingSphereParams {
+    SingleView(BoundingSphereCullingParams),
+    Vr {
+        left: BoundingSphereCullingParams,
+        right: BoundingSphereCullingParams,
+    },
+}
+
+impl Default for BoundingSphereParams {
+    fn default() -> Self {
+        Self::SingleView(Default::default())
     }
 }

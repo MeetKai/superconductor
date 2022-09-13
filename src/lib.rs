@@ -27,7 +27,8 @@ pub use renderer_core::{
 };
 
 use resources::{
-    Camera, Device, EventQueue, LutUrl, NewIblCubemap, Queue, SurfaceFrameView, WindowChanges,
+    Camera, CullingParams, Device, EventQueue, LutUrl, NewIblCubemap, Queue, SurfaceFrameView,
+    WindowChanges,
 };
 
 #[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
@@ -72,7 +73,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
         app.insert_resource(LutUrl(
             url::Url::parse("http://localhost:8000/assets/lut_ggx.png").unwrap(),
         ));
-        app.insert_resource(CullingFrustum::default());
+        app.insert_resource(CullingParams::default());
 
         app.add_startup_stage(
             StartupStage::PipelineCreation,
@@ -161,7 +162,6 @@ pub enum ModeSpecificState {
     Xr {
         session: web_sys::XrSession,
         reference_space: web_sys::XrReferenceSpace,
-        is_vr: bool,
     },
     Desktop {
         window: Window,
@@ -300,7 +300,6 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         mode_specific: ModeSpecificState::Xr {
             session: xr_session,
             reference_space: xr_reference_space,
-            is_vr: xr_mode == web_sys::XrSessionMode::ImmersiveVr,
         },
         device,
         queue,
@@ -392,10 +391,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
         ModeSpecificState::Xr {
             session,
             reference_space,
-            is_vr,
         } => {
-            app.insert_resource(resources::IsVr(is_vr));
-
             renderer_core::run_rendering_loop(&session, move |time, frame| {
                 let pose = match frame.get_viewer_pose(&reference_space) {
                     Some(pose) => pose,
@@ -411,8 +407,6 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
             });
         }
         ModeSpecificState::Desktop { window, event_loop } => {
-            app.insert_resource(resources::IsVr(false));
-
             let size = window.inner_size();
 
             let mut config = wgpu::SurfaceConfiguration {

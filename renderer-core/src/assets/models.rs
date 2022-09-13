@@ -1,7 +1,7 @@
 use super::materials::MaterialBindings;
 use super::textures;
 use super::HttpClient;
-use crate::culling::BoundingBox;
+use crate::culling::{BoundingBox, BoundingSphere};
 use crate::permutations;
 use crate::{spawn, BindGroupLayouts};
 use arc_swap::ArcSwap;
@@ -163,6 +163,7 @@ fn collect_primitives<
             index_buffer_range: staging_buffers.collect(&staging_primitive.buffers),
             bind_group: bind_group.clone(),
             bounding_box: staging_primitive.bounding_box,
+            bounding_sphere: staging_primitive.bounding_sphere,
         });
 
         spawn_texture_loading_futures(
@@ -374,6 +375,7 @@ impl Model {
 
                 primitive_vec.push(StagingPrimitive {
                     bounding_box: BoundingBox::new(&buffers.positions),
+                    bounding_sphere: BoundingSphere::new(transform.translation, &buffers.positions),
                     buffers,
                     material_settings: material_info.settings,
                     material_index: material_index.unwrap_or(0),
@@ -541,6 +543,7 @@ impl AnimatedModel {
 
                 primitive_vec.push(StagingPrimitive {
                     bounding_box: BoundingBox::new(&buffers.base.positions),
+                    bounding_sphere: BoundingSphere::new(Vec3::ZERO, &buffers.base.positions),
                     buffers,
                     material_settings: material_info.settings,
                     material_index: material_index.unwrap_or(0),
@@ -687,12 +690,14 @@ struct StagingPrimitive<T> {
     material_settings: shared_structs::MaterialSettings,
     material_index: usize,
     bounding_box: BoundingBox,
+    bounding_sphere: BoundingSphere,
 }
 
 pub struct Primitive {
     pub index_buffer_range: Range<u32>,
     pub bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
     pub bounding_box: BoundingBox,
+    pub bounding_sphere: BoundingSphere,
 }
 
 trait CollectableBuffer {

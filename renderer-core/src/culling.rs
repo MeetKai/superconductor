@@ -1,4 +1,4 @@
-use glam::{vec3, Mat4, Vec3};
+use glam::{vec3, Mat4, Vec2, Vec3, Vec3Swizzles};
 
 #[derive(Debug, Clone, Copy)]
 pub struct BoundingBox {
@@ -47,7 +47,7 @@ impl BoundingBox {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy)]
 pub struct CullingFrustum {
     near_right: f32,
     near_top: f32,
@@ -75,8 +75,8 @@ impl CullingFrustum {
 // When/if we move culling to the GPU we should use something simpler.
 #[inline]
 pub fn test_using_separating_axis_theorem(
-    frustum: &CullingFrustum,
-    vs_transform: Mat4,
+    frustum: CullingFrustum,
+    view: Mat4,
     similarity: gltf_helpers::Similarity,
     aabb: &BoundingBox,
 ) -> bool {
@@ -97,8 +97,7 @@ pub fn test_using_separating_axis_theorem(
 
     // Transform corners
     // This only translates to our OBB if our transform is affine
-    let corners =
-        corners.map(|corner| (vs_transform * (similarity * corner).extend(1.0)).truncate());
+    let corners = corners.map(|corner| (view * (similarity * corner).extend(1.0)).truncate());
 
     struct OrientatedBoundingBox {
         center: Vec3,
@@ -334,4 +333,72 @@ pub fn test_using_separating_axis_theorem(
 
     // No intersections detected
     true
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct BoundingSphereCullingParams {
+    pub view: Mat4,
+    pub frustum_x_xz: Vec2,
+    pub frustum_y_yz: Vec2,
+    pub z_near: f32,
+}
+
+impl BoundingSphereCullingParams {
+    pub fn new(view: Mat4, perspective: Mat4, z_near: f32) -> Self {
+        // Get the left and top planes (the ones that satisfy 'x + w < 0' and 'y + w < 0') (I think, don't quote me on this)
+        // https://github.com/zeux/niagara/blob/98f5d5ae2b48e15e145e3ad13ae7f4f9f1e0e297/src/niagara.cpp#L822-L823
+        // https://github.com/expenses/transmission-renderer/blob/b91538e8b0b65b53860552f24100b64ee7ae22d1/src/main.rs#L1730-L1733
+        let frustum_x = (perspective.row(3).truncate() + perspective.row(0).truncate()).normalize();
+        let frustum_y = (perspective.row(3).truncate() + perspective.row(1).truncate()).normalize();
+
+        Self {
+            view,
+            frustum_x_xz: frustum_x.xz(),
+            frustum_y_yz: frustum_y.yz(),
+            z_near,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BoundingSphere {
+    pub center: Vec3,
+    pub radius: f32,
+}
+
+impl BoundingSphere {
+    pub fn new(primitive_center: Vec3, points: &[Vec3]) -> Self {
+        let mut max_distance_sq = 0.0_f32;
+
+        for &point in points {
+            max_distance_sq = max_distance_sq.max(primitive_center.distance_squared(point));
+        }
+
+        Self {
+            center: primitive_center,
+            radius: max_distance_sq.sqrt(),
+        }
+    }
+}
+
+pub fn test_bounding_sphere(
+    bounding_sphere: BoundingSphere,
+    transform: gltf_helpers::Similarity,
+    params: BoundingSphereCullingParams,
+) -> bool {
+    let mut center = transform * bounding_sphere.center;
+    center = (params.view * center.extend(1.0)).truncate();
+    // in the view, +z = back so we flip it.
+    center.z = -center.z;
+
+    let radius = bounding_sphere.radius * transform.scale;
+
+    let mut visible = center.z + radius > params.z_near;
+
+    // Check that object does not cross over either of the left/right/top/bottom planes by
+    // radius distance (exploits frustum symmetry with the abs()).
+    visible &= center.z * params.frustum_x_xz.y - center.x.abs() * params.frustum_x_xz.x < radius;
+    visible &= center.z * params.frustum_y_yz.y - center.y.abs() * params.frustum_y_yz.x < radius;
+
+    visible
 }

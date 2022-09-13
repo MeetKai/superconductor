@@ -4,10 +4,11 @@ use crate::components::{
     PendingAnimatedModel, PendingModel,
 };
 use crate::resources::{
-    AnimatedVertexBuffers, BindGroupLayouts, Camera, ClampSampler, CompositeBindGroup, Device,
-    IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer, IsVr,
-    LineBuffer, LutUrl, MainBindGroup, NewIblCubemap, Pipelines, Queue, SkyboxUniformBindGroup,
-    SkyboxUniformBuffer, SurfaceFrameView, UniformBuffer, VertexBuffers,
+    AnimatedVertexBuffers, BindGroupLayouts, BoundingSphereParams, Camera, ClampSampler,
+    CompositeBindGroup, CullingParams, Device, IndexBuffer, InstanceBuffer,
+    IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LineBuffer, LutUrl, MainBindGroup,
+    NewIblCubemap, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer, SurfaceFrameView,
+    UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
@@ -15,7 +16,8 @@ use renderer_core::{
     assets::{textures, HttpClient},
     bytemuck, create_main_bind_group,
     crevice::std140::AsStd140,
-    culling::CullingFrustum,
+    culling::{BoundingSphereCullingParams, CullingFrustum},
+    glam::{Mat4, Vec4},
     ibl::IblResources,
     shared_structs, spawn, GpuInstance, Texture,
 };
@@ -253,8 +255,7 @@ pub(crate) fn push_debug_bounding_boxes_to_lines_buffer(
 
 pub(crate) fn push_entity_instances(
     camera: Res<Camera>,
-    is_vr: Res<IsVr>,
-    culling_frustum: Res<CullingFrustum>,
+    culling_params: Res<CullingParams>,
     mut instance_query: Query<(&InstanceOf, &Instance, Option<&JointsOffset>)>,
     mut model_query: Query<(&mut Instances, Option<&Model>, Option<&AnimatedModel>)>,
 ) {
@@ -267,16 +268,36 @@ pub(crate) fn push_entity_instances(
                     instances.reserve(model.0.primitives.len());
 
                     for (primitive_id, primitive) in model.0.primitives.iter().enumerate() {
-                        // todo: the culling method we're currently using doesn't really work with vr.
-                        // A better solution is to probably use bounding spheres like in
-                        // https://github.com/leetvr/hotham/blob/90692aeb80b449b0f833e92ec0f6c073b4faea39/hotham/src/resources/render_context.rs#L229-L258.
-                        let passed_culling_check = is_vr.0
-                            || renderer_core::culling::test_using_separating_axis_theorem(
-                                &culling_frustum,
-                                view_matrix,
-                                instance.0,
-                                &primitive.bounding_box,
-                            );
+                        let mut passed_culling_check = match culling_params.bounding_sphere_params {
+                            BoundingSphereParams::SingleView(params) => {
+                                renderer_core::culling::test_bounding_sphere(
+                                    primitive.bounding_sphere,
+                                    instance.0,
+                                    params,
+                                )
+                            }
+                            BoundingSphereParams::Vr { left, right } => {
+                                renderer_core::culling::test_bounding_sphere(
+                                    primitive.bounding_sphere,
+                                    instance.0,
+                                    left,
+                                ) || renderer_core::culling::test_bounding_sphere(
+                                    primitive.bounding_sphere,
+                                    instance.0,
+                                    right,
+                                )
+                            }
+                        };
+
+                        if let Some(frustum) = culling_params.frustum {
+                            passed_culling_check &=
+                                renderer_core::culling::test_using_separating_axis_theorem(
+                                    frustum,
+                                    view_matrix,
+                                    instance.0,
+                                    &primitive.bounding_box,
+                                );
+                        }
 
                         if !passed_culling_check {
                             continue;
@@ -294,8 +315,7 @@ pub(crate) fn push_entity_instances(
                 } else if let Some(animated_model) = animated_model {
                     instances.reserve(animated_model.0.primitives.len());
 
-                    for (primitive_id, primitive) in animated_model.0.primitives.iter().enumerate()
-                    {
+                    for primitive_id in 0..animated_model.0.primitives.len() {
                         instances.insert(
                             primitive_id,
                             GpuInstance {
@@ -619,11 +639,9 @@ pub(crate) fn set_desktop_uniform_buffers(
     skybox_uniform_buffer: Res<SkyboxUniformBuffer>,
     surface_frame_view: Res<SurfaceFrameView>,
     camera: Res<Camera>,
-    mut culling_frustum: ResMut<CullingFrustum>,
+    mut culling_params: ResMut<CullingParams>,
 ) {
     let queue = &queue.0;
-
-    use renderer_core::glam::{Mat4, Vec4};
 
     // Adapted from the functions used in
     // https://crates.io/crates/ultraviolet.
@@ -654,12 +672,18 @@ pub(crate) fn set_desktop_uniform_buffers(
         0.001,
         1000.0,
     );
-    *culling_frustum = CullingFrustum::new(
-        59.0_f32.to_radians(),
-        surface_frame_view.width as f32 / surface_frame_view.height as f32,
-        0.001,
-        1000.0,
-    );
+    *culling_params =
+        CullingParams {
+            frustum: Some(CullingFrustum::new(
+                59.0_f32.to_radians(),
+                surface_frame_view.width as f32 / surface_frame_view.height as f32,
+                0.001,
+                1000.0,
+            )),
+            bounding_sphere_params: BoundingSphereParams::SingleView(
+                BoundingSphereCullingParams::new(camera.view_matrix(), perspective_matrix, 0.001),
+            ),
+        };
 
     let projection_view = perspective_matrix * camera.view_matrix();
 
@@ -698,6 +722,13 @@ pub(crate) fn set_desktop_uniform_buffers(
     );
 }
 
+#[derive(Default)]
+struct ViewData {
+    projection: Mat4,
+    view: Mat4,
+    instance: renderer_core::Instance,
+}
+
 #[cfg(feature = "webgl")]
 pub(crate) fn update_uniform_buffers(
     pose: bevy_ecs::prelude::NonSend<web_sys::XrViewerPose>,
@@ -705,10 +736,9 @@ pub(crate) fn update_uniform_buffers(
     queue: Res<Queue>,
     uniform_buffer: Res<UniformBuffer>,
     skybox_uniform_buffer: Res<SkyboxUniformBuffer>,
+    mut culling_params: ResMut<CullingParams>,
 ) {
     let queue = &queue.0;
-
-    use renderer_core::glam::Mat4;
 
     let parse_matrix = |vec| Mat4::from_cols_array(&<[f32; 16]>::try_from(vec).unwrap());
 
@@ -718,38 +748,35 @@ pub(crate) fn update_uniform_buffers(
 
     let left_view: web_sys::XrView = views_iter.next().unwrap().into();
 
-    let left_proj = parse_matrix(left_view.projection_matrix());
-    let left_inv = parse_matrix(left_view.transform().matrix()).inverse();
+    let left_view_data = ViewData {
+        projection: parse_matrix(left_view.projection_matrix()),
+        view: parse_matrix(left_view.transform().matrix()).inverse(),
+        instance: renderer_core::instance::instance_from_transform(left_view.transform(), 0.0),
+    };
 
-    let left_projection_view: renderer_core::shared_structs::FlatMat4 =
-        (left_proj * left_inv).into();
+    let (right_view_data, is_vr) = if let Some(right_view) = views_iter.next() {
+        let right_view: web_sys::XrView = right_view.into();
 
-    let left_instance =
-        renderer_core::instance::instance_from_transform(left_view.transform(), 0.0);
-
-    let (right_projection_view, right_proj, right_instance) =
-        if let Some(right_view) = views_iter.next() {
-            let right_view: web_sys::XrView = right_view.into();
-
-            let right_proj = parse_matrix(right_view.projection_matrix());
-            let right_inv = parse_matrix(right_view.transform().matrix()).inverse();
-
-            let right_projection_view: renderer_core::shared_structs::FlatMat4 =
-                (right_proj * right_inv).into();
-
-            let right_instance =
-                renderer_core::instance::instance_from_transform(right_view.transform(), 0.0);
-
-            (right_projection_view, right_proj, right_instance)
-        } else {
-            Default::default()
-        };
+        (
+            ViewData {
+                projection: parse_matrix(right_view.projection_matrix()),
+                view: parse_matrix(right_view.transform().matrix()).inverse(),
+                instance: renderer_core::instance::instance_from_transform(
+                    right_view.transform(),
+                    0.0,
+                ),
+            },
+            true,
+        )
+    } else {
+        (Default::default(), false)
+    };
 
     let uniforms = renderer_core::shared_structs::Uniforms {
-        left_projection_view,
-        right_projection_view,
-        left_eye_position: left_instance.translation,
-        right_eye_position: right_instance.translation,
+        left_projection_view: (left_view_data.projection * left_view_data.view).into(),
+        right_projection_view: (right_view_data.projection * right_view_data.view).into(),
+        left_eye_position: left_view_data.instance.translation,
+        right_eye_position: right_view_data.instance.translation,
         flip_viewport: pipeline_options.flip_viewport as u32,
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
         inline_srgb: true as u32,
@@ -762,10 +789,10 @@ pub(crate) fn update_uniform_buffers(
     );
 
     let skybox_uniforms = shared_structs::SkyboxUniforms {
-        left_projection_inverse: left_proj.inverse().into(),
-        right_projection_inverse: right_proj.inverse().into(),
-        left_view_inverse: left_instance.rotation.into(),
-        right_view_inverse: right_instance.rotation.into(),
+        left_projection_inverse: left_view_data.projection.inverse().into(),
+        right_projection_inverse: right_view_data.projection.inverse().into(),
+        left_view_inverse: left_view_data.instance.rotation.into(),
+        right_view_inverse: right_view_data.instance.rotation.into(),
     };
 
     queue.write_buffer(
@@ -773,6 +800,30 @@ pub(crate) fn update_uniform_buffers(
         0,
         bytemuck::bytes_of(&skybox_uniforms.as_std140()),
     );
+
+    *culling_params = CullingParams {
+        frustum: None,
+        bounding_sphere_params: if is_vr {
+            BoundingSphereParams::Vr {
+                left: BoundingSphereCullingParams::new(
+                    left_view_data.view,
+                    left_view_data.projection,
+                    0.001,
+                ),
+                right: BoundingSphereCullingParams::new(
+                    right_view_data.view,
+                    right_view_data.projection,
+                    0.001,
+                ),
+            }
+        } else {
+            BoundingSphereParams::SingleView(BoundingSphereCullingParams::new(
+                left_view_data.view,
+                left_view_data.projection,
+                0.001,
+            ))
+        },
+    };
 }
 
 #[allow(clippy::too_many_arguments)]
