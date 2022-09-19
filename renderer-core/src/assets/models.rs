@@ -164,6 +164,7 @@ fn collect_primitives<
             bind_group: bind_group.clone(),
             bounding_box: staging_primitive.bounding_box,
             bounding_sphere: staging_primitive.bounding_sphere,
+            transform: staging_primitive.transform,
         });
 
         spawn_texture_loading_futures(
@@ -371,14 +372,15 @@ impl Model {
 
                 let mut buffers = StagingBuffers::default();
 
-                buffers.extend_from_reader(&reader, transform, material_info.texture_transform)?;
+                buffers.extend_from_reader(&reader, material_info.texture_transform)?;
 
                 primitive_vec.push(StagingPrimitive {
                     bounding_box: BoundingBox::new(&buffers.positions),
-                    bounding_sphere: BoundingSphere::new(transform.translation, &buffers.positions),
+                    bounding_sphere: BoundingSphere::new(&buffers.positions),
                     buffers,
                     material_settings: material_info.settings,
                     material_index: material_index.unwrap_or(0),
+                    transform,
                 });
             }
         }
@@ -512,11 +514,9 @@ impl AnimatedModel {
 
                 let mut buffers = AnimatedStagingBuffers::default();
 
-                let num_vertices = buffers.base.extend_from_reader(
-                    &reader,
-                    Similarity::IDENTITY,
-                    material_info.texture_transform,
-                )?;
+                let num_vertices = buffers
+                    .base
+                    .extend_from_reader(&reader, material_info.texture_transform)?;
 
                 match reader.read_joints()? {
                     Some(joints) => buffers.joint_indices.extend(joints.map(|indices| {
@@ -543,10 +543,11 @@ impl AnimatedModel {
 
                 primitive_vec.push(StagingPrimitive {
                     bounding_box: BoundingBox::new(&buffers.base.positions),
-                    bounding_sphere: BoundingSphere::new(Vec3::ZERO, &buffers.base.positions),
+                    bounding_sphere: BoundingSphere::new(&buffers.base.positions),
                     buffers,
                     material_settings: material_info.settings,
                     material_index: material_index.unwrap_or(0),
+                    transform: Similarity::IDENTITY,
                 });
             }
         }
@@ -691,6 +692,7 @@ struct StagingPrimitive<T> {
     material_index: usize,
     bounding_box: BoundingBox,
     bounding_sphere: BoundingSphere,
+    transform: Similarity,
 }
 
 pub struct Primitive {
@@ -698,6 +700,7 @@ pub struct Primitive {
     pub bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
     pub bounding_box: BoundingBox,
     pub bounding_sphere: BoundingSphere,
+    pub transform: Similarity,
 }
 
 trait CollectableBuffer {
@@ -717,7 +720,6 @@ impl StagingBuffers {
     fn extend_from_reader(
         &mut self,
         reader: &PrimitiveReader,
-        transform: Similarity,
         texture_transform: Option<goth_gltf::extensions::KhrTextureTransform>,
     ) -> anyhow::Result<usize> {
         let vertices_offset = self.positions.len();
@@ -726,7 +728,7 @@ impl StagingBuffers {
             reader
                 .read_positions()?
                 .ok_or_else(|| anyhow::anyhow!("Primitive doesn't specifiy vertex positions."))?
-                .map(|pos| transform * Vec3::from(pos)),
+                .map(Vec3::from),
         );
 
         let num_vertices = self.positions.len() - vertices_offset;
@@ -744,9 +746,7 @@ impl StagingBuffers {
         };
 
         match reader.read_normals()? {
-            Some(normals) => self
-                .normals
-                .extend(normals.map(|normal| transform.rotation * Vec3::from(normal))),
+            Some(normals) => self.normals.extend(normals.map(Vec3::from)),
             None => self
                 .normals
                 .extend(std::iter::repeat(Vec3::ZERO).take(num_vertices)),

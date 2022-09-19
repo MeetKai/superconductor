@@ -242,8 +242,7 @@ pub(crate) fn push_debug_bounding_boxes_to_lines_buffer(
                         .bounding_box
                         .line_points()
                         .map(|point| renderer_core::LineVertex {
-                            position: instance.0.translation
-                                + (instance.0.rotation * instance.0.scale * point),
+                            position: instance.0 * primitive.transform * point,
                             colour_id: primitive_id as u32,
                         });
 
@@ -268,22 +267,24 @@ pub(crate) fn push_entity_instances(
                     instances.reserve(model.0.primitives.len());
 
                     for (primitive_id, primitive) in model.0.primitives.iter().enumerate() {
+                        let primitive_transform = instance.0 * primitive.transform;
+
                         let mut passed_culling_check = match culling_params.bounding_sphere_params {
                             BoundingSphereParams::SingleView(params) => {
                                 renderer_core::culling::test_bounding_sphere(
                                     primitive.bounding_sphere,
-                                    instance.0,
+                                    primitive_transform,
                                     params,
                                 )
                             }
                             BoundingSphereParams::Vr { left, right } => {
                                 renderer_core::culling::test_bounding_sphere(
                                     primitive.bounding_sphere,
-                                    instance.0,
+                                    primitive_transform,
                                     left,
                                 ) || renderer_core::culling::test_bounding_sphere(
                                     primitive.bounding_sphere,
-                                    instance.0,
+                                    primitive_transform,
                                     right,
                                 )
                             }
@@ -294,7 +295,7 @@ pub(crate) fn push_entity_instances(
                                 renderer_core::culling::test_using_separating_axis_theorem(
                                     frustum,
                                     view_matrix,
-                                    instance.0,
+                                    primitive_transform,
                                     &primitive.bounding_box,
                                 );
                         }
@@ -306,7 +307,7 @@ pub(crate) fn push_entity_instances(
                         instances.insert(
                             primitive_id,
                             GpuInstance {
-                                similarity: instance.0,
+                                similarity: primitive_transform,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
                                 _padding: Default::default(),
                             },
@@ -315,11 +316,14 @@ pub(crate) fn push_entity_instances(
                 } else if let Some(animated_model) = animated_model {
                     instances.reserve(animated_model.0.primitives.len());
 
-                    for primitive_id in 0..animated_model.0.primitives.len() {
+                    for (primitive_id, primitive) in animated_model.0.primitives.iter().enumerate()
+                    {
+                        let primitive_transform = instance.0 * primitive.transform;
+
                         instances.insert(
                             primitive_id,
                             GpuInstance {
-                                similarity: instance.0,
+                                similarity: primitive_transform,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
                                 _padding: Default::default(),
                             },

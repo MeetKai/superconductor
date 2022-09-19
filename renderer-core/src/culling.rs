@@ -360,22 +360,21 @@ impl BoundingSphereCullingParams {
     }
 }
 
+// A bounding sphere centered on vec3(0, 0, 0)
 #[derive(Debug, Clone, Copy)]
 pub struct BoundingSphere {
-    pub center: Vec3,
     pub radius: f32,
 }
 
 impl BoundingSphere {
-    pub fn new(primitive_center: Vec3, points: &[Vec3]) -> Self {
+    pub fn new(points: &[Vec3]) -> Self {
         let mut max_distance_sq = 0.0_f32;
 
         for &point in points {
-            max_distance_sq = max_distance_sq.max(primitive_center.distance_squared(point));
+            max_distance_sq = max_distance_sq.max(point.length_squared());
         }
 
         Self {
-            center: primitive_center,
             radius: max_distance_sq.sqrt(),
         }
     }
@@ -386,7 +385,7 @@ pub fn test_bounding_sphere(
     transform: gltf_helpers::Similarity,
     params: BoundingSphereCullingParams,
 ) -> bool {
-    let mut center = transform * bounding_sphere.center;
+    let mut center = transform.translation;
     center = (params.view * center.extend(1.0)).truncate();
     // in the view, +z = back so we flip it.
     center.z = -center.z;
