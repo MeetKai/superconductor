@@ -231,7 +231,7 @@ pub fn fragment(
         view,
         material_params.base,
         lut_values,
-        |normal| unsafe { sample_sphere_harmonics(sphere_harmonics, normal) },
+        |normal| sample_sphere_harmonics(*sphere_harmonics, normal),
     );
 
     let specular_output = glam_pbr::get_ibl_radiance_ggx(
@@ -319,7 +319,7 @@ pub fn fragment_alpha_blended(
         view,
         material_params.base,
         lut_values,
-        |normal| unsafe { sample_sphere_harmonics(sphere_harmonics, normal) },
+        |normal| sample_sphere_harmonics(*sphere_harmonics, normal),
     );
 
     let specular_output = glam_pbr::get_ibl_radiance_ggx(
@@ -412,7 +412,7 @@ pub fn fragment_alpha_clipped(
         view,
         material_params.base,
         lut_values,
-        |normal| unsafe { sample_sphere_harmonics(sphere_harmonics, normal) },
+        |normal| sample_sphere_harmonics(*sphere_harmonics, normal),
     );
 
     let specular_output = glam_pbr::get_ibl_radiance_ggx(
@@ -651,22 +651,34 @@ fn debug_colour_for_id(id: u32) -> Vec3 {
     unsafe { *DEBUG_COLOURS.index_unchecked(id as usize % DEBUG_COLOURS.len()) }
 }
 
-unsafe fn sample_sphere_harmonics(sphere_harmonics: &SphereHarmonics, normal: Vec3) -> Vec3 {
-    let index = |i: usize| *sphere_harmonics.index_unchecked(i);
+pub fn sphere_harmonics_lerp(a: SphereHarmonics, b: SphereHarmonics, factor: f32) -> SphereHarmonics {
+    [
+        a[0].lerp(b[0], factor),
+        a[1].lerp(b[1], factor),
+        a[2].lerp(b[2], factor),
+        a[3].lerp(b[3], factor),
+        a[4].lerp(b[4], factor),
+        a[5].lerp(b[5], factor),
+        a[6].lerp(b[6], factor),
+        a[7].lerp(b[7], factor),
+        a[8].lerp(b[8], factor),
+    ]
+}
 
+fn sample_sphere_harmonics(sphere_harmonics: SphereHarmonics, normal: Vec3) -> Vec3 {
     let x = normal.x;
     let y = normal.y;
     let z = normal.z;
 
-    index(0)
-        + index(1) * (y)
-        + index(2) * (z)
-        + index(3) * (x)
-        + index(4) * (y * x)
-        + index(5) * (y * z)
-        + index(6) * (3.0 * z * z - 1.0)
-        + index(7) * (z * x)
-        + index(8) * (x * x - y * y)
+    sphere_harmonics[0]
+        + sphere_harmonics[1] * (y)
+        + sphere_harmonics[2] * (z)
+        + sphere_harmonics[3] * (x)
+        + sphere_harmonics[4] * (y * x)
+        + sphere_harmonics[5] * (y * z)
+        + sphere_harmonics[6] * (3.0 * z * z - 1.0)
+        + sphere_harmonics[7] * (z * x)
+        + sphere_harmonics[8] * (x * x - y * y)
 }
 
 #[spirv(vertex)]
