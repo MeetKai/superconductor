@@ -100,7 +100,8 @@ pub(crate) fn render_desktop(
         label: Some("command encoder"),
     });
 
-    // todo: most likely currently broken.
+    // todo: broken at the moment due to the addition of culling.
+    /*
     if pipeline_options.depth_prepass {
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("depth prepass render pass"),
@@ -142,6 +143,7 @@ pub(crate) fn render_desktop(
             }
         });
     }
+    */
 
     let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("main render pass"),
@@ -190,6 +192,7 @@ pub(crate) fn render_desktop(
     queue.submit(std::iter::once(command_encoder.finish()));
 }
 
+// todo: rename to render_xr or something. Same with uniform structs.
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature = "webgl")]
 pub(crate) fn render(
@@ -658,6 +661,7 @@ fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
             let mut joint_buffer_index = 0;
             let mut instance_offset = instance_range.start;
 
+            // todo: this is truely horrific. Remove this ASAP when we can switch to WebGPU.
             while instance_offset < instance_range.end {
                 let end = (instance_offset + model.0.max_instances_per_joint_buffer())
                     .min(instance_range.end);

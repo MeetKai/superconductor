@@ -25,6 +25,7 @@ use std::sync::Arc;
 
 pub(crate) mod rendering;
 
+// todo: probably merge all the setup systems or move them into the main code.
 pub(crate) fn create_bind_group_layouts_and_pipelines(
     device: Res<Device>,
     pipeline_options: Res<renderer_core::PipelineOptions>,
@@ -90,6 +91,7 @@ pub(crate) fn progress_animation_times(
                 }
             }
             Err(error) => {
+                // todo: this is very messy.
                 if *times_error_reported < 5 {
                     log::warn!("Got an error when progressing animations: {}", error);
                     *times_error_reported += 1;
@@ -229,6 +231,7 @@ pub(crate) fn push_debug_joints_to_lines_buffer(
     })
 }
 
+// todo: move into a debugging module.
 pub(crate) fn push_debug_bounding_boxes_to_lines_buffer(
     instance_query: Query<(&InstanceOf, &Instance)>,
     model_query: Query<&Model>,
@@ -320,6 +323,7 @@ pub(crate) fn push_entity_instances(
                     {
                         let primitive_transform = instance.0 * primitive.transform;
 
+                        // todo: culling for animated models.
                         instances.insert(
                             primitive_id,
                             GpuInstance {
@@ -398,6 +402,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     let pipelines = &pipelines.0;
     let bind_group_layouts = &bind_group_layouts.0;
 
+    // todo: this is very messy.
     let ibl_resources = Arc::new(IblResources {
         lut: ArcSwap::from(Arc::new(Texture::new(device.create_texture(
             &wgpu::TextureDescriptor {
@@ -497,6 +502,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     let lut_url = lut_url.0.clone();
 
     spawn(async move {
+        // todo: yuck.
         // This results in only the skybox being rendered:
         //let bytes = &include_bytes!("../../lut_ggx.png")[..];
         let bytes = textures_context
@@ -647,6 +653,7 @@ pub(crate) fn set_desktop_uniform_buffers(
 ) {
     let queue = &queue.0;
 
+    // todo: ideally we want to use reversed Z matrices.
     // Adapted from the functions used in
     // https://crates.io/crates/ultraviolet.
     //
@@ -733,6 +740,7 @@ struct ViewData {
     instance: renderer_core::Instance,
 }
 
+// todo: this should be renamed *_xr.
 #[cfg(feature = "webgl")]
 pub(crate) fn update_uniform_buffers(
     pose: bevy_ecs::prelude::NonSend<web_sys::XrViewerPose>,

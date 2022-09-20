@@ -219,25 +219,25 @@ async fn collect_buffer_view_map<T: HttpClient>(
             continue;
         }
 
-        match &buffer.uri {
-            None => {}
-            Some(uri) => {
-                let url = url::Url::options().base_url(Some(root_url)).parse(uri)?;
+        let url = match &buffer.uri {
+            Some(url) => uri,
+            None => continue,
+        };
 
-                if url.scheme() == "data" {
-                    let (_mime_type, data) = url
-                        .path()
-                        .split_once(',')
-                        .ok_or_else(|| anyhow::anyhow!("Failed to get data uri split"))?;
-                    log::warn!("Loading buffers from embedded base64 is inefficient. Consider moving the buffers into a seperate file.");
-                    buffer_map.insert(index, Cow::Owned(base64::decode(data)?));
-                } else {
-                    buffer_map.insert(
-                        index,
-                        Cow::Owned(context.http_client.fetch_bytes(&url, None).await?),
-                    );
-                }
-            }
+        let url = url::Url::options().base_url(Some(root_url)).parse(uri)?;
+
+        if url.scheme() == "data" {
+            let (_mime_type, data) = url
+                .path()
+                .split_once(',')
+                .ok_or_else(|| anyhow::anyhow!("Failed to get data uri split"))?;
+            log::warn!("Loading buffers from embedded base64 is inefficient. Consider moving the buffers into a seperate file.");
+            buffer_map.insert(index, Cow::Owned(base64::decode(data)?));
+        } else {
+            buffer_map.insert(
+                index,
+                Cow::Owned(context.http_client.fetch_bytes(&url, None).await?),
+            );
         }
     }
 
@@ -323,8 +323,6 @@ impl Model {
 
         let buffer_view_map = collect_buffer_view_map(&gltf, glb_buffer, root_url, context).await?;
 
-        // What we're doing here is essentially collecting all the model primitives that share a meterial together
-        // to reduce the number of draw calls.
         let mut staging_primitives: permutations::BlendMode<permutations::FaceSides<Vec<_>>> =
             Default::default();
 
@@ -370,6 +368,7 @@ impl Model {
 
                 let material_info = MaterialInfo::load(material, &reader);
 
+                // todo: this could all be re-arranged.
                 let mut buffers = StagingBuffers::default();
 
                 buffers.extend_from_reader(&reader, material_info.texture_transform)?;
@@ -754,6 +753,7 @@ impl StagingBuffers {
 
         match reader.read_uvs()? {
             Some(uvs) => match texture_transform {
+                // todo: do this transform in the shader so that we can upload quantitised values.
                 Some(transform) => self.uvs.extend(uvs.map(|uv| {
                     Vec2::from(transform.offset)
                         + (Mat2::from_angle(transform.rotation)

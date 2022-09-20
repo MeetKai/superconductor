@@ -119,6 +119,7 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
                 )
                 .await;
 
+            // todo: do something with these
             let _incoming_textures = crate::assets::materials::Textures {
                 albedo: albedo_texture,
                 metallic_roughness: metallic_roughness_texture,
