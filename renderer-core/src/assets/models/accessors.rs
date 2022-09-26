@@ -1,5 +1,6 @@
-use either::Either;
+use glam::{UVec4, Vec2, Vec3, Vec4};
 use goth_gltf::ComponentType;
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 fn unsigned_short_to_float(short: u16) -> f32 {
@@ -58,13 +59,10 @@ pub fn read_f32<'a>(
     slice: &'a [u8],
     byte_stride: Option<usize>,
     accessor: &goth_gltf::Accessor,
-) -> anyhow::Result<impl Iterator<Item = f32> + 'a> {
+) -> anyhow::Result<Cow<'a, [f32]>> {
     Ok(
         match (accessor.component_type, accessor.normalized, byte_stride) {
-            (ComponentType::Float, false, None) => {
-                let slice: &[f32] = bytemuck::cast_slice(slice);
-                slice.iter().copied()
-            }
+            (ComponentType::Float, false, None) => Cow::Borrowed(bytemuck::cast_slice(slice)),
             other => {
                 return Err(anyhow::anyhow!(
                 "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
@@ -80,34 +78,48 @@ pub fn read_f32x3<'a>(
     slice: &'a [u8],
     byte_stride: Option<usize>,
     accessor: &goth_gltf::Accessor,
-) -> anyhow::Result<impl Iterator<Item = [f32; 3]> + 'a> {
+) -> anyhow::Result<Cow<'a, [Vec3]>> {
     Ok(
         match (accessor.component_type, accessor.normalized, byte_stride) {
             (ComponentType::Float, false, None | Some(12)) => {
                 let slice: &[f32] = bytemuck::cast_slice(slice);
-                Either::Left(Either::Left(
-                    slice.chunks(3).map(|slice| slice.try_into().unwrap()),
-                ))
+                Cow::Owned(
+                    slice
+                        .chunks(3)
+                        .map(|slice| Vec3::from(<[f32; 3]>::try_from(slice).unwrap()))
+                        .collect(),
+                )
             }
             (ComponentType::UnsignedShort, false, Some(8)) => {
                 let slice: &[u16] = bytemuck::cast_slice(slice);
-                Either::Left(Either::Right(
+                Cow::Owned(
                     slice
                         .chunks(4)
-                        .map(move |slice| std::array::from_fn(|i| slice[i] as f32)),
-                ))
+                        .map(move |slice| Vec3::from(std::array::from_fn(|i| slice[i] as f32)))
+                        .collect(),
+                )
             }
             (ComponentType::UnsignedShort, true, Some(8)) => {
                 let slice: &[u16] = bytemuck::cast_slice(slice);
-                Either::Right(Either::Left(slice.chunks(4).map(|slice| {
-                    std::array::from_fn(|i| unsigned_short_to_float(slice[i]))
-                })))
+                Cow::Owned(
+                    slice
+                        .chunks(4)
+                        .map(|slice| {
+                            Vec3::from(std::array::from_fn(|i| unsigned_short_to_float(slice[i])))
+                        })
+                        .collect(),
+                )
             }
-            (ComponentType::Byte, true, Some(4)) => {
-                Either::Right(Either::Right(slice.chunks(4).map(move |slice| {
-                    std::array::from_fn(|i| signed_byte_to_float(slice[i] as i8))
-                })))
-            }
+            (ComponentType::Byte, true, Some(4)) => Cow::Owned(
+                slice
+                    .chunks(4)
+                    .map(move |slice| {
+                        Vec3::from(std::array::from_fn(|i| {
+                            signed_byte_to_float(slice[i] as i8)
+                        }))
+                    })
+                    .collect(),
+            ),
             other => {
                 return Err(anyhow::anyhow!(
                 "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
@@ -123,19 +135,21 @@ fn read_f32x2<'a>(
     slice: &'a [u8],
     byte_stride: Option<usize>,
     accessor: &goth_gltf::Accessor,
-) -> anyhow::Result<impl Iterator<Item = [f32; 2]> + 'a> {
+) -> anyhow::Result<Cow<'a, [Vec2]>> {
     Ok(
         match (accessor.component_type, accessor.normalized, byte_stride) {
             (ComponentType::Float, false, None | Some(8)) => {
-                let slice: &[[f32; 2]] = bytemuck::cast_slice(slice);
-                Either::Left(slice.iter().copied())
+                Cow::Borrowed(bytemuck::cast_slice(slice))
             }
             (ComponentType::UnsignedShort, true, Some(4)) => {
                 let slice: &[u16] = bytemuck::cast_slice(slice);
-                Either::Right(
-                    slice.chunks(2).map(move |slice| {
-                        std::array::from_fn(|i| unsigned_short_to_float(slice[i]))
-                    }),
+                Cow::Owned(
+                    slice
+                        .chunks(2)
+                        .map(move |slice| {
+                            Vec2::from(std::array::from_fn(|i| unsigned_short_to_float(slice[i])))
+                        })
+                        .collect(),
                 )
             }
             other => {
@@ -153,28 +167,27 @@ pub fn read_f32x4<'a>(
     slice: &'a [u8],
     byte_stride: Option<usize>,
     accessor: &goth_gltf::Accessor,
-) -> anyhow::Result<impl Iterator<Item = [f32; 4]> + 'a> {
+) -> anyhow::Result<Cow<'a, [Vec4]>> {
     Ok(
         match (accessor.component_type, accessor.normalized, byte_stride) {
-            (ComponentType::Float, false, None) => {
-                let slice: &[f32] = bytemuck::cast_slice(slice);
-                Either::Left(Either::Left(
-                    slice
-                        .chunks(4)
-                        .map(|slice| std::array::from_fn(|i| slice[i])),
-                ))
-            }
-            (ComponentType::UnsignedByte, true, Some(4)) => {
-                Either::Left(Either::Right(slice.chunks(4).map(move |slice| {
-                    std::array::from_fn(|i| unsigned_byte_to_float(slice[i]))
-                })))
-            }
+            (ComponentType::Float, false, None) => Cow::Borrowed(bytemuck::cast_slice(slice)),
+            (ComponentType::UnsignedByte, true, Some(4)) => Cow::Owned(
+                slice
+                    .chunks(4)
+                    .map(move |slice| {
+                        Vec4::from(std::array::from_fn(|i| unsigned_byte_to_float(slice[i])))
+                    })
+                    .collect(),
+            ),
             (ComponentType::Short, true, None) => {
                 let slice: &[[i16; 4]] = bytemuck::cast_slice(slice);
-                Either::Right(
+                Cow::Owned(
                     slice
                         .iter()
-                        .map(|slice| std::array::from_fn(|i| signed_short_to_float(slice[i]))),
+                        .map(|slice| {
+                            Vec4::from(std::array::from_fn(|i| signed_short_to_float(slice[i])))
+                        })
+                        .collect(),
                 )
             }
             other => {
@@ -192,17 +205,14 @@ fn read_u32<'a>(
     slice: &'a [u8],
     byte_stride: Option<usize>,
     accessor: &goth_gltf::Accessor,
-) -> anyhow::Result<impl Iterator<Item = u32> + 'a> {
+) -> anyhow::Result<Cow<'a, [u32]>> {
     Ok(
         match (accessor.component_type, accessor.normalized, byte_stride) {
             (ComponentType::UnsignedShort, false, None) => {
                 let slice: &[u16] = bytemuck::cast_slice(slice);
-                Either::Left(slice.iter().map(|&i| i as u32))
+                Cow::Owned(slice.iter().map(|&i| i as u32).collect())
             }
-            (ComponentType::UnsignedInt, false, None) => {
-                let slice: &[u32] = bytemuck::cast_slice(slice);
-                Either::Right(slice.iter().copied())
-            }
+            (ComponentType::UnsignedInt, false, None) => Cow::Borrowed(bytemuck::cast_slice(slice)),
             other => {
                 return Err(anyhow::anyhow!(
                 "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
@@ -218,12 +228,15 @@ fn read_u32x4<'a>(
     slice: &'a [u8],
     byte_stride: Option<usize>,
     accessor: &goth_gltf::Accessor,
-) -> anyhow::Result<impl Iterator<Item = [u32; 4]> + 'a> {
+) -> anyhow::Result<Cow<'a, [UVec4]>> {
     Ok(
         match (accessor.component_type, accessor.normalized, byte_stride) {
-            (ComponentType::UnsignedByte, false, Some(4) | None) => slice
-                .chunks(4)
-                .map(|slice| std::array::from_fn(|i| slice[i] as u32)),
+            (ComponentType::UnsignedByte, false, Some(4) | None) => Cow::Owned(
+                slice
+                    .chunks(4)
+                    .map(|slice| UVec4::from(std::array::from_fn(|i| slice[i] as u32)))
+                    .collect(),
+            ),
             other => {
                 return Err(anyhow::anyhow!(
                 "{}: Unsupported combination of component type, normalized and byte stride: {:?}",
@@ -254,7 +267,7 @@ impl<'a> PrimitiveReader<'a> {
         }
     }
 
-    pub fn read_indices(&self) -> anyhow::Result<Option<impl Iterator<Item = u32> + '_>> {
+    pub fn read_indices(&self) -> anyhow::Result<Option<Cow<'a, [u32]>>> {
         let accessor_index = match self.primitive.indices {
             Some(index) => index,
             None => return Ok(None),
@@ -270,7 +283,7 @@ impl<'a> PrimitiveReader<'a> {
         Ok(Some(read_u32(slice, byte_stride, accessor)?))
     }
 
-    pub fn read_positions(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 3]> + '_>> {
+    pub fn read_positions(&self) -> anyhow::Result<Option<Cow<'a, [Vec3]>>> {
         let accessor_index = match self.primitive.attributes.position {
             Some(index) => index,
             None => return Ok(None),
@@ -286,7 +299,7 @@ impl<'a> PrimitiveReader<'a> {
         Ok(Some(read_f32x3(slice, byte_stride, accessor)?))
     }
 
-    pub fn read_normals(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 3]> + '_>> {
+    pub fn read_normals(&self) -> anyhow::Result<Option<Cow<'a, [Vec3]>>> {
         let accessor_index = match self.primitive.attributes.normal {
             Some(index) => index,
             None => return Ok(None),
@@ -302,7 +315,7 @@ impl<'a> PrimitiveReader<'a> {
         Ok(Some(read_f32x3(slice, byte_stride, accessor)?))
     }
 
-    pub fn read_uvs(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 2]> + '_>> {
+    pub fn read_uvs(&self) -> anyhow::Result<Option<Cow<'a, [Vec2]>>> {
         let accessor_index = match self.primitive.attributes.texcoord_0 {
             Some(index) => index,
             None => return Ok(None),
@@ -318,7 +331,7 @@ impl<'a> PrimitiveReader<'a> {
         Ok(Some(read_f32x2(slice, byte_stride, accessor)?))
     }
 
-    pub fn read_joints(&self) -> anyhow::Result<Option<impl Iterator<Item = [u32; 4]> + '_>> {
+    pub fn read_joints(&self) -> anyhow::Result<Option<Cow<'a, [UVec4]>>> {
         let accessor_index = match self.primitive.attributes.joints_0 {
             Some(index) => index,
             None => return Ok(None),
@@ -335,7 +348,7 @@ impl<'a> PrimitiveReader<'a> {
         Ok(Some(read_u32x4(slice, byte_stride, accessor)?))
     }
 
-    pub fn read_weights(&self) -> anyhow::Result<Option<impl Iterator<Item = [f32; 4]> + '_>> {
+    pub fn read_weights(&self) -> anyhow::Result<Option<Cow<'a, [Vec4]>>> {
         let accessor_index = match self.primitive.attributes.weights_0 {
             Some(index) => index,
             None => return Ok(None),

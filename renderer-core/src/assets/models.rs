@@ -219,8 +219,8 @@ async fn collect_buffer_view_map<T: HttpClient>(
             continue;
         }
 
-        let url = match &buffer.uri {
-            Some(url) => uri,
+        let uri = match &buffer.uri {
+            Some(uri) => uri,
             None => continue,
         };
 
@@ -368,10 +368,7 @@ impl Model {
 
                 let material_info = MaterialInfo::load(material, &reader);
 
-                // todo: this could all be re-arranged.
-                let mut buffers = StagingBuffers::default();
-
-                buffers.extend_from_reader(&reader, material_info.texture_transform)?;
+                let buffers = StagingBuffers::new(&reader, material_info.texture_transform)?;
 
                 primitive_vec.push(StagingPrimitive {
                     bounding_box: BoundingBox::new(&buffers.positions),
@@ -511,33 +508,22 @@ impl AnimatedModel {
 
                 let material_info = MaterialInfo::load(material, &reader);
 
-                let mut buffers = AnimatedStagingBuffers::default();
+                let buffers = StagingBuffers::new(&reader, material_info.texture_transform)?;
 
-                let num_vertices = buffers
-                    .base
-                    .extend_from_reader(&reader, material_info.texture_transform)?;
-
-                match reader.read_joints()? {
-                    Some(joints) => buffers.joint_indices.extend(joints.map(|indices| {
-                        UVec4::new(
-                            indices[0] as u32,
-                            indices[1] as u32,
-                            indices[2] as u32,
-                            indices[3] as u32,
-                        )
-                    })),
-                    None => buffers.joint_indices.extend(
-                        std::iter::repeat(UVec4::splat(node_index as u32)).take(num_vertices),
-                    ),
-                }
-
-                match reader.read_weights()? {
-                    Some(joint_weights) => {
-                        buffers.joint_weights.extend(joint_weights.map(Vec4::from))
-                    }
-                    None => buffers
-                        .joint_weights
-                        .extend(std::iter::repeat(Vec4::X).take(num_vertices)),
+                let buffers = AnimatedStagingBuffers {
+                    joint_indices: match reader.read_joints()? {
+                        Some(joints) => joints.to_vec(),
+                        None => std::iter::repeat(UVec4::splat(node_index as u32))
+                            .take(buffers.positions.len())
+                            .collect(),
+                    },
+                    joint_weights: match reader.read_weights()? {
+                        Some(joint_weights) => joint_weights.to_vec(),
+                        None => std::iter::repeat(Vec4::X)
+                            .take(buffers.positions.len())
+                            .collect(),
+                    },
+                    base: buffers,
                 };
 
                 primitive_vec.push(StagingPrimitive {
@@ -716,58 +702,50 @@ struct StagingBuffers {
 }
 
 impl StagingBuffers {
-    fn extend_from_reader(
-        &mut self,
+    fn new(
         reader: &PrimitiveReader,
         texture_transform: Option<goth_gltf::extensions::KhrTextureTransform>,
-    ) -> anyhow::Result<usize> {
-        let vertices_offset = self.positions.len();
+    ) -> anyhow::Result<Self> {
+        let positions: Vec<Vec3> = reader
+            .read_positions()?
+            .ok_or_else(|| anyhow::anyhow!("Primitive doesn't specifiy vertex positions."))?
+            .to_vec();
 
-        self.positions.extend(
-            reader
-                .read_positions()?
-                .ok_or_else(|| anyhow::anyhow!("Primitive doesn't specifiy vertex positions."))?
-                .map(Vec3::from),
-        );
+        Ok(Self {
+            indices: match reader.read_indices()? {
+                Some(indices) => indices.to_vec(),
+                None => {
+                    log::warn!("No indices specified, using inefficient per-vertex indices.");
 
-        let num_vertices = self.positions.len() - vertices_offset;
-
-        match reader.read_indices()? {
-            Some(indices) => self
-                .indices
-                .extend(indices.map(|index| vertices_offset as u32 + index)),
-            None => {
-                log::warn!("No indices specified, using inefficient per-vertex indices.");
-
-                self.indices
-                    .extend(vertices_offset as u32..vertices_offset as u32 + num_vertices as u32);
-            }
-        };
-
-        match reader.read_normals()? {
-            Some(normals) => self.normals.extend(normals.map(Vec3::from)),
-            None => self
-                .normals
-                .extend(std::iter::repeat(Vec3::ZERO).take(num_vertices)),
-        }
-
-        match reader.read_uvs()? {
-            Some(uvs) => match texture_transform {
-                // todo: do this transform in the shader so that we can upload quantitised values.
-                Some(transform) => self.uvs.extend(uvs.map(|uv| {
-                    Vec2::from(transform.offset)
-                        + (Mat2::from_angle(transform.rotation)
-                            * Vec2::from(transform.scale)
-                            * Vec2::from(uv))
-                })),
-                None => self.uvs.extend(uvs.map(Vec2::from)),
+                    (0..positions.len() as u32).collect()
+                }
             },
-            None => self
-                .uvs
-                .extend(std::iter::repeat(Vec2::ZERO).take(num_vertices)),
-        }
-
-        Ok(num_vertices)
+            normals: match reader.read_normals()? {
+                Some(normals) => normals.to_vec(),
+                None => std::iter::repeat(Vec3::ZERO)
+                    .take(positions.len())
+                    .collect(),
+            },
+            uvs: match reader.read_uvs()? {
+                Some(uvs) => match texture_transform {
+                    // todo: do this transform in the shader so that we can upload quantitised values.
+                    Some(transform) => uvs
+                        .iter()
+                        .map(|&uv| {
+                            Vec2::from(transform.offset)
+                                + (Mat2::from_angle(transform.rotation)
+                                    * Vec2::from(transform.scale)
+                                    * uv)
+                        })
+                        .collect(),
+                    None => uvs.to_vec(),
+                },
+                None => std::iter::repeat(Vec2::ZERO)
+                    .take(positions.len())
+                    .collect(),
+            },
+            positions,
+        })
     }
 }
 

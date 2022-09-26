@@ -1,22 +1,20 @@
 use crate::{DepthFirstNodes, Similarity};
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, Vec3, Vec4};
 use goth_gltf::{Interpolation, TargetPath};
+use std::borrow::Cow;
 use std::fmt;
 use std::ops::{Add, Mul};
 
-pub fn read_animations<'a, F1, I1, F3, I3, F4, I4>(
+pub fn read_animations<'a, F1, F3, F4>(
     gltf: &'a goth_gltf::Gltf,
     read_f32: F1,
     read_f32x3: F3,
     read_f32x4: F4,
 ) -> Vec<Animation>
 where
-    I1: Iterator<Item = f32>,
-    F1: Fn(&goth_gltf::Accessor) -> I1,
-    I3: Iterator<Item = [f32; 3]>,
-    F3: Fn(&goth_gltf::Accessor) -> I3,
-    I4: Iterator<Item = [f32; 4]>,
-    F4: Fn(&goth_gltf::Accessor) -> I4,
+    F1: Fn(&goth_gltf::Accessor) -> Cow<'a, [f32]>,
+    F3: Fn(&goth_gltf::Accessor) -> Cow<'a, [Vec3]>,
+    F4: Fn(&goth_gltf::Accessor) -> Cow<'a, [Vec4]>,
 {
     gltf.animations
         .iter()
@@ -32,7 +30,7 @@ where
 
                 let output_accessor = &gltf.accessors[sampler.output];
 
-                let inputs = read_f32(input_accessor).collect();
+                let inputs = read_f32(input_accessor).to_vec();
 
                 match channel.target.path {
                     TargetPath::Translation => {
@@ -40,7 +38,7 @@ where
                             interpolation: sampler.interpolation,
                             inputs,
                             node_index: channel.target.node.unwrap(),
-                            outputs: read_f32x3(output_accessor).map(Vec3::from).collect(),
+                            outputs: read_f32x3(output_accessor).to_vec(),
                         });
                     }
                     TargetPath::Rotation => {
@@ -49,7 +47,11 @@ where
                             inputs,
                             node_index: channel.target.node.unwrap(),
                             outputs: {
-                                read_f32x4(output_accessor).map(Quat::from_array).collect()
+                                read_f32x4(output_accessor)
+                                    .iter()
+                                    .copied()
+                                    .map(Quat::from_vec4)
+                                    .collect()
                             },
                         });
                     }
@@ -59,6 +61,7 @@ where
                             inputs,
                             node_index: channel.target.node.unwrap(),
                             outputs: read_f32x3(output_accessor)
+                                .iter()
                                 .map(|scale| scale[0].max(scale[1]).max(scale[2]))
                                 .collect(),
                         });
