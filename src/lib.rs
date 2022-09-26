@@ -102,10 +102,10 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
 
         buffer_resetting_stage = match self.mode {
             Mode::Desktop => {
-                buffer_resetting_stage.with_system(systems::set_desktop_uniform_buffers)
+                buffer_resetting_stage.with_system(systems::update_desktop_uniform_buffers)
             }
             #[cfg(feature = "webgl")]
-            _ => buffer_resetting_stage.with_system(systems::update_uniform_buffers),
+            _ => buffer_resetting_stage.with_system(systems::update_webxr_uniform_buffers),
         };
 
         app.add_stage_after(
@@ -141,7 +141,7 @@ impl<T: HttpClient> Plugin for XrPlugin<T> {
         rendering_stage = match self.mode {
             Mode::Desktop => rendering_stage.with_system(systems::rendering::render_desktop),
             #[cfg(feature = "webgl")]
-            _ => rendering_stage.with_system(systems::rendering::render),
+            _ => rendering_stage.with_system(systems::rendering::render_webxr),
         };
 
         app.add_stage_after(Stage::BufferUploading, Stage::Rendering, rendering_stage);

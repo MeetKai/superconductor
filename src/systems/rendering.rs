@@ -195,7 +195,7 @@ pub(crate) fn render_desktop(
 // todo: rename to render_xr or something. Same with uniform structs.
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature = "webgl")]
-pub(crate) fn render(
+pub(crate) fn render_webxr(
     frame: bevy_ecs::prelude::NonSend<web_sys::XrFrame>,
     (device, queue, pipelines): (Res<Device>, Res<Queue>, Res<Pipelines>),
     bind_group_layouts: Res<resources::BindGroupLayouts>,

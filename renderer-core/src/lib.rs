@@ -112,12 +112,21 @@ impl Canvas {
     ) -> web_sys::WebGl2RenderingContext {
         use wasm_bindgen::JsCast;
 
-        let mut gl_attribs = std::collections::HashMap::new();
-        gl_attribs.insert(String::from("xrCompatible"), true);
+        let js_gl_attribs = js_sys::Object::new();
+        js_sys::Reflect::set(
+            &js_gl_attribs,
+            &"xrCompatible".into(),
+            &wasm_bindgen::JsValue::TRUE,
+        )
+        .expect("Failed to set xrCompatible");
         // WebGL silently ignores any stencil writing or testing if this is not set.
         // (Atleast on Chrome). What a fantastic design decision.
-        gl_attribs.insert(String::from("stencil"), options.stencil);
-        let js_gl_attribs = wasm_bindgen::JsValue::from_serde(&gl_attribs).unwrap();
+        js_sys::Reflect::set(
+            &js_gl_attribs,
+            &"stencil".into(),
+            &wasm_bindgen::JsValue::from_bool(options.stencil),
+        )
+        .expect("Failed to set stencil");
 
         self.inner
             .get_context_with_context_options("webgl2", &js_gl_attribs)

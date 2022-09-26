@@ -163,6 +163,13 @@ fn read_f32x2<'a>(
     )
 }
 
+unsafe fn cast_slice<T>(bytes: &[u8]) -> &[T] {
+    std::slice::from_raw_parts(
+        bytes.as_ptr() as *const T,
+        bytes.len() / std::mem::size_of::<T>(),
+    )
+}
+
 pub fn read_f32x4<'a>(
     slice: &'a [u8],
     byte_stride: Option<usize>,
@@ -170,7 +177,11 @@ pub fn read_f32x4<'a>(
 ) -> anyhow::Result<Cow<'a, [Vec4]>> {
     Ok(
         match (accessor.component_type, accessor.normalized, byte_stride) {
-            (ComponentType::Float, false, None) => Cow::Borrowed(bytemuck::cast_slice(slice)),
+            (ComponentType::Float, false, None) => {
+                // bytemuck::cast_slice panics with an alignment issue on wasm so we just use unsafe for this.
+                // todo: might be wrong.
+                Cow::Borrowed(unsafe { cast_slice(slice) })
+            }
             (ComponentType::UnsignedByte, true, Some(4)) => Cow::Owned(
                 slice
                     .chunks(4)

@@ -584,7 +584,7 @@ pub(crate) fn update_ibl_resources<T: HttpClient>(
     });
 }
 
-pub(crate) fn set_desktop_uniform_buffers(
+pub(crate) fn update_desktop_uniform_buffers(
     pipeline_options: Res<renderer_core::PipelineOptions>,
     queue: Res<Queue>,
     uniform_buffer: Res<UniformBuffer>,
@@ -682,9 +682,8 @@ struct ViewData {
     instance: renderer_core::Instance,
 }
 
-// todo: this should be renamed *_xr.
 #[cfg(feature = "webgl")]
-pub(crate) fn update_uniform_buffers(
+pub(crate) fn update_webxr_uniform_buffers(
     pose: bevy_ecs::prelude::NonSend<web_sys::XrViewerPose>,
     pipeline_options: Res<renderer_core::PipelineOptions>,
     queue: Res<Queue>,

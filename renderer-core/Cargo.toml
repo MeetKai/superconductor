@@ -33,6 +33,7 @@ async-std = "1.12.0"
 futures = "0.3.21"
 goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "584bfe250af13de6e9ea98e1d76d12e4ea92b2f2" }
 meshopt-decoder = { git = "https://github.com/expenses/meshopt-decoder", rev = "1d7eb93c61d9acc2583a50cb3ec7032bbffec61e" }
+js-sys = "0.3.60"
 
 [dependencies.web-sys]
 version = "=0.3.58"
