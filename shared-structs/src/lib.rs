@@ -3,7 +3,7 @@
 use core::ops::Mul;
 #[cfg(not(target_arch = "spirv"))]
 use crevice::std140::AsStd140;
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat2, Mat4, Vec2, Vec3, Vec4};
 
 #[cfg_attr(not(target_arch = "spirv"), derive(crevice::std140::AsStd140))]
 #[repr(C)]
@@ -94,7 +94,33 @@ impl From<Mat4> for FlatMat4 {
 }
 
 #[cfg_attr(not(target_arch = "spirv"), derive(AsStd140, Debug))]
+#[repr(C)]
+pub struct TextureTransform {
+    pub offset: Vec2,
+    pub scale: Vec2,
+    pub rotation: f32,
+}
+
+impl Default for TextureTransform {
+    fn default() -> Self {
+        Self {
+            offset: Vec2::ZERO,
+            scale: Vec2::ONE,
+            rotation: 0.0,
+        }
+    }
+}
+
+impl TextureTransform {
+    pub fn transform_uv(&self, uv: Vec2) -> Vec2 {
+        self.offset + (Mat2::from_angle(self.rotation) * self.scale * uv)
+    }
+}
+
+#[cfg_attr(not(target_arch = "spirv"), derive(AsStd140, Debug))]
+#[repr(C)]
 pub struct MaterialSettings {
+    pub texture_transform: TextureTransform,
     pub base_color_factor: Vec4,
     pub emissive_factor: Vec3,
     // todo: see above.
@@ -117,6 +143,7 @@ impl MaterialSettings {
             roughness_factor: 1.0,
             normal_map_scale: 1.0,
             is_unlit: true as u32,
+            texture_transform: Default::default(),
         }
     }
 }

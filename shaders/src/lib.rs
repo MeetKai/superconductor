@@ -32,6 +32,7 @@ pub fn vertex(
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
     #[spirv(position)] builtin_pos: &mut Vec4,
     #[spirv(view_index)] view_index: i32,
     out_position: &mut Vec3,
@@ -45,7 +46,7 @@ pub fn vertex(
     *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
     *out_position = position;
     *out_normal = instance_rotation * normal;
-    *out_uv = uv;
+    *out_uv = material_settings.texture_transform.transform_uv(uv);
 
     if uniforms.flip_viewport != 0 {
         builtin_pos.y = -builtin_pos.y;
@@ -63,6 +64,7 @@ pub fn animated_vertex(
     #[spirv(flat)] joint_indices: UVec4,
     joint_weights: Vec4,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
     #[spirv(descriptor_set = 2, binding = 0, uniform)]
     joint_transforms: &[JointTransform; JointTransform::MAX_COUNT],
     #[spirv(position)] builtin_pos: &mut Vec4,
@@ -101,7 +103,7 @@ pub fn animated_vertex(
     *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
     *out_position = position;
     *out_normal = instance_rotation * normal;
-    *out_uv = uv;
+    *out_uv = material_settings.texture_transform.transform_uv(uv);
 
     if uniforms.flip_viewport != 0 {
         builtin_pos.y = -builtin_pos.y;

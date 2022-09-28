@@ -5,7 +5,7 @@ use crate::culling::{BoundingBox, BoundingSphere};
 use crate::permutations;
 use crate::{spawn, BindGroupLayouts};
 use arc_swap::ArcSwap;
-use glam::{Mat2, Mat4, UVec4, Vec2, Vec3, Vec4};
+use glam::{Mat4, UVec4, Vec2, Vec3, Vec4};
 use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
     Similarity,
@@ -366,15 +366,13 @@ impl Model {
 
                 let reader = PrimitiveReader::new(&gltf, primitive, &buffer_view_map);
 
-                let material_info = MaterialInfo::load(material, &reader);
-
-                let buffers = StagingBuffers::new(&reader, material_info.texture_transform)?;
+                let buffers = StagingBuffers::new(&reader)?;
 
                 primitive_vec.push(StagingPrimitive {
                     bounding_box: BoundingBox::new(&buffers.positions),
                     bounding_sphere: BoundingSphere::new(&buffers.positions),
                     buffers,
-                    material_settings: material_info.settings,
+                    material_settings: load_material_settings(material, &reader),
                     material_index: material_index.unwrap_or(0),
                     transform,
                 });
@@ -506,31 +504,27 @@ impl AnimatedModel {
 
                 let reader = PrimitiveReader::new(&gltf, primitive, &buffer_view_map);
 
-                let material_info = MaterialInfo::load(material, &reader);
-
-                let buffers = StagingBuffers::new(&reader, material_info.texture_transform)?;
-
-                let buffers = AnimatedStagingBuffers {
-                    joint_indices: match reader.read_joints()? {
-                        Some(joints) => joints.to_vec(),
-                        None => std::iter::repeat(UVec4::splat(node_index as u32))
-                            .take(buffers.positions.len())
-                            .collect(),
-                    },
-                    joint_weights: match reader.read_weights()? {
-                        Some(joint_weights) => joint_weights.to_vec(),
-                        None => std::iter::repeat(Vec4::X)
-                            .take(buffers.positions.len())
-                            .collect(),
-                    },
-                    base: buffers,
-                };
+                let buffers = StagingBuffers::new(&reader)?;
 
                 primitive_vec.push(StagingPrimitive {
-                    bounding_box: BoundingBox::new(&buffers.base.positions),
-                    bounding_sphere: BoundingSphere::new(&buffers.base.positions),
-                    buffers,
-                    material_settings: material_info.settings,
+                    bounding_box: BoundingBox::new(&buffers.positions),
+                    bounding_sphere: BoundingSphere::new(&buffers.positions),
+                    buffers: AnimatedStagingBuffers {
+                        joint_indices: match reader.read_joints()? {
+                            Some(joints) => joints.to_vec(),
+                            None => std::iter::repeat(UVec4::splat(node_index as u32))
+                                .take(buffers.positions.len())
+                                .collect(),
+                        },
+                        joint_weights: match reader.read_weights()? {
+                            Some(joint_weights) => joint_weights.to_vec(),
+                            None => std::iter::repeat(Vec4::X)
+                                .take(buffers.positions.len())
+                                .collect(),
+                        },
+                        base: buffers,
+                    },
+                    material_settings: load_material_settings(material, &reader),
                     material_index: material_index.unwrap_or(0),
                     transform: Similarity::IDENTITY,
                 });
@@ -702,10 +696,7 @@ struct StagingBuffers {
 }
 
 impl StagingBuffers {
-    fn new(
-        reader: &PrimitiveReader,
-        texture_transform: Option<goth_gltf::extensions::KhrTextureTransform>,
-    ) -> anyhow::Result<Self> {
+    fn new(reader: &PrimitiveReader) -> anyhow::Result<Self> {
         let positions: Vec<Vec3> = reader
             .read_positions()?
             .ok_or_else(|| anyhow::anyhow!("Primitive doesn't specifiy vertex positions."))?
@@ -727,19 +718,7 @@ impl StagingBuffers {
                     .collect(),
             },
             uvs: match reader.read_uvs()? {
-                Some(uvs) => match texture_transform {
-                    // todo: do this transform in the shader so that we can upload quantitised values.
-                    Some(transform) => uvs
-                        .iter()
-                        .map(|&uv| {
-                            Vec2::from(transform.offset)
-                                + (Mat2::from_angle(transform.rotation)
-                                    * Vec2::from(transform.scale)
-                                    * uv)
-                        })
-                        .collect(),
-                    None => uvs.to_vec(),
-                },
+                Some(uvs) => uvs.to_vec(),
                 None => std::iter::repeat(Vec2::ZERO)
                     .take(positions.len())
                     .collect(),
@@ -914,53 +893,52 @@ fn spawn_texture_loading_futures<T: HttpClient>(
     });
 }
 
-struct MaterialInfo {
-    settings: shared_structs::MaterialSettings,
-    texture_transform: Option<goth_gltf::extensions::KhrTextureTransform>,
-}
+fn load_material_settings(
+    material: goth_gltf::Material,
+    reader: &PrimitiveReader,
+) -> shared_structs::MaterialSettings {
+    // Workaround for some exporters (Scaniverse) exporting scanned models that are meant to be
+    // rendered unlit but don't set the material flag.
+    let unlit = material.extensions.khr_materials_unlit.is_some()
+        || reader.primitive.attributes.normal.is_none();
 
-impl MaterialInfo {
-    fn load(material: goth_gltf::Material, reader: &PrimitiveReader) -> Self {
-        // Workaround for some exporters (Scaniverse) exporting scanned models that are meant to be
-        // rendered unlit but don't set the material flag.
-        let unlit = material.extensions.khr_materials_unlit.is_some()
-            || reader.primitive.attributes.normal.is_none();
+    let pbr = material.pbr_metallic_roughness;
 
-        let pbr = material.pbr_metallic_roughness;
+    let texture_transform = pbr
+        .base_color_texture
+        .map(|info| info.extensions)
+        .or_else(|| pbr.metallic_roughness_texture.map(|info| info.extensions))
+        .or_else(|| material.normal_texture.map(|info| info.extensions))
+        .or_else(|| material.emissive_texture.map(|info| info.extensions))
+        .and_then(|extensions| extensions.khr_texture_transform);
 
-        let texture_transform = pbr
-            .base_color_texture
-            .map(|info| info.extensions)
-            .or_else(|| pbr.metallic_roughness_texture.map(|info| info.extensions))
-            .or_else(|| material.normal_texture.map(|info| info.extensions))
-            .or_else(|| material.emissive_texture.map(|info| info.extensions))
-            .and_then(|extensions| extensions.khr_texture_transform);
+    let emissive_strength = material
+        .extensions
+        .khr_materials_emissive_strength
+        .map(|emissive_strength| emissive_strength.emissive_strength)
+        .unwrap_or(1.0);
 
-        let emissive_strength = material
-            .extensions
-            .khr_materials_emissive_strength
-            .map(|emissive_strength| emissive_strength.emissive_strength)
-            .unwrap_or(1.0);
-
-        let settings = shared_structs::MaterialSettings {
-            base_color_factor: pbr.base_color_factor.into(),
-            emissive_factor: Vec3::from(material.emissive_factor) * emissive_strength,
-            metallic_factor: pbr.metallic_factor,
-            roughness_factor: pbr.roughness_factor,
-            is_unlit: unlit as u32,
-            normal_map_scale: material
-                .normal_texture
-                .map(|info| info.scale)
-                .unwrap_or(1.0),
-            // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
-            // todo: find a nicer way to resolve this.
-            #[cfg(not(feature = "wasm"))]
-            _padding: 0,
-        };
-
-        Self {
-            settings,
-            texture_transform,
-        }
+    shared_structs::MaterialSettings {
+        base_color_factor: pbr.base_color_factor.into(),
+        emissive_factor: Vec3::from(material.emissive_factor) * emissive_strength,
+        metallic_factor: pbr.metallic_factor,
+        roughness_factor: pbr.roughness_factor,
+        is_unlit: unlit as u32,
+        normal_map_scale: material
+            .normal_texture
+            .map(|info| info.scale)
+            .unwrap_or(1.0),
+        // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
+        // todo: find a nicer way to resolve this.
+        #[cfg(not(feature = "wasm"))]
+        _padding: 0,
+        texture_transform: match texture_transform {
+            Some(transform) => shared_structs::TextureTransform {
+                offset: Vec2::from(transform.offset),
+                scale: Vec2::from(transform.scale),
+                rotation: transform.rotation,
+            },
+            None => Default::default(),
+        },
     }
 }

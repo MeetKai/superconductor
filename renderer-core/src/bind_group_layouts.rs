@@ -96,7 +96,7 @@ impl BindGroupLayouts {
                     texture_entry(1),
                     texture_entry(2),
                     texture_entry(3),
-                    uniform_entry(4, wgpu::ShaderStages::FRAGMENT),
+                    uniform_entry(4, wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT),
                     sampler_entry(5),
                 ],
             }),

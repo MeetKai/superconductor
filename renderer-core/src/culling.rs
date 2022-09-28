@@ -69,10 +69,9 @@ impl CullingFrustum {
 }
 
 // Modified from https://bruop.github.io/improved_frustum_culling/.
-// todo:
-//
-// This is a crazy complicated implementation but has basically zero false positives.
-// When/if we move culling to the GPU we should use something simpler.
+// todo: This is a crazy complicated implementation but has basically
+// zero false positives. When/if we move culling to the GPU we should
+// use something simpler.
 #[inline]
 pub fn test_using_separating_axis_theorem(
     frustum: CullingFrustum,
