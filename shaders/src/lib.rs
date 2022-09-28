@@ -46,7 +46,7 @@ pub fn vertex(
     *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
     *out_position = position;
     *out_normal = instance_rotation * normal;
-    *out_uv = material_settings.texture_transform.transform_uv(uv);
+    *out_uv = material_settings.transform_uv(uv);
 
     if uniforms.flip_viewport != 0 {
         builtin_pos.y = -builtin_pos.y;
@@ -103,7 +103,7 @@ pub fn animated_vertex(
     *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
     *out_position = position;
     *out_normal = instance_rotation * normal;
-    *out_uv = material_settings.texture_transform.transform_uv(uv);
+    *out_uv = material_settings.transform_uv(uv);
 
     if uniforms.flip_viewport != 0 {
         builtin_pos.y = -builtin_pos.y;
@@ -144,7 +144,7 @@ impl ExtendedMaterialParams {
         material_settings: &MaterialSettings,
     ) -> Self {
         let albedo = albedo_texture.sample() * material_settings.base_color_factor;
-        let emissive = emissive_texture.sample().truncate() * material_settings.emissive_factor;
+        let emissive = emissive_texture.sample().truncate() * material_settings.emissive_factor();
 
         let metallic_roughness = metallic_roughness_texture.sample();
         let metallic = metallic_roughness.z * material_settings.metallic_factor;

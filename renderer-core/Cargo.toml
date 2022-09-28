@@ -16,7 +16,6 @@ log = "0.4.17"
 glam = { version = "0.20", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }
 bytemuck = { version = "1.9.1", features = ["derive"] }
-crevice = "0.10.0"
 ktx2 = { git = "https://github.com/BVE-Reborn/ktx2", rev = "0e5b0febb09546c91bc845a5e7b5d04610d70044" }
 zstd = { version = "0.11.2", default-features = false, features = ["wasm"] }
 anyhow = "1.0.58"

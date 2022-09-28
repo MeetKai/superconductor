@@ -904,6 +904,12 @@ fn load_material_settings(
 
     let pbr = material.pbr_metallic_roughness;
 
+    let emissive_strength = material
+        .extensions
+        .khr_materials_emissive_strength
+        .map(|emissive_strength| emissive_strength.emissive_strength)
+        .unwrap_or(1.0);
+
     let texture_transform = pbr
         .base_color_texture
         .map(|info| info.extensions)
@@ -912,15 +918,13 @@ fn load_material_settings(
         .or_else(|| material.emissive_texture.map(|info| info.extensions))
         .and_then(|extensions| extensions.khr_texture_transform);
 
-    let emissive_strength = material
-        .extensions
-        .khr_materials_emissive_strength
-        .map(|emissive_strength| emissive_strength.emissive_strength)
-        .unwrap_or(1.0);
+    let emissive_factor = Vec3::from(material.emissive_factor) * emissive_strength;
 
     shared_structs::MaterialSettings {
         base_color_factor: pbr.base_color_factor.into(),
-        emissive_factor: Vec3::from(material.emissive_factor) * emissive_strength,
+        emissive_factor_x: emissive_factor.x,
+        emissive_factor_y: emissive_factor.y,
+        emissive_factor_z: emissive_factor.z,
         metallic_factor: pbr.metallic_factor,
         roughness_factor: pbr.roughness_factor,
         is_unlit: unlit as u32,
@@ -928,17 +932,14 @@ fn load_material_settings(
             .normal_texture
             .map(|info| info.scale)
             .unwrap_or(1.0),
-        // It seems like uniform buffer padding works differently in the wgpu Vulkan backends vs the WebGL2 backend.
-        // todo: find a nicer way to resolve this.
-        #[cfg(not(feature = "wasm"))]
-        _padding: 0,
-        texture_transform: match texture_transform {
-            Some(transform) => shared_structs::TextureTransform {
-                offset: Vec2::from(transform.offset),
-                scale: Vec2::from(transform.scale),
-                rotation: transform.rotation,
-            },
-            None => Default::default(),
-        },
+        texture_transform_offset: texture_transform
+            .map(|transform| Vec2::from(transform.offset))
+            .unwrap_or(Vec2::ZERO),
+        texture_transform_scale: texture_transform
+            .map(|transform| Vec2::from(transform.scale))
+            .unwrap_or(Vec2::ONE),
+        texture_transform_rotation: texture_transform
+            .map(|transform| transform.rotation)
+            .unwrap_or(0.0),
     }
 }

@@ -15,7 +15,6 @@ use renderer_core::{
     arc_swap::{ArcSwap, ArcSwapOption},
     assets::{textures, HttpClient},
     bytemuck, create_main_bind_group,
-    crevice::std140::AsStd140,
     culling::{BoundingSphereCullingParams, CullingFrustum},
     glam::Mat4,
     ibl::IblResources,
@@ -387,7 +386,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
 
     let uniform_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("uniform buffer"),
-        size: std::mem::size_of::<<shared_structs::Uniforms as AsStd140>::Output>() as u64,
+        size: std::mem::size_of::<shared_structs::Uniforms>() as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
         mapped_at_creation: false,
     }));
@@ -403,7 +402,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
 
     let skybox_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("skybox uniform buffer"),
-        size: std::mem::size_of::<<shared_structs::SkyboxUniforms as AsStd140>::Output>() as u64,
+        size: std::mem::size_of::<shared_structs::SkyboxUniforms>() as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
         mapped_at_creation: false,
     });
@@ -622,21 +621,24 @@ pub(crate) fn update_desktop_uniform_buffers(
     let uniforms = renderer_core::shared_structs::Uniforms {
         left_projection_view: projection_view.into(),
         right_projection_view: projection_view.into(),
-        left_eye_position: camera.position,
-        right_eye_position: camera.position,
+        left_eye_x: camera.position.x,
+        left_eye_y: camera.position.y,
+        left_eye_z: camera.position.z,
+        right_eye_x: camera.position.x,
+        right_eye_y: camera.position.y,
+        right_eye_z: camera.position.z,
         flip_viewport: false as u32,
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
         // Rendering to a srgb surface should be possible at some point, but doesn't currently seem to be.
         inline_srgb: is_webgpu as u32,
         reverse_z: true as u32,
-        #[cfg(not(feature = "wasm"))]
-        _padding: 0,
+        _padding: Default::default(),
     };
 
     queue.write_buffer(
         &uniform_buffer.0,
         0,
-        renderer_core::bytemuck::bytes_of(&uniforms.as_std140()),
+        renderer_core::bytemuck::bytes_of(&uniforms),
     );
 
     let skybox_uniforms = shared_structs::SkyboxUniforms {
@@ -649,7 +651,7 @@ pub(crate) fn update_desktop_uniform_buffers(
     queue.write_buffer(
         &skybox_uniform_buffer.0,
         0,
-        bytemuck::bytes_of(&skybox_uniforms.as_std140()),
+        bytemuck::bytes_of(&skybox_uniforms),
     );
 }
 
@@ -707,18 +709,23 @@ pub(crate) fn update_webxr_uniform_buffers(
     let uniforms = renderer_core::shared_structs::Uniforms {
         left_projection_view: (left_view_data.projection * left_view_data.view).into(),
         right_projection_view: (right_view_data.projection * right_view_data.view).into(),
-        left_eye_position: left_view_data.instance.translation,
-        right_eye_position: right_view_data.instance.translation,
+        left_eye_x: left_view_data.instance.translation.x,
+        left_eye_y: left_view_data.instance.translation.y,
+        left_eye_z: left_view_data.instance.translation.z,
+        right_eye_x: right_view_data.instance.translation.x,
+        right_eye_y: right_view_data.instance.translation.y,
+        right_eye_z: right_view_data.instance.translation.z,
         flip_viewport: pipeline_options.flip_viewport as u32,
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
         inline_srgb: true as u32,
         reverse_z: false as u32,
+        _padding: Default::default(),
     };
 
     queue.write_buffer(
         &uniform_buffer.0,
         0,
-        renderer_core::bytemuck::bytes_of(&uniforms.as_std140()),
+        renderer_core::bytemuck::bytes_of(&uniforms),
     );
 
     let skybox_uniforms = shared_structs::SkyboxUniforms {
@@ -731,7 +738,7 @@ pub(crate) fn update_webxr_uniform_buffers(
     queue.write_buffer(
         &skybox_uniform_buffer.0,
         0,
-        bytemuck::bytes_of(&skybox_uniforms.as_std140()),
+        bytemuck::bytes_of(&skybox_uniforms),
     );
 
     *culling_params = CullingParams {

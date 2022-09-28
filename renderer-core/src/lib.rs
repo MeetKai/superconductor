@@ -11,7 +11,6 @@ pub mod utils;
 
 pub use arc_swap;
 pub use bytemuck;
-pub use crevice;
 pub use glam;
 pub use gltf_helpers;
 pub use shared_structs;

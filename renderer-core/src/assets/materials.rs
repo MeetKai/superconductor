@@ -1,6 +1,5 @@
 use super::textures;
 use crate::{BindGroupLayouts, Texture};
-use crevice::std140::AsStd140;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
@@ -52,7 +51,7 @@ impl MaterialBindings {
     ) -> Self {
         let material_settings = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("material settings"),
-            contents: bytemuck::bytes_of(&material_settings.as_std140()),
+            contents: bytemuck::bytes_of(material_settings),
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
