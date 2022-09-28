@@ -18,7 +18,8 @@ use renderer_core::{
     culling::{BoundingSphereCullingParams, CullingFrustum},
     glam::Mat4,
     ibl::IblResources,
-    shared_structs, spawn, GpuInstance, Texture,
+    shared_structs::{self, Settings},
+    spawn, GpuInstance, Texture,
 };
 use std::sync::Arc;
 
@@ -616,7 +617,16 @@ pub(crate) fn update_desktop_uniform_buffers(
 
     let projection_view = perspective_matrix * camera.view_matrix();
 
-    let is_webgpu = cfg!(all(feature = "wasm", not(feature = "webgl")));
+    let mut settings = Settings::REVERSE_Z;
+
+    // Rendering to a srgb surface should be possible at some point, but doesn't currently seem to be.
+    if cfg!(all(feature = "wasm", not(feature = "webgl"))) {
+        settings |= Settings::INLINE_SRGB;
+    }
+
+    if pipeline_options.inline_tonemapping {
+        settings |= Settings::INLINE_TONEMAPPING;
+    }
 
     let uniforms = renderer_core::shared_structs::Uniforms {
         left_projection_view: projection_view.into(),
@@ -627,11 +637,7 @@ pub(crate) fn update_desktop_uniform_buffers(
         right_eye_x: camera.position.x,
         right_eye_y: camera.position.y,
         right_eye_z: camera.position.z,
-        flip_viewport: false as u32,
-        inline_tonemapping: pipeline_options.inline_tonemapping as u32,
-        // Rendering to a srgb surface should be possible at some point, but doesn't currently seem to be.
-        inline_srgb: is_webgpu as u32,
-        reverse_z: true as u32,
+        settings,
         _padding: Default::default(),
     };
 
@@ -706,6 +712,17 @@ pub(crate) fn update_webxr_uniform_buffers(
         (Default::default(), false)
     };
 
+    // todo: reverse z in XR.
+    let mut settings = Settings::INLINE_SRGB;
+
+    if pipeline_options.flip_viewport {
+        settings |= Settings::FLIP_VIEWPORT;
+    }
+
+    if pipeline_options.inline_tonemapping {
+        settings |= Settings::INLINE_TONEMAPPING;
+    }
+
     let uniforms = renderer_core::shared_structs::Uniforms {
         left_projection_view: (left_view_data.projection * left_view_data.view).into(),
         right_projection_view: (right_view_data.projection * right_view_data.view).into(),
@@ -715,10 +732,7 @@ pub(crate) fn update_webxr_uniform_buffers(
         right_eye_x: right_view_data.instance.translation.x,
         right_eye_y: right_view_data.instance.translation.y,
         right_eye_z: right_view_data.instance.translation.z,
-        flip_viewport: pipeline_options.flip_viewport as u32,
-        inline_tonemapping: pipeline_options.inline_tonemapping as u32,
-        inline_srgb: true as u32,
-        reverse_z: false as u32,
+        settings,
         _padding: Default::default(),
     };
 

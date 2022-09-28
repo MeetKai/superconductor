@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use core::ops::Mul;
+use core::ops::{BitOr, BitOrAssign, Mul};
 use glam::{Mat2, Mat4, Vec2, Vec3, Vec4};
 
 #[derive(Clone, Copy)]
@@ -18,14 +18,48 @@ pub struct Uniforms {
     pub right_eye_x: f32,
     pub right_eye_y: f32,
     pub right_eye_z: f32,
-    pub flip_viewport: u32,
-    pub inline_tonemapping: u32,
-    pub inline_srgb: u32,
-    pub reverse_z: u32,
+    pub settings: Settings,
     // As the struct is 16-byte aligned due to the Vec4s in the FlatMat4s,
-    // we need to pad it to 16 bytes by adding 8 more bytes.
+    // we need to pad it to 16 bytes by adding a few more bytes.
     #[cfg(not(target_arch = "spirv"))]
-    pub _padding: [u32; 2],
+    pub _padding: u32,
+}
+
+#[derive(Clone, Copy, Default)]
+#[cfg_attr(
+    not(target_arch = "spirv"),
+    derive(Debug, bytemuck::Zeroable, bytemuck::Pod)
+)]
+#[repr(transparent)]
+pub struct Settings {
+    bits: u32,
+}
+
+impl Settings {
+    pub const FLIP_VIEWPORT: Self = Self { bits: 1 << 0 };
+    pub const INLINE_TONEMAPPING: Self = Self { bits: 1 << 1 };
+    pub const INLINE_SRGB: Self = Self { bits: 1 << 2 };
+    pub const REVERSE_Z: Self = Self { bits: 1 << 3 };
+
+    pub fn contains(self, other: Self) -> bool {
+        (self.bits & other.bits) == other.bits
+    }
+}
+
+impl BitOr for Settings {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self {
+            bits: self.bits | rhs.bits,
+        }
+    }
+}
+
+impl BitOrAssign for Settings {
+    fn bitor_assign(&mut self, rhs: Self) {
+        *self = *self | rhs;
+    }
 }
 
 impl Uniforms {
@@ -136,7 +170,11 @@ impl MaterialSettings {
     }
 
     pub fn emissive_factor(self) -> Vec3 {
-        Vec3::new(self.emissive_factor_x, self.emissive_factor_y, self.emissive_factor_z)
+        Vec3::new(
+            self.emissive_factor_x,
+            self.emissive_factor_y,
+            self.emissive_factor_z,
+        )
     }
 
     pub fn default_unlit() -> Self {

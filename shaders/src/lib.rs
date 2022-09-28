@@ -5,7 +5,7 @@
     no_std
 )]
 
-use shared_structs::{JointTransform, MaterialSettings, SkyboxUniforms, Uniforms};
+use shared_structs::{JointTransform, MaterialSettings, SkyboxUniforms, Uniforms, Settings};
 use spirv_std::{
     arch::IndexUnchecked,
     glam::{self, const_vec3, Mat3, UVec4, Vec2, Vec3, Vec4},
@@ -48,7 +48,7 @@ pub fn vertex(
     *out_normal = instance_rotation * normal;
     *out_uv = material_settings.transform_uv(uv);
 
-    if uniforms.flip_viewport != 0 {
+    if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
     }
 }
@@ -105,7 +105,7 @@ pub fn animated_vertex(
     *out_normal = instance_rotation * normal;
     *out_uv = material_settings.transform_uv(uv);
 
-    if uniforms.flip_viewport != 0 {
+    if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
     }
 }
@@ -521,7 +521,7 @@ fn aces_filmic(x: Vec3) -> Vec3 {
 }
 
 fn potentially_convert_linear_to_srgb(mut output: Vec3, uniforms: &Uniforms) -> Vec3 {
-    if uniforms.inline_srgb != 0 {
+    if uniforms.settings.contains(Settings::INLINE_SRGB) {
         output = linear_to_srgb_approx(output);
     }
 
@@ -529,10 +529,10 @@ fn potentially_convert_linear_to_srgb(mut output: Vec3, uniforms: &Uniforms) -> 
 }
 
 fn potentially_tonemap(mut output: Vec3, uniforms: &Uniforms) -> Vec3 {
-    if uniforms.inline_tonemapping != 0 {
+    if uniforms.settings.contains(Settings::INLINE_TONEMAPPING) {
         output = aces_filmic(output);
     }
-    if uniforms.inline_srgb != 0 {
+    if uniforms.settings.contains(Settings::INLINE_SRGB) {
         output = linear_to_srgb_approx(output);
     }
 
@@ -557,10 +557,10 @@ pub fn tonemap(
 
     let mut colour_output = sample.truncate();
 
-    if uniforms.inline_tonemapping == 0 {
+    if !uniforms.settings.contains(Settings::INLINE_TONEMAPPING) {
         colour_output = aces_filmic(colour_output);
     }
-    if uniforms.inline_srgb == 0 {
+    if !uniforms.settings.contains(Settings::INLINE_SRGB) {
         colour_output = linear_to_srgb_approx(colour_output);
     }
 
@@ -581,7 +581,7 @@ pub fn vertex_skybox(
         (vertex_index / 2) as f32 * 4.0 - 1.0,
         (vertex_index & 1) as f32 * 4.0 - 1.0,
         // Set to 0 if reverse z, 1 if normal z.
-        (1 - uniforms.reverse_z) as f32,
+        (1 - uniforms.settings.contains(Settings::REVERSE_Z) as u32) as f32,
         1.0,
     );
 
@@ -591,7 +591,7 @@ pub fn vertex_skybox(
 
     *builtin_pos = pos;
 
-    if uniforms.flip_viewport != 0 {
+    if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
     }
 }
@@ -621,7 +621,7 @@ pub fn line_vertex(
     *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
     *colour = debug_colour_for_id(colour_id);
 
-    if uniforms.flip_viewport != 0 {
+    if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
     }
 }
@@ -699,7 +699,7 @@ pub fn depth_prepass_vertex(
     let position = instance_translation + (instance_rotation * (instance_scale * position));
     *builtin_pos = uniforms.projection_view(view_index) * position.extend(1.0);
 
-    if uniforms.flip_viewport != 0 {
+    if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
     }
 }

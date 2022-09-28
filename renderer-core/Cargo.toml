@@ -47,5 +47,5 @@ features = [
 ]
 
 [features]
-wasm = ["shared-structs/webgl"]
+wasm = []
 webgl = ["wasm", "wgpu/webgl"]
