@@ -47,7 +47,7 @@ type AnimatedModelQuery<'world, 'state, 'component> = Query<
     ),
 >;
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub(crate) fn render_desktop(
     (device, queue, pipelines): (Res<Device>, Res<Queue>, Res<Pipelines>),
     main_bind_group: Res<MainBindGroup>,
@@ -161,7 +161,7 @@ pub(crate) fn render_desktop(
                 load: if pipeline_options.depth_prepass {
                     wgpu::LoadOp::Load
                 } else {
-                    wgpu::LoadOp::Clear(1.0)
+                    wgpu::LoadOp::Clear(0.0)
                 },
                 store: true,
             }),

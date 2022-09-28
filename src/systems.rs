@@ -17,7 +17,7 @@ use renderer_core::{
     bytemuck, create_main_bind_group,
     crevice::std140::AsStd140,
     culling::{BoundingSphereCullingParams, CullingFrustum},
-    glam::{Mat4, Vec4},
+    glam::Mat4,
     ibl::IblResources,
     shared_structs, spawn, GpuInstance, Texture,
 };
@@ -329,6 +329,7 @@ pub(crate) fn upload_lines(
     queue.0.submit(std::iter::once(command_encoder.finish()));
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn allocate_bind_groups<T: HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
@@ -595,36 +596,12 @@ pub(crate) fn update_desktop_uniform_buffers(
 ) {
     let queue = &queue.0;
 
-    // todo: ideally we want to use reversed Z matrices.
-    // Adapted from the functions used in
-    // https://crates.io/crates/ultraviolet.
-    //
-    // Corresponds to `perspective_wgpu_dx`.
-    fn create_perspective_matrix(
-        vertical_fov: f32,
-        aspect_ratio: f32,
-        z_near: f32,
-        z_far: f32,
-    ) -> Mat4 {
-        let t = (vertical_fov / 2.0).tan();
-        let sy = 1.0 / t;
-        let sx = sy / aspect_ratio;
-        let nmf = z_near - z_far;
-
-        Mat4::from_cols(
-            Vec4::new(sx, 0.0, 0.0, 0.0),
-            Vec4::new(0.0, sy, 0.0, 0.0),
-            Vec4::new(0.0, 0.0, z_far / nmf, -1.0),
-            Vec4::new(0.0, 0.0, z_near * z_far / nmf, 0.0),
-        )
-    }
-
-    let perspective_matrix = create_perspective_matrix(
+    let perspective_matrix = Mat4::perspective_infinite_reverse_rh(
         59.0_f32.to_radians(),
         surface_frame_view.width as f32 / surface_frame_view.height as f32,
         0.001,
-        1000.0,
     );
+
     *culling_params =
         CullingParams {
             frustum: Some(CullingFrustum::new(
@@ -651,6 +628,7 @@ pub(crate) fn update_desktop_uniform_buffers(
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
         // Rendering to a srgb surface should be possible at some point, but doesn't currently seem to be.
         inline_srgb: is_webgpu as u32,
+        reverse_z: true as u32,
         #[cfg(not(feature = "wasm"))]
         _padding: 0,
     };
@@ -675,6 +653,7 @@ pub(crate) fn update_desktop_uniform_buffers(
     );
 }
 
+#[cfg(feature = "webgl")]
 #[derive(Default)]
 struct ViewData {
     projection: Mat4,
@@ -733,6 +712,7 @@ pub(crate) fn update_webxr_uniform_buffers(
         flip_viewport: pipeline_options.flip_viewport as u32,
         inline_tonemapping: pipeline_options.inline_tonemapping as u32,
         inline_srgb: true as u32,
+        reverse_z: false as u32,
     };
 
     queue.write_buffer(

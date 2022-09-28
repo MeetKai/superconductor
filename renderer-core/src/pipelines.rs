@@ -14,6 +14,7 @@ pub struct PipelineOptions {
     pub framebuffer_format: wgpu::TextureFormat,
     pub flip_viewport: bool,
     pub depth_prepass: bool,
+    pub reverse_z: bool,
 }
 
 impl PipelineOptions {
@@ -194,7 +195,11 @@ impl Pipelines {
         let normal_depth_state = wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
             depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::Less,
+            depth_compare: if options.reverse_z {
+                wgpu::CompareFunction::Greater
+            } else {
+                wgpu::CompareFunction::Less
+            },
             bias: wgpu::DepthBiasState::default(),
             stencil: wgpu::StencilState::default(),
         };
@@ -519,7 +524,11 @@ impl Pipelines {
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: DEPTH_FORMAT,
                     depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::LessEqual,
+                    depth_compare: if options.reverse_z {
+                        wgpu::CompareFunction::GreaterEqual
+                    } else {
+                        wgpu::CompareFunction::LessEqual
+                    },
                     bias: wgpu::DepthBiasState::default(),
                     stencil: wgpu::StencilState::default(),
                 }),

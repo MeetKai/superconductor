@@ -19,6 +19,7 @@ pub struct Uniforms {
     pub flip_viewport: u32,
     pub inline_tonemapping: u32,
     pub inline_srgb: u32,
+    pub reverse_z: u32,
 }
 
 impl Uniforms {

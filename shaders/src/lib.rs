@@ -578,7 +578,8 @@ pub fn vertex_skybox(
     let pos = Vec4::new(
         (vertex_index / 2) as f32 * 4.0 - 1.0,
         (vertex_index & 1) as f32 * 4.0 - 1.0,
-        1.0,
+        // Set to 0 if reverse z, 1 if normal z.
+        (1 - uniforms.reverse_z) as f32,
         1.0,
     );
 

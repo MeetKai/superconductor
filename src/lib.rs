@@ -217,6 +217,8 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
             // As we're doing multiview.
             flip_viewport: false,
             depth_prepass: false,
+            // todo: enable reverse z everywhere. See below.
+            reverse_z: false,
         }
     } else {
         renderer_core::PipelineOptions {
@@ -226,6 +228,8 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
             // As we're rendering directly to the framebuffer.
             flip_viewport: true,
             depth_prepass: false,
+            // todo: enable reverse z everywhere. See below.
+            reverse_z: false,
         }
     };
 
@@ -281,6 +285,9 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
     let mut render_state_init = web_sys::XrRenderStateInit::new();
     render_state_init
         .depth_near(0.001)
+        // todo: reverse z is supposedly possible by setting depth_near and depth_far
+        // to opposite values, but I'm not sure how.
+        //.depth_near(1000.0)
         .base_layer(Some(&xr_gl_layer));
     xr_session.update_render_state_with_state(&render_state_init);
 
@@ -373,6 +380,8 @@ pub async fn initialise_desktop() -> InitialisedState {
             // wgpu handles this for us.
             flip_viewport: false,
             depth_prepass: false,
+            // Reverse z has more accurate depth info.
+            reverse_z: true,
         },
         surface,
     }

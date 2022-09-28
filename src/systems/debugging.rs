@@ -2,6 +2,7 @@ use crate::components::{AnimatedModel, AnimationJoints, Instance, InstanceOf, Mo
 use crate::resources::LineBuffer;
 use bevy_ecs::prelude::{Query, ResMut};
 
+#[allow(dead_code)]
 pub(crate) fn push_joints_to_lines_buffer(
     instance_query: Query<(&InstanceOf, &AnimationJoints, &Instance)>,
     model_query: Query<&AnimatedModel>,
@@ -37,6 +38,7 @@ pub(crate) fn push_joints_to_lines_buffer(
     })
 }
 
+#[allow(dead_code)]
 pub(crate) fn push_bounding_boxes_to_lines_buffer(
     instance_query: Query<(&InstanceOf, &Instance)>,
     model_query: Query<&Model>,
