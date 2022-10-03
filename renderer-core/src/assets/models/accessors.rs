@@ -1,4 +1,5 @@
 use glam::{UVec4, Vec2, Vec3, Vec4};
+use gltf_helpers::Extensions;
 use goth_gltf::ComponentType;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -19,7 +20,10 @@ fn signed_short_to_float(short: i16) -> f32 {
     (short as f32 / 32767.0).max(-1.0)
 }
 
-fn byte_stride(accessor: &goth_gltf::Accessor, buffer_view: &goth_gltf::BufferView) -> usize {
+fn byte_stride(
+    accessor: &goth_gltf::Accessor,
+    buffer_view: &goth_gltf::BufferView<Extensions>,
+) -> usize {
     buffer_view
         .extensions
         .ext_meshopt_compression
@@ -33,7 +37,7 @@ fn byte_stride(accessor: &goth_gltf::Accessor, buffer_view: &goth_gltf::BufferVi
 
 pub fn read_buffer_with_accessor<'a>(
     buffer_view_map: &'a HashMap<usize, Vec<u8>>,
-    gltf: &'a goth_gltf::Gltf,
+    gltf: &'a goth_gltf::Gltf<Extensions>,
     accessor: &goth_gltf::Accessor,
 ) -> anyhow::Result<(&'a [u8], Option<usize>)> {
     let buffer_view_index = accessor
@@ -260,14 +264,14 @@ fn read_u32x4<'a>(
 }
 
 pub struct PrimitiveReader<'a> {
-    gltf: &'a goth_gltf::Gltf,
+    gltf: &'a goth_gltf::Gltf<Extensions>,
     pub primitive: &'a goth_gltf::Primitive,
     buffer_view_map: &'a HashMap<usize, Vec<u8>>,
 }
 
 impl<'a> PrimitiveReader<'a> {
     pub fn new(
-        gltf: &'a goth_gltf::Gltf,
+        gltf: &'a goth_gltf::Gltf<Extensions>,
         primitive: &'a goth_gltf::Primitive,
         buffer_view_map: &'a HashMap<usize, Vec<u8>>,
     ) -> Self {

@@ -1,4 +1,4 @@
-use crate::{DepthFirstNodes, Similarity};
+use crate::{DepthFirstNodes, Extensions, Similarity};
 use glam::{Mat4, Quat, Vec3, Vec4};
 use goth_gltf::{Interpolation, TargetPath};
 use std::borrow::Cow;
@@ -6,7 +6,7 @@ use std::fmt;
 use std::ops::{Add, Mul};
 
 pub fn read_animations<'a, F1, F3, F4>(
-    gltf: &'a goth_gltf::Gltf,
+    gltf: &'a goth_gltf::Gltf<Extensions>,
     read_f32: F1,
     read_f32x3: F3,
     read_f32x4: F4,
@@ -105,7 +105,7 @@ pub struct AnimationJoints {
 }
 
 impl AnimationJoints {
-    pub fn new(gltf: &goth_gltf::Gltf, depth_first_nodes: &DepthFirstNodes) -> Self {
+    pub fn new(gltf: &goth_gltf::Gltf<Extensions>, depth_first_nodes: &DepthFirstNodes) -> Self {
         let node_transforms: Vec<_> = gltf
             .nodes
             .iter()

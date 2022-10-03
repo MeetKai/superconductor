@@ -712,7 +712,6 @@ pub(crate) fn update_webxr_uniform_buffers(
         (Default::default(), false)
     };
 
-    // todo: reverse z in XR.
     let mut settings = Settings::INLINE_SRGB;
 
     if pipeline_options.flip_viewport {

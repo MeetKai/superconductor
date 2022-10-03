@@ -2,6 +2,8 @@ pub mod animation;
 use glam::{Mat3, Mat4, Quat, Vec3};
 use std::ops::Mul;
 
+pub type Extensions = goth_gltf::default_extensions::Extensions;
+
 #[derive(Clone, Copy, Debug, bytemuck::Zeroable, bytemuck::Pod)]
 #[repr(C)]
 pub struct Similarity {
@@ -61,7 +63,7 @@ impl Similarity {
         Self::new_from_gltf(translation.into(), rotation.into(), scale.into())
     }
 
-    pub fn new_from_gltf_node(node: &goth_gltf::Node) -> Self {
+    pub fn new_from_gltf_node(node: &goth_gltf::Node<Extensions>) -> Self {
         match node.transform() {
             goth_gltf::NodeTransform::Matrix(matrix) => {
                 Self::new_from_mat4(Mat4::from_cols_array(&matrix))
@@ -106,7 +108,7 @@ pub struct NodeTree {
 }
 
 impl NodeTree {
-    pub fn new(gltf: &goth_gltf::Gltf) -> Self {
+    pub fn new(gltf: &goth_gltf::Gltf<Extensions>) -> Self {
         let mut inner = vec![(Similarity::IDENTITY, usize::max_value()); gltf.nodes.len()];
 
         for (index, node) in gltf.nodes.iter().enumerate() {
@@ -157,7 +159,7 @@ pub struct DepthFirstNodes {
 }
 
 impl DepthFirstNodes {
-    pub fn new(gltf: &goth_gltf::Gltf, node_tree: &NodeTree) -> Self {
+    pub fn new(gltf: &goth_gltf::Gltf<Extensions>, node_tree: &NodeTree) -> Self {
         let roots: Vec<_> = node_tree
             .inner
             .iter()

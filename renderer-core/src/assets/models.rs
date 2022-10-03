@@ -8,7 +8,7 @@ use arc_swap::ArcSwap;
 use glam::{Mat4, UVec4, Vec2, Vec3, Vec4};
 use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
-    Similarity,
+    Extensions, Similarity,
 };
 use goth_gltf::extensions::CompressionMode;
 use goth_gltf::AlphaMode;
@@ -62,7 +62,7 @@ pub struct Ranges {
 // and collect all the primitive ranges into one big vector.
 fn collect_all_primitives<'a, T: HttpClient, B: 'a + CollectableBuffer + Default>(
     context: &Context<T>,
-    gltf: Arc<goth_gltf::Gltf>,
+    gltf: Arc<goth_gltf::Gltf<Extensions>>,
     staging_primitives: &permutations::BlendMode<permutations::FaceSides<Vec<StagingPrimitive<B>>>>,
     pending_textures: Arc<HashMap<usize, PendingTexture>>,
 ) -> (PrimitiveRanges, Vec<Primitive>, B) {
@@ -141,7 +141,7 @@ fn collect_primitives<
     staging_buffers: &mut B,
     staging_primitives: I,
     context: &Context<T>,
-    gltf: Arc<goth_gltf::Gltf>,
+    gltf: Arc<goth_gltf::Gltf<Extensions>>,
     pending_textures: Arc<HashMap<usize, PendingTexture>>,
 ) -> Ranges {
     let primitives_start = primitives.len();
@@ -195,7 +195,7 @@ pub struct AnimatedModelData {
 }
 
 async fn collect_buffer_view_map<T: HttpClient>(
-    gltf: &goth_gltf::Gltf,
+    gltf: &goth_gltf::Gltf<Extensions>,
     glb_buffer: Option<&[u8]>,
     root_url: &url::Url,
     context: &Context<T>,
@@ -344,7 +344,7 @@ impl Model {
 
             for primitive in &mesh.primitives {
                 let material_index = primitive.material;
-                let material = gltf.materials[primitive.material.unwrap_or(0)];
+                let material = &gltf.materials[primitive.material.unwrap_or(0)];
 
                 // Note: it's possible to render double-sided objects with a backface-culling shader if we double the
                 // triangles in the index buffer but with a backwards winding order. It's only worth doing this to keep
@@ -482,7 +482,7 @@ impl AnimatedModel {
 
             for primitive in &mesh.primitives {
                 let material_index = primitive.material;
-                let material = gltf.materials[primitive.material.unwrap_or(0)];
+                let material = &gltf.materials[primitive.material.unwrap_or(0)];
 
                 // Note: it's possible to render double-sided objects with a backface-culling shader if we double the
                 // triangles in the index buffer but with a backwards winding order. It's only worth doing this to keep
@@ -774,12 +774,12 @@ fn spawn_texture_loading_futures<T: HttpClient>(
     bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
     material_bindings: MaterialBindings,
     material_index: usize,
-    gltf: Arc<goth_gltf::Gltf>,
+    gltf: Arc<goth_gltf::Gltf<Extensions>>,
     context: &Context<T>,
     pending_textures: Arc<HashMap<usize, PendingTexture>>,
 ) {
     let material = match gltf.materials.get(material_index) {
-        Some(material) => *material,
+        Some(material) => material.clone(),
         None => {
             log::warn!(
                 "Material index {} is out of range of {}",
@@ -894,7 +894,7 @@ fn spawn_texture_loading_futures<T: HttpClient>(
 }
 
 fn load_material_settings(
-    material: goth_gltf::Material,
+    material: &goth_gltf::Material<Extensions>,
     reader: &PrimitiveReader,
 ) -> shared_structs::MaterialSettings {
     // Workaround for some exporters (Scaniverse) exporting scanned models that are meant to be
@@ -902,7 +902,7 @@ fn load_material_settings(
     let unlit = material.extensions.khr_materials_unlit.is_some()
         || reader.primitive.attributes.normal.is_none();
 
-    let pbr = material.pbr_metallic_roughness;
+    let pbr = &material.pbr_metallic_roughness;
 
     let emissive_strength = material
         .extensions
@@ -912,10 +912,20 @@ fn load_material_settings(
 
     let texture_transform = pbr
         .base_color_texture
+        .as_ref()
         .map(|info| info.extensions)
-        .or_else(|| pbr.metallic_roughness_texture.map(|info| info.extensions))
-        .or_else(|| material.normal_texture.map(|info| info.extensions))
-        .or_else(|| material.emissive_texture.map(|info| info.extensions))
+        .or_else(|| {
+            pbr.metallic_roughness_texture
+                .as_ref()
+                .map(|info| info.extensions)
+        })
+        .or_else(|| material.normal_texture.as_ref().map(|info| info.extensions))
+        .or_else(|| {
+            material
+                .emissive_texture
+                .as_ref()
+                .map(|info| info.extensions)
+        })
         .and_then(|extensions| extensions.khr_texture_transform);
 
     let emissive_factor = Vec3::from(material.emissive_factor) * emissive_strength;
@@ -930,6 +940,7 @@ fn load_material_settings(
         is_unlit: unlit as u32,
         normal_map_scale: material
             .normal_texture
+            .as_ref()
             .map(|info| info.scale)
             .unwrap_or(1.0),
         texture_transform_offset: texture_transform

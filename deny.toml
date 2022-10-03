@@ -211,6 +211,7 @@ allow-git = [
     "https://github.com/expenses/basis-universal-rs",
     "https://github.com/expenses/basis-universal-rs-wasm",
     "https://github.com/expenses/meshopt-decoder",
+    "https://github.com/expenses/nanoserde",
     "https://github.com/gfx-rs/naga",
 ]
 

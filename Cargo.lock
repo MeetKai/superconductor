@@ -1287,7 +1287,7 @@ dependencies = [
 [[package]]
 name = "goth-gltf"
 version = "0.1.0"
-source = "git+https://github.com/expenses/goth-gltf?rev=584bfe250af13de6e9ea98e1d76d12e4ea92b2f2#584bfe250af13de6e9ea98e1d76d12e4ea92b2f2"
+source = "git+https://github.com/expenses/goth-gltf?rev=320bcb9e518ca13eae25134771f539a365617186#320bcb9e518ca13eae25134771f539a365617186"
 dependencies = [
  "nanoserde",
 ]
@@ -1777,8 +1777,7 @@ dependencies = [
 [[package]]
 name = "nanoserde"
 version = "0.1.30"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ada81c67664d8256507a2d427273ed307631f0e4bb2bbb56beffd8fe42a1c4d"
+source = "git+https://github.com/expenses/nanoserde?branch=goth-gltf-custom-generics#d6bbf182de210c9ab6449200a839a52db0a81c26"
 dependencies = [
  "nanoserde-derive",
 ]
@@ -1786,8 +1785,7 @@ dependencies = [
 [[package]]
 name = "nanoserde-derive"
 version = "0.1.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "290eec6719d68aef1f5ca0e695f8ad6421adcf8791fc17641c4ccc6c5388fb39"
+source = "git+https://github.com/expenses/nanoserde?branch=goth-gltf-custom-generics#d6bbf182de210c9ab6449200a839a52db0a81c26"
 
 [[package]]
 name = "ndk"

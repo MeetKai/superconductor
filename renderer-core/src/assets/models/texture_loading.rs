@@ -10,13 +10,14 @@ use crate::assets::textures::{self, load_image_with_mime_type, ImageSource};
 use crate::assets::HttpClient;
 use crate::{spawn, Texture};
 use futures::future::{self, FutureExt, OptionFuture};
+use gltf_helpers::Extensions;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 
 pub fn image_index_from_texture_index(
     texture_index: usize,
-    gltf: &goth_gltf::Gltf,
+    gltf: &goth_gltf::Gltf<Extensions>,
 ) -> anyhow::Result<usize> {
     let texture = match gltf.textures.get(texture_index) {
         Some(texture) => texture,
@@ -42,7 +43,7 @@ pub fn image_index_from_texture_index(
 }
 
 pub fn start_loading_all_material_textures<T: HttpClient>(
-    gltf: &goth_gltf::Gltf,
+    gltf: &goth_gltf::Gltf<Extensions>,
     root_url: url::Url,
     textures_context: textures::Context<T>,
     buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
@@ -52,7 +53,7 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
 
     for material in &gltf.materials {
         let albedo_future =
-            if let Some(tex_info) = material.pbr_metallic_roughness.base_color_texture {
+            if let Some(tex_info) = material.pbr_metallic_roughness.base_color_texture.as_ref() {
                 Some(start_loading_texture(
                     tex_info.index,
                     true,
@@ -66,22 +67,11 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
                 None
             };
 
-        let metallic_roughness_future =
-            if let Some(tex_info) = material.pbr_metallic_roughness.metallic_roughness_texture {
-                Some(start_loading_texture(
-                    tex_info.index,
-                    false,
-                    gltf,
-                    &mut pending_textures,
-                    root_url.clone(),
-                    textures_context.clone(),
-                    buffer_view_map.clone(),
-                )?)
-            } else {
-                None
-            };
-
-        let normal_future = if let Some(tex_info) = material.normal_texture {
+        let metallic_roughness_future = if let Some(tex_info) = material
+            .pbr_metallic_roughness
+            .metallic_roughness_texture
+            .as_ref()
+        {
             Some(start_loading_texture(
                 tex_info.index,
                 false,
@@ -95,7 +85,21 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
             None
         };
 
-        let emissive_future = if let Some(tex_info) = material.emissive_texture {
+        let normal_future = if let Some(tex_info) = material.normal_texture.as_ref() {
+            Some(start_loading_texture(
+                tex_info.index,
+                false,
+                gltf,
+                &mut pending_textures,
+                root_url.clone(),
+                textures_context.clone(),
+                buffer_view_map.clone(),
+            )?)
+        } else {
+            None
+        };
+
+        let emissive_future = if let Some(tex_info) = material.emissive_texture.as_ref() {
             Some(start_loading_texture(
                 tex_info.index,
                 true,
@@ -137,7 +141,7 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
 fn start_loading_texture<T: HttpClient>(
     texture_index: usize,
     srgb: bool,
-    gltf: &goth_gltf::Gltf,
+    gltf: &goth_gltf::Gltf<Extensions>,
     pending_textures: &mut HashMap<usize, PendingTexture>,
     root_url: url::Url,
     textures_context: textures::Context<T>,

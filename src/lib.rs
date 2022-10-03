@@ -217,7 +217,6 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
             // As we're doing multiview.
             flip_viewport: false,
             depth_prepass: false,
-            // todo: enable reverse z everywhere. See below.
             reverse_z: false,
         }
     } else {
@@ -228,7 +227,6 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
             // As we're rendering directly to the framebuffer.
             flip_viewport: true,
             depth_prepass: false,
-            // todo: enable reverse z everywhere. See below.
             reverse_z: false,
         }
     };
