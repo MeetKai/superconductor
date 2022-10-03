@@ -424,6 +424,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                 width: size.width,
                 height: size.height,
                 present_mode: wgpu::PresentMode::AutoVsync,
+                alpha_mode: wgpu::CompositeAlphaMode::Auto,
             };
             initialised_state.surface.configure(&device, &config);
 

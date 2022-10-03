@@ -4,26 +4,24 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 bevy_app = { version = "0.8", default-features = false }
 bevy_ecs = { version = "0.8", default-features = false }
 log = "0.4.17"
 wasm-bindgen = "0.2.83"
 renderer-core = { path = "renderer-core" }
-wasm-bindgen-futures = "0.4.31"
-js-sys = "0.3.58"
-futures = "0.3.21"
-wgpu = "0.13.0"
-anyhow = "1.0.58"
-url = "2.2.2"
-winit = "0.27.2"
+wasm-bindgen-futures = "0.4.33"
+js-sys = "0.3.60"
+futures = "0.3.24"
+wgpu = "=0.13.0"
+anyhow = "1.0.65"
+url = "2.3.1"
+winit = "0.27.3"
 arrayvec = "0.7.2"
 surf = { version = "2.3.2", default-features = false }
 
 [dependencies.web-sys]
-version = "=0.3.58"
+version = "=0.3.60"
 features = [
     "HtmlButtonElement",
     "Document",
@@ -61,8 +59,8 @@ members = [
 
 [patch.crates-io]
 glow = { git = "https://github.com/grovesNL/glow", rev = "11853d28ae64fbd7db5c856fe8b92a4a20fded94" }
-wgpu = { git = "https://github.com/expenses/wgpu", rev = "697481ee27556a960effaebb2de9e626b2d63618" }
-wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "697481ee27556a960effaebb2de9e626b2d63618" }
+wgpu = { git = "https://github.com/expenses/wgpu", rev = "91db79f921f0d611da457bcfa0793cc57249fbf8" }
+wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "91db79f921f0d611da457bcfa0793cc57249fbf8" }
 
 [profile.dev]
 debug = true

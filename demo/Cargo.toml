@@ -11,14 +11,14 @@ crate-type = ["cdylib"]
 console_error_panic_hook = "0.1.7"
 console_log = "0.2.0"
 dolly = "=0.3.0"
-env_logger = "0.9.0"
-futures = "0.3.21"
-js-sys = "0.3.58"
+env_logger = "0.9.1"
+futures = "0.3.24"
+js-sys = "0.3.60"
 log = "0.4.17"
 superconductor = { path = ".." }
-wasm-bindgen = "0.2.81"
-wasm-bindgen-futures = "0.4.31"
-web-sys = "0.3.58"
+wasm-bindgen = "0.2.83"
+wasm-bindgen-futures = "0.4.33"
+web-sys = "0.3.60"
 basis-universal-wasm = { git = "https://github.com/expenses/basis-universal-rs-wasm", rev = "a240b3c5aaffa2c0a60ce6a150a45a5c3a1c7d07" }
 async-std = "1.12.0"
 

@@ -4,38 +4,36 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 raw-window-handle = "0.5.0"
-wasm-bindgen = { version = "0.2.82", features = ["serde-serialize"] }
+wasm-bindgen = { version = "0.2.83", features = ["serde-serialize"] }
 glow = "0.11.2"
-wgpu = { version = "0.13.0", features = ["spirv"] }
-wgpu-hal = { version = "0.13.0" }
+wgpu = { version = "=0.13.0", features = ["spirv"] }
+wgpu-hal = { version = "=0.13.0" }
 log = "0.4.17"
 glam = { version = "0.20", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }
-bytemuck = { version = "1.9.1", features = ["derive"] }
+bytemuck = { version = "1.12.1", features = ["derive"] }
 ktx2 = { git = "https://github.com/BVE-Reborn/ktx2", rev = "0e5b0febb09546c91bc845a5e7b5d04610d70044" }
 zstd = { version = "0.11.2", default-features = false, features = ["wasm"] }
-anyhow = "1.0.58"
-url = "2.2.2"
-wasm-bindgen-futures = "0.4.31"
+anyhow = "1.0.65"
+url = "2.3.1"
+wasm-bindgen-futures = "0.4.33"
 gltf-helpers = { path = "../gltf-helpers" }
 base64 = "0.13.0"
 range-alloc = { git = "https://github.com/expenses/gfx", rev = "6afbeb6d9733e295404f4fe0ac936591e277a26e" }
 parking_lot = "0.12.1"
-image = { version = "0.24.2", default-features = false, features = ["jpeg", "png"] }
-arc-swap = "1.5.0"
+image = { version = "0.24.4", default-features = false, features = ["jpeg", "png"] }
+arc-swap = "1.5.1"
 basis-universal = { git = "https://github.com/expenses/basis-universal-rs", rev = "d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610" }
 async-std = "1.12.0"
-futures = "0.3.21"
+futures = "0.3.24"
 goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "584bfe250af13de6e9ea98e1d76d12e4ea92b2f2" }
 meshopt-decoder = { git = "https://github.com/expenses/meshopt-decoder", rev = "1d7eb93c61d9acc2583a50cb3ec7032bbffec61e" }
 js-sys = "0.3.60"
 
 [dependencies.web-sys]
-version = "=0.3.58"
+version = "=0.3.60"
 features = [
     "XrSession",
     "XrFrame",
