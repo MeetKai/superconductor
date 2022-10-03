@@ -11,7 +11,7 @@ glow = "0.11.2"
 wgpu = { version = "=0.13.0", features = ["spirv"] }
 wgpu-hal = { version = "=0.13.0" }
 log = "0.4.17"
-glam = { version = "0.20", features = ["bytemuck"] }
+glam = { version = "0.21", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }
 bytemuck = { version = "1.12.1", features = ["derive"] }
 ktx2 = { git = "https://github.com/BVE-Reborn/ktx2", rev = "0e5b0febb09546c91bc845a5e7b5d04610d70044" }

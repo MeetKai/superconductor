@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 console_error_panic_hook = "0.1.7"
 console_log = "0.2.0"
-dolly = "=0.3.0"
+dolly = "0.3.1"
 env_logger = "0.9.1"
 futures = "0.3.24"
 js-sys = "0.3.60"

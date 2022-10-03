@@ -912,9 +912,9 @@ dependencies = [
 
 [[package]]
 name = "dolly"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72ca62af80028e899eae554918f89106ae480104b1de01965b454601e1ad87de"
+checksum = "c2ae35fe7c2f8550eb2e84dd8251cbaba660d167315daff50c800aee4013da32"
 dependencies = [
  "glam",
 ]
@@ -1242,9 +1242,9 @@ dependencies = [
 
 [[package]]
 name = "glam"
-version = "0.20.5"
+version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f43e957e744be03f5801a55472f593d43fabdebf25a4585db250f04d86b1675f"
+checksum = "518faa5064866338b013ff9b2350dc318e14cc4fcd6cb8206d7e7c9886c98815"
 dependencies = [
  "bytemuck",
  "num-traits",

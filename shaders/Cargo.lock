@@ -46,7 +46,7 @@ dependencies = [
 [[package]]
 name = "glam-pbr"
 version = "0.1.0"
-source = "git+https://github.com/expenses/glam-pbr#07b806b24f1d4bd1c6e9a38e7cd86577754a43c7"
+source = "git+https://github.com/expenses/glam-pbr#c5636489dd602dbed51ea9f586b004a7b262b54d"
 dependencies = [
  "glam",
  "num-traits",
@@ -105,31 +105,31 @@ dependencies = [
 
 [[package]]
 name = "spirv-std"
-version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu#0866cf591a7fdbbd15bdb3468e192bb9b6189fd0"
+version = "0.4.0-alpha.15"
+source = "git+https://github.com/EmbarkStudios/rust-gpu#35df2de639e8504dcac9444a82cec34fa481b29a"
 dependencies = [
  "bitflags",
  "glam",
  "num-traits",
  "spirv-std-macros",
- "spirv-types",
+ "spirv-std-types",
 ]
 
 [[package]]
 name = "spirv-std-macros"
-version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu#0866cf591a7fdbbd15bdb3468e192bb9b6189fd0"
+version = "0.4.0-alpha.15"
+source = "git+https://github.com/EmbarkStudios/rust-gpu#35df2de639e8504dcac9444a82cec34fa481b29a"
 dependencies = [
  "proc-macro2",
  "quote",
- "spirv-types",
+ "spirv-std-types",
  "syn",
 ]
 
 [[package]]
-name = "spirv-types"
-version = "0.4.0-alpha.12"
-source = "git+https://github.com/EmbarkStudios/rust-gpu#0866cf591a7fdbbd15bdb3468e192bb9b6189fd0"
+name = "spirv-std-types"
+version = "0.4.0-alpha.15"
+source = "git+https://github.com/EmbarkStudios/rust-gpu#35df2de639e8504dcac9444a82cec34fa481b29a"
 
 [[package]]
 name = "syn"
