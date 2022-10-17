@@ -7,9 +7,9 @@ license = "MIT"
 [dependencies]
 raw-window-handle = "0.5.0"
 wasm-bindgen = { version = "0.2.83", features = ["serde-serialize"] }
-glow = "0.11.2"
-wgpu = { version = "=0.13.0", features = ["spirv"] }
-wgpu-hal = { version = "=0.13.0" }
+glow = { git = "https://github.com/grovesNL/glow/", rev = "c8a011fcd57a5c68cc917ed394baa484bdefc909" }
+wgpu = { version = "=0.14.0", features = ["spirv"] }
+wgpu-hal = { version = "=0.14.0" }
 log = "0.4.17"
 glam = { version = "0.21", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }

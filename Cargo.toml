@@ -13,10 +13,10 @@ renderer-core = { path = "renderer-core" }
 wasm-bindgen-futures = "0.4.33"
 js-sys = "0.3.60"
 futures = "0.3.24"
-wgpu = "=0.13.0"
+wgpu = "=0.14.0"
 anyhow = "1.0.65"
 url = "2.3.1"
-winit = "0.27.3"
+winit = "0.27.4"
 arrayvec = "0.7.2"
 surf = { version = "2.3.2", default-features = false }
 
@@ -58,9 +58,9 @@ members = [
 ]
 
 [patch.crates-io]
-glow = { git = "https://github.com/grovesNL/glow", rev = "11853d28ae64fbd7db5c856fe8b92a4a20fded94" }
-wgpu = { git = "https://github.com/expenses/wgpu", rev = "91db79f921f0d611da457bcfa0793cc57249fbf8" }
-wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "91db79f921f0d611da457bcfa0793cc57249fbf8" }
+#glow = { git = "https://github.com/grovesNL/glow", rev = "11853d28ae64fbd7db5c856fe8b92a4a20fded94" }
+wgpu = { git = "https://github.com/expenses/wgpu", rev = "f4a8e1732c88995e6e53f401fc3879481c317768" }
+wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "f4a8e1732c88995e6e53f401fc3879481c317768" }
 
 [profile.dev]
 debug = true

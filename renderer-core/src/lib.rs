@@ -186,6 +186,7 @@ pub fn create_view_from_device_framebuffer(
                     depth: 1,
                 },
                 is_cubemap: false,
+                drop_guard: None,
             },
             &wgpu::TextureDescriptor {
                 label: Some(label),

@@ -137,7 +137,7 @@ impl Plugin for SuperconductorPlugin {
         plugin.build(app);
 
         app.insert_resource(NewIblCubemap(Some(
-            url::Url::parse("http://localhost:8000/assets/cubemaps/lodge.ktx2").unwrap(),
+            url::Url::parse("http://localhost:8000/assets/cubemaps/helipad.ktx2").unwrap(),
         )));
     }
 }
