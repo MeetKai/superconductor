@@ -54,6 +54,10 @@ pub fn read_buffer_with_accessor<'a>(
         anyhow::anyhow!("Buffer view index {} is out of range", buffer_view_index)
     })?;
 
+    // Force the end of the slice to be in-bounds as either the maths for calculating
+    // `end` is wrong or some files are a little odd.
+    let end = end.min(buffer_view_bytes.len());
+
     let slice = &buffer_view_bytes[start..end];
 
     Ok((slice, buffer_view.byte_stride))
@@ -94,6 +98,17 @@ pub fn read_f32x3<'a>(
                         .collect(),
                 )
             }
+            (ComponentType::Short, true, Some(stride)) => {
+                let slice: &[i16] = bytemuck::cast_slice(slice);
+                Cow::Owned(
+                    slice
+                        .chunks(stride / 2)
+                        .map(|slice| {
+                            Vec3::from(std::array::from_fn(|i| signed_short_to_float(slice[i])))
+                        })
+                        .collect(),
+                )
+            }
             (ComponentType::UnsignedShort, false, Some(8)) => {
                 let slice: &[u16] = bytemuck::cast_slice(slice);
                 Cow::Owned(
@@ -114,9 +129,9 @@ pub fn read_f32x3<'a>(
                         .collect(),
                 )
             }
-            (ComponentType::Byte, true, Some(4)) => Cow::Owned(
+            (ComponentType::Byte, true, Some(stride)) => Cow::Owned(
                 slice
-                    .chunks(4)
+                    .chunks(stride)
                     .map(move |slice| {
                         Vec3::from(std::array::from_fn(|i| {
                             signed_byte_to_float(slice[i] as i8)
@@ -145,11 +160,20 @@ fn read_f32x2<'a>(
             (ComponentType::Float, false, None | Some(8)) => {
                 Cow::Borrowed(bytemuck::cast_slice(slice))
             }
-            (ComponentType::UnsignedShort, true, Some(4)) => {
+            (ComponentType::Float, false, Some(stride)) => {
+                let slice: &[f32] = bytemuck::cast_slice(slice);
+                Cow::Owned(
+                    slice
+                        .chunks(stride / 4)
+                        .map(move |slice| Vec2::from(std::array::from_fn(|i| slice[i])))
+                        .collect(),
+                )
+            }
+            (ComponentType::UnsignedShort, true, Some(stride)) => {
                 let slice: &[u16] = bytemuck::cast_slice(slice);
                 Cow::Owned(
                     slice
-                        .chunks(2)
+                        .chunks(stride / 2)
                         .map(move |slice| {
                             Vec2::from(std::array::from_fn(|i| unsigned_short_to_float(slice[i])))
                         })

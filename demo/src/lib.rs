@@ -55,7 +55,7 @@ impl Plugin for SuperconductorPlugin {
             .world
             .spawn()
             .insert(components::ModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/ferris/ferris.gltf").unwrap(),
+                url::Url::parse("http://localhost:8000/assets/models/zen-garden.glb").unwrap(),
             ))
             .insert(components::Instances::default())
             .insert(components::InstanceRanges::default())
@@ -65,58 +65,10 @@ impl Plugin for SuperconductorPlugin {
             .spawn()
             .insert(components::InstanceOf(model))
             .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::new(1.0, 1.0, -2.0),
-                1.0,
-                Default::default(),
-            )))
-            .insert(Spinning);
-
-        app.world
-            .spawn()
-            .insert(components::InstanceOf(model))
-            .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::new(-1.0, 1.0, -2.0),
+                Vec3::ZERO,
                 1.0,
                 Default::default(),
             )));
-
-        let helmet = app
-            .world
-            .spawn()
-            .insert(components::AnimatedModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/squid6.glb").unwrap(),
-            ))
-            .insert(components::Instances::default())
-            .insert(components::InstanceRanges::default())
-            .id();
-
-        app.world
-            .spawn()
-            .insert(components::InstanceOf(helmet))
-            .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::new(0.0, 1.0, -3.0),
-                0.5,
-                Default::default(),
-            )))
-            .insert(components::AnimationState {
-                time: 0.5,
-                animation_index: 1,
-            });
-
-        for i in 0..10 {
-            app.world
-                .spawn()
-                .insert(components::InstanceOf(helmet))
-                .insert(components::Instance(renderer_core::Instance::new(
-                    Vec3::new(1.0 + i as f32, 1.0, -4.0 - i as f32),
-                    0.5 + (i as f32 * 0.05),
-                    Default::default(),
-                )))
-                .insert(components::AnimationState {
-                    time: i as f32 / 10.0,
-                    animation_index: i,
-                });
-        }
 
         let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()
             .with(dolly::drivers::Position::new(Vec3::new(0.0, 1.75, 0.0)))
