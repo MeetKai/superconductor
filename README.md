@@ -21,3 +21,8 @@ It has a few limitations in order to ensure performance:
 - No custom shader support. Superconductor tries to use a über-shader model where a few large shaders are used to render all models, instead of many specialised shaders
 - No capabilities for 2D rendering
 - No support for models that use vertex-colours.
+
+### A big thanks to our generous Sponsor for making this work sustainable:
+<a href="https://meetkai.com">
+    <img src="assets/sponsors/meetkai_metaverse_banner_purple_900x250.png" width="600" height="166" />
+</a>
