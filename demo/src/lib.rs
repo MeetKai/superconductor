@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use superconductor::{
     bevy_app, bevy_ecs, components, renderer_core,
-    resources::{Camera, EventQueue, NewIblCubemap, WindowChanges},
+    resources::{Camera, EventQueue, LutUrl, NewIblCubemap, WindowChanges},
     url, winit,
     winit::event::{ElementState, VirtualKeyCode},
     Mode, Vec3,
@@ -51,11 +51,28 @@ impl SuperconductorPlugin {
 
 impl Plugin for SuperconductorPlugin {
     fn build(&self, app: &mut App) {
+        #[cfg(feature = "wasm")]
+        let href = web_sys::window().unwrap().location().href().unwrap();
+        #[cfg(not(feature = "webgl"))]
+        let href = "http://localhost:8000";
+        let href = url::Url::parse(&href).unwrap();
+
+        let mut model_url = std::borrow::Cow::Borrowed("/assets/models/zen-garden.glb");
+
+        for (key, value) in href.query_pairs() {
+            if key == "model" {
+                model_url = value;
+            }
+        }
+
         let model = app
             .world
             .spawn()
             .insert(components::ModelUrl(
-                url::Url::parse("http://localhost:8000/assets/models/zen-garden.glb").unwrap(),
+                url::Url::options()
+                    .base_url(Some(&href))
+                    .parse(&model_url)
+                    .unwrap(),
             ))
             .insert(components::Instances::default())
             .insert(components::InstanceRanges::default())
@@ -89,8 +106,17 @@ impl Plugin for SuperconductorPlugin {
         plugin.build(app);
 
         app.insert_resource(NewIblCubemap(Some(
-            url::Url::parse("http://localhost:8000/assets/cubemaps/helipad.ktx2").unwrap(),
+            url::Url::options()
+                .base_url(Some(&href))
+                .parse("/assets/cubemaps/helipad.ktx2")
+                .unwrap(),
         )));
+        app.insert_resource(LutUrl(
+            url::Url::options()
+                .base_url(Some(&href))
+                .parse("/assets/lut_ggx.png")
+                .unwrap(),
+        ));
     }
 }
 
