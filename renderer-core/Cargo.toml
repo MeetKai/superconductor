@@ -13,7 +13,7 @@ wgpu-hal = { version = "=0.14.0" }
 log = "0.4.17"
 glam = { version = "=0.21", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }
-bytemuck = { version = "1.12.2", features = ["derive"] }
+bytemuck = { version = "1.12.3", features = ["derive"] }
 ktx2 = { git = "https://github.com/BVE-Reborn/ktx2", rev = "0e5b0febb09546c91bc845a5e7b5d04610d70044" }
 zstd = { version = "0.11.2", default-features = false, features = ["wasm"] }
 anyhow = "1.0.66"
@@ -28,7 +28,7 @@ arc-swap = "1.5.1"
 basis-universal = { git = "https://github.com/expenses/basis-universal-rs", rev = "d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610" }
 async-std = "1.12.0"
 futures = "0.3.25"
-goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "f40568157889a83712632734a00131cfc7aa3c65" }
+goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "60315284570588b2b5831d1ce03224fe7b307a6f" }
 meshopt-decoder = { git = "https://github.com/expenses/meshopt-decoder", rev = "1d7eb93c61d9acc2583a50cb3ec7032bbffec61e" }
 js-sys = "0.3.60"
 
