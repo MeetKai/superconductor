@@ -1288,7 +1288,7 @@ dependencies = [
 [[package]]
 name = "goth-gltf"
 version = "0.1.0"
-source = "git+https://github.com/expenses/goth-gltf?rev=60315284570588b2b5831d1ce03224fe7b307a6f#60315284570588b2b5831d1ce03224fe7b307a6f"
+source = "git+https://github.com/expenses/goth-gltf?rev=ea2fd669e60ec93d612aab3a4235cedb43c2c901#ea2fd669e60ec93d612aab3a4235cedb43c2c901"
 dependencies = [
  "nanoserde",
 ]
@@ -1767,7 +1767,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.10.0"
-source = "git+https://github.com/gfx-rs/naga?rev=c52d9102#c52d91023d43092323615fcc746162e478033f26"
+source = "git+https://github.com/gfx-rs/naga?rev=e7fc8e6#e7fc8e64f2f23397b149217ecce6e123c5aa5092"
 dependencies = [
  "bit-set",
  "bitflags",
@@ -3209,7 +3209,7 @@ dependencies = [
 [[package]]
 name = "wgpu"
 version = "0.14.0"
-source = "git+https://github.com/expenses/wgpu?rev=f4a8e1732c88995e6e53f401fc3879481c317768#f4a8e1732c88995e6e53f401fc3879481c317768"
+source = "git+https://github.com/expenses/wgpu?rev=9f6d6d88d1bdfaa3300ece267f489164090f3d11#9f6d6d88d1bdfaa3300ece267f489164090f3d11"
 dependencies = [
  "arrayvec 0.7.2",
  "js-sys",
@@ -3230,7 +3230,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "0.14.0"
-source = "git+https://github.com/expenses/wgpu?rev=f4a8e1732c88995e6e53f401fc3879481c317768#f4a8e1732c88995e6e53f401fc3879481c317768"
+source = "git+https://github.com/expenses/wgpu?rev=9f6d6d88d1bdfaa3300ece267f489164090f3d11#9f6d6d88d1bdfaa3300ece267f489164090f3d11"
 dependencies = [
  "arrayvec 0.7.2",
  "bit-vec",
@@ -3253,7 +3253,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "0.14.0"
-source = "git+https://github.com/expenses/wgpu?rev=f4a8e1732c88995e6e53f401fc3879481c317768#f4a8e1732c88995e6e53f401fc3879481c317768"
+source = "git+https://github.com/expenses/wgpu?rev=9f6d6d88d1bdfaa3300ece267f489164090f3d11#9f6d6d88d1bdfaa3300ece267f489164090f3d11"
 dependencies = [
  "android_system_properties",
  "arrayvec 0.7.2",
@@ -3291,7 +3291,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "0.14.0"
-source = "git+https://github.com/expenses/wgpu?rev=f4a8e1732c88995e6e53f401fc3879481c317768#f4a8e1732c88995e6e53f401fc3879481c317768"
+source = "git+https://github.com/expenses/wgpu?rev=9f6d6d88d1bdfaa3300ece267f489164090f3d11#9f6d6d88d1bdfaa3300ece267f489164090f3d11"
 dependencies = [
  "bitflags",
 ]

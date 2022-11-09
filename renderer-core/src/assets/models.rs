@@ -12,7 +12,7 @@ use gltf_helpers::{
 };
 use goth_gltf::extensions::CompressionMode;
 use goth_gltf::AlphaMode;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -148,33 +148,42 @@ fn collect_primitives<
     let indices_start = staging_buffers.num_indices();
 
     for staging_primitive in staging_primitives {
-        let material_bindings = MaterialBindings::new(
-            &context.device,
-            &context.queue,
-            context.bind_group_layouts.clone(),
-            &staging_primitive.material_settings,
-        );
-
-        let bind_group = Arc::new(ArcSwap::from_pointee(
-            material_bindings.create_initial_bind_group(&context.device, &context.texture_settings),
-        ));
-
         primitives.push(Primitive {
-            index_buffer_range: staging_buffers.collect(&staging_primitive.buffers),
-            bind_group: bind_group.clone(),
             bounding_box: staging_primitive.bounding_box,
             bounding_sphere: staging_primitive.bounding_sphere,
             transform: staging_primitive.transform,
-        });
+            lods: staging_primitive
+                .lods
+                .iter()
+                .map(|lod| {
+                    let material_bindings = MaterialBindings::new(
+                        &context.device,
+                        &context.queue,
+                        context.bind_group_layouts.clone(),
+                        &lod.material_settings,
+                    );
 
-        spawn_texture_loading_futures(
-            bind_group,
-            material_bindings,
-            staging_primitive.material_index,
-            gltf.clone(),
-            context,
-            pending_textures.clone(),
-        )
+                    let bind_group = Arc::new(ArcSwap::from_pointee(
+                        material_bindings
+                            .create_initial_bind_group(&context.device, &context.texture_settings),
+                    ));
+
+                    spawn_texture_loading_futures(
+                        bind_group.clone(),
+                        material_bindings,
+                        lod.material_index,
+                        gltf.clone(),
+                        context,
+                        pending_textures.clone(),
+                    );
+
+                    PrimitiveLod {
+                        index_buffer_range: staging_buffers.collect(&lod.buffers),
+                        bind_group,
+                    }
+                })
+                .collect(),
+        });
     }
 
     let primitives_end = primitives.len();
@@ -333,18 +342,76 @@ impl Model {
             buffer_view_map.clone(),
         )?);
 
-        for (node_index, mesh_index) in gltf
+        let mut ignored_nodes: HashSet<usize> = HashSet::new();
+
+        for node in &gltf.nodes {
+            if let Some(msft_lod) = &node.extensions.msft_lod {
+                ignored_nodes.extend(&msft_lod.ids);
+            }
+        }
+
+        for (node_index, node, mesh_index) in gltf
             .nodes
             .iter()
             .enumerate()
-            .filter_map(|(node_index, node)| node.mesh.map(|mesh_index| (node_index, mesh_index)))
+            .filter(|(node_index, _)| !ignored_nodes.contains(&node_index))
+            .filter_map(|(node_index, node)| {
+                node.mesh.map(|mesh_index| (node_index, node, mesh_index))
+            })
         {
             let transform = node_tree.transform_of(node_index);
+
             let mesh = &gltf.meshes[mesh_index];
 
-            for primitive in &mesh.primitives {
-                let material_index = primitive.material;
-                let material = &gltf.materials[primitive.material.unwrap_or(0)];
+            let meshes = std::iter::once(mesh).chain(
+                node.extensions
+                    .msft_lod
+                    .iter()
+                    .flat_map(|lod| &lod.ids)
+                    .filter_map(|&node_index| gltf.nodes.get(node_index))
+                    .filter_map(|node| node.mesh)
+                    .filter_map(|mesh_index| gltf.meshes.get(mesh_index)),
+            );
+
+            let mut screen_coverage = Vec::new();
+
+            if let Some(msft_screencoverage) = &node.extras.msft_screencoverage {
+                let mut prev = 1.0;
+
+                for &value in msft_screencoverage {
+                    screen_coverage.push(prev..value);
+                    prev = value;
+                }
+            }
+
+            let num_primitives = mesh.primitives.len();
+
+            for mesh in meshes.clone() {
+                assert_eq!(mesh.primitives.len(), num_primitives);
+            }
+
+            for primitive_index in 0..num_primitives {
+                let mut lods = Vec::new();
+
+                for (mesh_index, mesh) in meshes.clone().enumerate() {
+                    let primitive = &mesh.primitives[primitive_index];
+
+                    let material_index = primitive.material.unwrap_or(0);
+                    let material = &gltf.materials[material_index];
+
+                    let reader = PrimitiveReader::new(&gltf, primitive, &buffer_view_map);
+
+                    let buffers = StagingBuffers::new(&reader)?;
+
+                    lods.push(StagingPrimitiveLod {
+                        buffers,
+                        material_settings: load_material_settings(material, &reader),
+                        material_index: material_index,
+                        screen_coverage: screen_coverage[mesh_index].clone(),
+                    });
+                }
+
+                let material = &gltf.materials[lods[0].material_index];
 
                 // Note: it's possible to render double-sided objects with a backface-culling shader if we double the
                 // triangles in the index buffer but with a backwards winding order. It's only worth doing this to keep
@@ -364,16 +431,10 @@ impl Model {
                     (AlphaMode::Blend, true) => &mut staging_primitives.alpha_blended.double,
                 };
 
-                let reader = PrimitiveReader::new(&gltf, primitive, &buffer_view_map);
-
-                let buffers = StagingBuffers::new(&reader)?;
-
                 primitive_vec.push(StagingPrimitive {
-                    bounding_box: BoundingBox::new(&buffers.positions),
-                    bounding_sphere: BoundingSphere::new(&buffers.positions),
-                    buffers,
-                    material_settings: load_material_settings(material, &reader),
-                    material_index: material_index.unwrap_or(0),
+                    bounding_box: BoundingBox::new(&lods[0].buffers.positions),
+                    bounding_sphere: BoundingSphere::new(&lods[0].buffers.positions),
+                    lods,
                     transform,
                 });
             }
@@ -418,8 +479,10 @@ impl Model {
 
         // Make sure the primitive index ranges are absolute from the start of the buffer.
         for primitive in &mut primitives {
-            primitive.index_buffer_range.start += index_buffer_range.start;
-            primitive.index_buffer_range.end += index_buffer_range.start;
+            for lod in &mut primitive.lods {
+                lod.index_buffer_range.start += index_buffer_range.start;
+                lod.index_buffer_range.end += index_buffer_range.start;
+            }
         }
 
         for range in primitive_ranges
@@ -481,8 +544,8 @@ impl AnimatedModel {
             let mesh = &gltf.meshes[mesh_index];
 
             for primitive in &mesh.primitives {
-                let material_index = primitive.material;
-                let material = &gltf.materials[primitive.material.unwrap_or(0)];
+                let material_index = primitive.material.unwrap_or(0);
+                let material = &gltf.materials[material_index];
 
                 // Note: it's possible to render double-sided objects with a backface-culling shader if we double the
                 // triangles in the index buffer but with a backwards winding order. It's only worth doing this to keep
@@ -509,23 +572,26 @@ impl AnimatedModel {
                 primitive_vec.push(StagingPrimitive {
                     bounding_box: BoundingBox::new(&buffers.positions),
                     bounding_sphere: BoundingSphere::new(&buffers.positions),
-                    buffers: AnimatedStagingBuffers {
-                        joint_indices: match reader.read_joints()? {
-                            Some(joints) => joints.to_vec(),
-                            None => std::iter::repeat(UVec4::splat(node_index as u32))
-                                .take(buffers.positions.len())
-                                .collect(),
+                    lods: vec![StagingPrimitiveLod {
+                        buffers: AnimatedStagingBuffers {
+                            joint_indices: match reader.read_joints()? {
+                                Some(joints) => joints.to_vec(),
+                                None => std::iter::repeat(UVec4::splat(node_index as u32))
+                                    .take(buffers.positions.len())
+                                    .collect(),
+                            },
+                            joint_weights: match reader.read_weights()? {
+                                Some(joint_weights) => joint_weights.to_vec(),
+                                None => std::iter::repeat(Vec4::X)
+                                    .take(buffers.positions.len())
+                                    .collect(),
+                            },
+                            base: buffers,
                         },
-                        joint_weights: match reader.read_weights()? {
-                            Some(joint_weights) => joint_weights.to_vec(),
-                            None => std::iter::repeat(Vec4::X)
-                                .take(buffers.positions.len())
-                                .collect(),
-                        },
-                        base: buffers,
-                    },
-                    material_settings: load_material_settings(material, &reader),
-                    material_index: material_index.unwrap_or(0),
+                        material_settings: load_material_settings(material, &reader),
+                        material_index,
+                        screen_coverage: 1.0..0.0,
+                    }],
                     transform: Similarity::IDENTITY,
                 });
             }
@@ -572,8 +638,10 @@ impl AnimatedModel {
 
         // Make sure the primitive index ranges are absolute from the start of the buffer.
         for primitive in &mut primitives {
-            primitive.index_buffer_range.start += index_buffer_range.start;
-            primitive.index_buffer_range.end += index_buffer_range.start;
+            for lod in &mut primitive.lods {
+                lod.index_buffer_range.start += index_buffer_range.start;
+                lod.index_buffer_range.end += index_buffer_range.start;
+            }
         }
 
         for range in primitive_ranges
@@ -666,20 +734,29 @@ impl AnimatedModel {
 }
 
 struct StagingPrimitive<T> {
-    buffers: T,
-    material_settings: shared_structs::MaterialSettings,
-    material_index: usize,
+    lods: Vec<StagingPrimitiveLod<T>>,
     bounding_box: BoundingBox,
     bounding_sphere: BoundingSphere,
     transform: Similarity,
 }
 
+struct StagingPrimitiveLod<T> {
+    buffers: T,
+    material_settings: shared_structs::MaterialSettings,
+    material_index: usize,
+    screen_coverage: Range<f32>,
+}
+
 pub struct Primitive {
-    pub index_buffer_range: Range<u32>,
-    pub bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
+    pub lods: Vec<PrimitiveLod>,
     pub bounding_box: BoundingBox,
     pub bounding_sphere: BoundingSphere,
     pub transform: Similarity,
+}
+
+pub struct PrimitiveLod {
+    pub index_buffer_range: Range<u32>,
+    pub bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
 }
 
 trait CollectableBuffer {

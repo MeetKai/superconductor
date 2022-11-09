@@ -565,3 +565,35 @@ impl renderer_core::assets::HttpClient for SimpleHttpClient {
         })
     }
 }
+
+#[derive(Default, Debug)]
+pub struct FlatVecVec<T> {
+    items: Vec<T>,
+    ranges: Vec<Range<usize>>,
+}
+
+impl<T> FlatVecVec<T> {
+    pub fn iter(&self) -> impl Iterator<Item = &[T]> {
+        self.ranges.iter().map(|range| &self.items[range.clone()])
+    }
+
+    pub fn get(&self, outer_index: usize) -> &[T] {
+        let range = self.ranges[outer_index].clone();
+        &self.items[range]
+    }
+
+    pub fn clear(&mut self) {
+        self.items.clear();
+        self.ranges.clear();
+    }
+
+    pub fn extend(&mut self, items: impl Iterator<Item = T>) {
+        let start = self.items.len();
+
+        self.items.extend(items);
+
+        let end = self.items.len();
+
+        self.ranges.push(start..end);
+    }
+}

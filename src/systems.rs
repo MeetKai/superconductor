@@ -299,14 +299,19 @@ pub(crate) fn upload_instances(
     query.for_each_mut(|(instances, mut instance_ranges)| {
         instance_ranges.0.clear();
 
-        for primitive_instances in &instances.inner {
-            instance_ranges.0.push(instance_buffer.0.push(
-                primitive_instances,
-                &device.0,
-                &queue.0,
-                &mut command_encoder,
-            ));
-        }
+        instance_ranges.0.extend(std::iter::empty());
+        //instance_ranges.0.extend(std::iter::empty());
+
+        instance_ranges
+            .0
+            .extend(instances.inner.iter().map(|primitive_instances| {
+                instance_buffer.0.push(
+                    primitive_instances,
+                    &device.0,
+                    &queue.0,
+                    &mut command_encoder,
+                )
+            }));
     });
 
     queue.0.submit(std::iter::once(command_encoder.finish()));

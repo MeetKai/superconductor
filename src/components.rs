@@ -1,3 +1,4 @@
+use crate::FlatVecVec;
 use bevy_ecs::prelude::{Component, Entity};
 use renderer_core::arc_swap::ArcSwapOption;
 use renderer_core::assets::models;
@@ -47,7 +48,7 @@ impl Instances {
 }
 
 #[derive(Component, Default)]
-pub struct InstanceRanges(pub Vec<Range<u32>>);
+pub struct InstanceRanges(pub FlatVecVec<Range<u32>>);
 
 #[derive(Component)]
 pub struct ModelUrl(pub url::Url);

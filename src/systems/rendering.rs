@@ -96,6 +96,9 @@ pub(crate) fn render_desktop(
     static_model_bind_groups.collect(&static_models);
     animated_model_bind_groups.collect_animated(&animated_models);
 
+    dbg!(&static_model_bind_groups.model_offsets);
+    dbg!(&static_model_bind_groups.primitive_offsets);
+
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("command encoder"),
     });
@@ -534,61 +537,67 @@ pub struct ModelBindGroups {
     bind_groups: Vec<arc_swap::Guard<Arc<wgpu::BindGroup>>>,
     // We use a `Vec` of offsets here to avoid needing a `Vec<Vec<Arc<wgpu::BindGroup>>>`
     // This means we can just clear the `Vec`s instead of re-allocating.
-    offsets: Vec<usize>,
+    model_offsets: Vec<usize>,
+    primitive_offsets: Vec<usize>,
 }
 
 impl ModelBindGroups {
     fn collect(&mut self, query: &ModelQuery) {
         self.bind_groups.clear();
-        self.offsets.clear();
+        self.model_offsets.clear();
+        self.primitive_offsets.clear();
 
         // This is mutable because it involves potentially swapping out the dummy bind groups
         // for loaded ones.
         query.for_each(|(model, _)| {
-            self.offsets.push(self.bind_groups.len());
+            self.model_offsets.push(self.primitive_offsets.len());
 
             // Todo: we could do a check if the model has any instances here
             // and not write the bind groups if not, which would mean that we don't have to do a check
             // however many times we do a `render_all_primitives` call. But that'd be less clear and
             // I'm not sure if it's worthwhile.
-            self.bind_groups.extend(
-                model
-                    .0
-                    .primitives
-                    .iter()
-                    .map(|primitive| primitive.bind_group.load()),
-            );
+
+            for primitive in &model.0.primitives {
+                self.primitive_offsets.push(self.bind_groups.len());
+
+                self.bind_groups
+                    .extend(primitive.lods.iter().map(|lod| lod.bind_group.load()));
+            }
         })
     }
 
     fn collect_animated(&mut self, query: &AnimatedModelQuery) {
         self.bind_groups.clear();
-        self.offsets.clear();
+        self.model_offsets.clear();
 
         // This is mutable because it involves potentially swapping out the dummy bind groups
         // for loaded ones.
         query.for_each(|(model, ..)| {
-            self.offsets.push(self.bind_groups.len());
+            self.model_offsets.push(self.primitive_offsets.len());
 
             // Todo: we could do a check if the model has any instances here
             // and not write the bind groups if not, which would mean that we don't have to do a check
             // however many times we do a `render_all_primitives` call. But that'd be less clear and
             // I'm not sure if it's worthwhile.
-            self.bind_groups.extend(
-                model
-                    .0
-                    .primitives
-                    .iter()
-                    .map(|primitive| primitive.bind_group.load()),
-            );
+
+            for primitive in &model.0.primitives {
+                self.primitive_offsets.push(self.bind_groups.len());
+
+                self.bind_groups
+                    .extend(primitive.lods.iter().map(|lod| lod.bind_group.load()));
+            }
         })
     }
 
-    fn bind_groups_for_model(
+    fn bind_groups_for_model_primitive(
         &self,
         model_index: usize,
+        primitive_index: usize,
     ) -> &[arc_swap::Guard<Arc<wgpu::BindGroup>>] {
-        &self.bind_groups[self.offsets[model_index]..]
+        let primitive_offset =
+            self.primitive_offsets[self.model_offsets[model_index] + primitive_index];
+
+        &self.bind_groups[primitive_offset..]
     }
 }
 
@@ -599,34 +608,41 @@ fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     primitive_range_getter: G,
 ) {
     for (model_index, (model, instance_ranges)) in models.iter().enumerate() {
-        if instance_ranges.0.is_empty() {
-            continue;
-        }
-
         // Get the range of primtives we're rendering
         let range = primitive_range_getter(&model.0.primitive_ranges);
 
         // Get the primitives we're rendering
         let primitives = &model.0.primitives[range.clone()];
-        // And their associated material bind groups
-        let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range.clone()];
 
-        let instance_ranges = &instance_ranges.0[range];
+        dbg!(&instance_ranges.0);
 
-        for ((primitive, bind_group), instance_range) in
-            primitives.iter().zip(bind_groups).zip(instance_ranges)
-        {
-            if instance_range.is_empty() {
+        for (lod, instance_ranges) in instance_ranges.0.iter().enumerate() {
+            if instance_ranges.is_empty() {
                 continue;
             }
 
-            render_pass.set_bind_group(1, bind_group, &[]);
+            let instance_ranges = &instance_ranges[range.clone()];
 
-            render_pass.draw_indexed(
-                primitive.index_buffer_range.clone(),
-                0,
-                instance_range.clone(),
-            );
+            dbg!(&lod);
+
+            if instance_ranges.is_empty() {
+                continue;
+            }
+
+            for ((primitive_index, primitive), instance_range) in
+                range.clone().zip(primitives).zip(instance_ranges)
+            {
+                let bind_groups = &model_bind_groups
+                    .bind_groups_for_model_primitive(model_index, primitive_index);
+
+                render_pass.set_bind_group(1, &bind_groups[lod], &[]);
+
+                render_pass.draw_indexed(
+                    primitive.lods[lod].index_buffer_range.clone(),
+                    0,
+                    instance_range.clone(),
+                );
+            }
         }
     }
 }
@@ -638,45 +654,48 @@ fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     primitive_range_getter: G,
 ) {
     for (model_index, (model, joint_buffers, instance_ranges)) in models.iter().enumerate() {
-        if instance_ranges.0.is_empty() {
-            continue;
-        }
-
         // Get the range of primtives we're rendering
         let range = primitive_range_getter(&model.0.primitive_ranges);
 
         // Get the primitives we're rendering
         let primitives = &model.0.primitives[range.clone()];
-        // And their associated material bind groups
-        let bind_groups = &model_bind_groups.bind_groups_for_model(model_index)[range.clone()];
 
-        let instance_ranges = &instance_ranges.0[range];
+        for (lod, instance_ranges) in instance_ranges.0.iter().enumerate() {
+            let instance_ranges = &instance_ranges[range.clone()];
 
-        for ((primitive, bind_group), instance_range) in
-            primitives.iter().zip(bind_groups).zip(instance_ranges)
-        {
-            render_pass.set_bind_group(1, bind_group, &[]);
+            if instance_ranges.is_empty() {
+                continue;
+            }
 
-            let mut joint_buffer_index = 0;
-            let mut instance_offset = instance_range.start;
+            for ((primitive_index, primitive), instance_range) in
+                range.clone().zip(primitives).zip(instance_ranges)
+            {
+                let bind_groups = &model_bind_groups
+                    .bind_groups_for_model_primitive(model_index, primitive_index);
 
-            // todo: Remove this ASAP when we can switch to WebGPU.
-            while instance_offset < instance_range.end {
-                let end = (instance_offset + model.0.max_instances_per_joint_buffer())
-                    .min(instance_range.end);
+                render_pass.set_bind_group(1, &bind_groups[lod], &[]);
 
-                if let Some(joint_buffer) = joint_buffers.buffers.get(joint_buffer_index) {
-                    render_pass.set_bind_group(2, &joint_buffer.bind_group, &[]);
+                let mut joint_buffer_index = 0;
+                let mut instance_offset = instance_range.start;
 
-                    render_pass.draw_indexed(
-                        primitive.index_buffer_range.clone(),
-                        0,
-                        instance_offset..end,
-                    );
+                // todo: Remove this ASAP when we can switch to WebGPU.
+                while instance_offset < instance_range.end {
+                    let end = (instance_offset + model.0.max_instances_per_joint_buffer())
+                        .min(instance_range.end);
+
+                    if let Some(joint_buffer) = joint_buffers.buffers.get(joint_buffer_index) {
+                        render_pass.set_bind_group(2, &joint_buffer.bind_group, &[]);
+
+                        render_pass.draw_indexed(
+                            primitive.lods[lod].index_buffer_range.clone(),
+                            0,
+                            instance_offset..end,
+                        );
+                    }
+
+                    instance_offset = end;
+                    joint_buffer_index += 1;
                 }
-
-                instance_offset = end;
-                joint_buffer_index += 1;
             }
         }
     }
