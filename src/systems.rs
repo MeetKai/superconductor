@@ -200,6 +200,7 @@ pub(crate) fn push_joints(
 pub(crate) fn push_entity_instances(
     camera: Res<Camera>,
     culling_params: Res<CullingParams>,
+    surface_frame_view: Res<SurfaceFrameView>,
     mut instance_query: Query<(&InstanceOf, &Instance, Option<&JointsOffset>)>,
     mut model_query: Query<(&mut Instances, Option<&Model>, Option<&AnimatedModel>)>,
 ) {
@@ -209,10 +210,37 @@ pub(crate) fn push_entity_instances(
         match model_query.get_mut(instance_of.0) {
             Ok((mut instances, model, animated_model)) => {
                 if let Some(model) = model {
-                    instances.reserve(model.0.primitives.len());
-
                     for (primitive_id, primitive) in model.0.primitives.iter().enumerate() {
                         let primitive_transform = instance.0 * primitive.transform;
+
+                        let distance_to_camera =
+                            primitive_transform.translation.distance(camera.position);
+                        let bounding_sphere_radius =
+                            primitive.bounding_sphere.radius * primitive_transform.scale;
+                        let visible_radius = bounding_sphere_radius / distance_to_camera;
+                        let mesh_area = visible_radius * visible_radius * std::f32::consts::PI;
+                        let aspect_ratio =
+                            surface_frame_view.width as f32 / surface_frame_view.height as f32;
+
+                        // calculate the size of the min z frustum rectangle or something (I have removed min_z from both sides of the equation).
+                        // https://github.com/BabylonJS/Babylon.js/blob/d25bc29091d47f51bd2f0f98fb0f16d25517675f/packages/dev/core/src/Cameras/camera.ts#L149-L150
+                        // todo: research more.
+
+                        let screen_area = {
+                            let y = (59.0_f32.to_radians() / 2.0).tan();
+                            let x = y * aspect_ratio;
+                            x * y
+                        };
+
+                        let screen_coverage = mesh_area / screen_area;
+
+                        let lod = if screen_coverage > 0.7 {
+                            0
+                        } else if screen_coverage > 0.3 {
+                            1
+                        } else {
+                            2
+                        };
 
                         let mut passed_culling_check = match culling_params.bounding_sphere_params {
                             BoundingSphereParams::SingleView(params) => {
@@ -251,6 +279,7 @@ pub(crate) fn push_entity_instances(
 
                         instances.insert(
                             primitive_id,
+                            lod,
                             GpuInstance {
                                 similarity: primitive_transform,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
@@ -259,8 +288,6 @@ pub(crate) fn push_entity_instances(
                         );
                     }
                 } else if let Some(animated_model) = animated_model {
-                    instances.reserve(animated_model.0.primitives.len());
-
                     for (primitive_id, primitive) in animated_model.0.primitives.iter().enumerate()
                     {
                         let primitive_transform = instance.0 * primitive.transform;
@@ -268,6 +295,7 @@ pub(crate) fn push_entity_instances(
                         // todo: culling for animated models.
                         instances.insert(
                             primitive_id,
+                            0,
                             GpuInstance {
                                 similarity: primitive_transform,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
@@ -297,21 +325,21 @@ pub(crate) fn upload_instances(
         });
 
     query.for_each_mut(|(instances, mut instance_ranges)| {
-        instance_ranges.0.clear();
+        instance_ranges.clear();
 
-        instance_ranges.0.extend(std::iter::empty());
-        //instance_ranges.0.extend(std::iter::empty());
-
-        instance_ranges
-            .0
-            .extend(instances.inner.iter().map(|primitive_instances| {
-                instance_buffer.0.push(
-                    primitive_instances,
-                    &device.0,
-                    &queue.0,
-                    &mut command_encoder,
-                )
-            }));
+        for primitives in instances.primitives.iter() {
+            for (lod_index, lod) in primitives.lods.iter().enumerate() {
+                instance_ranges.extend(
+                    lod_index,
+                    std::iter::once(instance_buffer.0.push(
+                        &lod.instances,
+                        &device.0,
+                        &queue.0,
+                        &mut command_encoder,
+                    )),
+                );
+            }
+        }
     });
 
     queue.0.submit(std::iter::once(command_encoder.finish()));

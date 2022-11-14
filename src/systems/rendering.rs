@@ -96,9 +96,6 @@ pub(crate) fn render_desktop(
     static_model_bind_groups.collect(&static_models);
     animated_model_bind_groups.collect_animated(&animated_models);
 
-    dbg!(&static_model_bind_groups.model_offsets);
-    dbg!(&static_model_bind_groups.primitive_offsets);
-
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("command encoder"),
     });
@@ -608,37 +605,32 @@ fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     primitive_range_getter: G,
 ) {
     for (model_index, (model, instance_ranges)) in models.iter().enumerate() {
-        // Get the range of primtives we're rendering
+        // Get the range of primitives we're rendering
         let range = primitive_range_getter(&model.0.primitive_ranges);
 
         // Get the primitives we're rendering
         let primitives = &model.0.primitives[range.clone()];
 
-        dbg!(&instance_ranges.0);
-
-        for (lod, instance_ranges) in instance_ranges.0.iter().enumerate() {
-            if instance_ranges.is_empty() {
-                continue;
-            }
-
-            let instance_ranges = &instance_ranges[range.clone()];
-
-            dbg!(&lod);
-
-            if instance_ranges.is_empty() {
-                continue;
-            }
+        // Loop over, doing LODs first then primitives. This is because
+        // if a particular LOD level isn't drawn, we don't have to do the inner
+        // primitives loop.
+        for (lod_index, lod) in instance_ranges.iter() {
+            let instance_ranges = &lod.ranges[range.clone()];
 
             for ((primitive_index, primitive), instance_range) in
                 range.clone().zip(primitives).zip(instance_ranges)
             {
+                if instance_range.is_empty() {
+                    continue;
+                }
+
                 let bind_groups = &model_bind_groups
                     .bind_groups_for_model_primitive(model_index, primitive_index);
 
-                render_pass.set_bind_group(1, &bind_groups[lod], &[]);
+                render_pass.set_bind_group(1, &bind_groups[lod_index], &[]);
 
                 render_pass.draw_indexed(
-                    primitive.lods[lod].index_buffer_range.clone(),
+                    primitive.lods[lod_index].index_buffer_range.clone(),
                     0,
                     instance_range.clone(),
                 );
@@ -654,26 +646,26 @@ fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
     primitive_range_getter: G,
 ) {
     for (model_index, (model, joint_buffers, instance_ranges)) in models.iter().enumerate() {
-        // Get the range of primtives we're rendering
+        // Get the range of primitives we're rendering
         let range = primitive_range_getter(&model.0.primitive_ranges);
 
         // Get the primitives we're rendering
         let primitives = &model.0.primitives[range.clone()];
 
-        for (lod, instance_ranges) in instance_ranges.0.iter().enumerate() {
-            let instance_ranges = &instance_ranges[range.clone()];
-
-            if instance_ranges.is_empty() {
-                continue;
-            }
+        for (lod_index, lod) in instance_ranges.iter() {
+            let instance_ranges = &lod.ranges[range.clone()];
 
             for ((primitive_index, primitive), instance_range) in
                 range.clone().zip(primitives).zip(instance_ranges)
             {
+                if instance_range.is_empty() {
+                    continue;
+                }
+
                 let bind_groups = &model_bind_groups
                     .bind_groups_for_model_primitive(model_index, primitive_index);
 
-                render_pass.set_bind_group(1, &bind_groups[lod], &[]);
+                render_pass.set_bind_group(1, &bind_groups[lod_index], &[]);
 
                 let mut joint_buffer_index = 0;
                 let mut instance_offset = instance_range.start;
@@ -687,7 +679,7 @@ fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
                         render_pass.set_bind_group(2, &joint_buffer.bind_group, &[]);
 
                         render_pass.draw_indexed(
-                            primitive.lods[lod].index_buffer_range.clone(),
+                            primitive.lods[lod_index].index_buffer_range.clone(),
                             0,
                             instance_offset..end,
                         );

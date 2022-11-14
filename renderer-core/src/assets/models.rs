@@ -354,7 +354,7 @@ impl Model {
             .nodes
             .iter()
             .enumerate()
-            .filter(|(node_index, _)| !ignored_nodes.contains(&node_index))
+            .filter(|(node_index, _)| !ignored_nodes.contains(node_index))
             .filter_map(|(node_index, node)| {
                 node.mesh.map(|mesh_index| (node_index, node, mesh_index))
             })
@@ -406,7 +406,7 @@ impl Model {
                     lods.push(StagingPrimitiveLod {
                         buffers,
                         material_settings: load_material_settings(material, &reader),
-                        material_index: material_index,
+                        material_index,
                         screen_coverage: screen_coverage[mesh_index].clone(),
                     });
                 }

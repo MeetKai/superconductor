@@ -1,4 +1,3 @@
-use crate::FlatVecVec;
 use bevy_ecs::prelude::{Component, Entity};
 use renderer_core::arc_swap::ArcSwapOption;
 use renderer_core::assets::models;
@@ -26,29 +25,83 @@ pub struct AnimatedModel(pub Arc<models::AnimatedModel>);
 
 #[derive(Component, Default)]
 pub struct Instances {
-    pub inner: Vec<Vec<renderer_core::GpuInstance>>,
+    // vec of primitives of lods of instances.
+    pub primitives: Vec<instances::Primitive>,
+}
+
+mod instances {
+    pub struct Primitive {
+        pub lods: Vec<Lod>,
+    }
+
+    pub struct Lod {
+        pub instances: Vec<renderer_core::GpuInstance>,
+    }
 }
 
 impl Instances {
     pub fn clear(&mut self) {
-        for primitive_instances in &mut self.inner {
-            primitive_instances.clear();
+        for primitives in &mut self.primitives {
+            for lod in &mut primitives.lods {
+                lod.instances.clear();
+            }
         }
     }
 
-    pub fn reserve(&mut self, capacity: usize) {
-        while self.inner.len() <= capacity {
-            self.inner.push(Vec::new());
+    pub fn insert(
+        &mut self,
+        primitive_id: usize,
+        lod: usize,
+        instance: renderer_core::GpuInstance,
+    ) {
+        while self.primitives.len() <= primitive_id {
+            self.primitives
+                .push(instances::Primitive { lods: Vec::new() });
         }
-    }
 
-    pub fn insert(&mut self, primitive_id: usize, instance: renderer_core::GpuInstance) {
-        self.inner[primitive_id].push(instance);
+        let lods = &mut self.primitives[primitive_id].lods;
+
+        while lods.len() <= lod {
+            lods.push(instances::Lod {
+                instances: Vec::new(),
+            });
+        }
+
+        lods[lod].instances.push(instance);
     }
 }
 
 #[derive(Component, Default)]
-pub struct InstanceRanges(pub FlatVecVec<Range<u32>>);
+pub struct InstanceRanges {
+    lods: Vec<instance_ranges::Lod>,
+}
+
+mod instance_ranges {
+    use super::*;
+
+    pub struct Lod {
+        pub ranges: Vec<Range<u32>>,
+    }
+}
+
+impl InstanceRanges {
+    pub fn clear(&mut self) {
+        for lod in &mut self.lods {
+            lod.ranges.clear();
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (usize, &instance_ranges::Lod)> {
+        self.lods.iter().enumerate()
+    }
+
+    pub fn extend(&mut self, lod: usize, ranges: impl Iterator<Item = Range<u32>>) {
+        while lod >= self.lods.len() {
+            self.lods.push(instance_ranges::Lod { ranges: Vec::new() });
+        }
+        self.lods[lod].ranges.extend(ranges);
+    }
+}
 
 #[derive(Component)]
 pub struct ModelUrl(pub url::Url);
