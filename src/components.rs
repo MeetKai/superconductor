@@ -73,7 +73,7 @@ impl Instances {
 
 #[derive(Component, Default)]
 pub struct InstanceRanges {
-    lods: Vec<instance_ranges::Lod>,
+    pub lods: Vec<instance_ranges::Lod>,
 }
 
 mod instance_ranges {
@@ -89,10 +89,6 @@ impl InstanceRanges {
         for lod in &mut self.lods {
             lod.ranges.clear();
         }
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (usize, &instance_ranges::Lod)> {
-        self.lods.iter().enumerate()
     }
 
     pub fn extend(&mut self, lod: usize, ranges: impl Iterator<Item = Range<u32>>) {

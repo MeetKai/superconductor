@@ -614,7 +614,7 @@ fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
         // Loop over, doing LODs first then primitives. This is because
         // if a particular LOD level isn't drawn, we don't have to do the inner
         // primitives loop.
-        for (lod_index, lod) in instance_ranges.iter() {
+        for (lod_index, lod) in instance_ranges.lods.iter().enumerate() {
             let instance_ranges = &lod.ranges[range.clone()];
 
             for ((primitive_index, primitive), instance_range) in
@@ -652,7 +652,7 @@ fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
         // Get the primitives we're rendering
         let primitives = &model.0.primitives[range.clone()];
 
-        for (lod_index, lod) in instance_ranges.iter() {
+        for (lod_index, lod) in instance_ranges.lods.iter().enumerate() {
             let instance_ranges = &lod.ranges[range.clone()];
 
             for ((primitive_index, primitive), instance_range) in
