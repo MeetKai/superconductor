@@ -1,10 +1,8 @@
-use super::materials::MaterialBindings;
 use super::textures;
 use super::HttpClient;
 use crate::culling::{BoundingBox, BoundingSphere};
 use crate::permutations;
-use crate::{spawn, BindGroupLayouts};
-use arc_swap::ArcSwap;
+use crate::BindGroupLayouts;
 use glam::{Mat4, UVec4, Vec2, Vec3, Vec4};
 use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
@@ -15,14 +13,13 @@ use goth_gltf::AlphaMode;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::sync::Arc;
+use texture_loading::MaterialBindGroup;
 
 mod accessors;
 mod texture_loading;
 
 use accessors::{read_buffer_with_accessor, read_f32, read_f32x3, read_f32x4, PrimitiveReader};
-use texture_loading::{
-    image_index_from_texture_index, start_loading_all_material_textures, PendingTexture,
-};
+use texture_loading::start_loading_all_material_textures;
 
 #[derive(Clone)]
 pub struct Context<T> {
@@ -60,11 +57,8 @@ pub struct Ranges {
 
 // Collect all the buffers for the primitives into one big staging buffer
 // and collect all the primitive ranges into one big vector.
-fn collect_all_primitives<'a, T: HttpClient, B: 'a + CollectableBuffer + Default>(
-    context: &Context<T>,
-    gltf: Arc<goth_gltf::Gltf<Extensions>>,
+fn collect_all_primitives<'a, B: 'a + CollectableBuffer + Default>(
     staging_primitives: &permutations::BlendMode<permutations::FaceSides<Vec<StagingPrimitive<B>>>>,
-    pending_textures: Arc<HashMap<usize, PendingTexture>>,
 ) -> (PrimitiveRanges, Vec<Primitive>, B) {
     let mut primitives = Vec::new();
     let mut staging_buffers = B::default();
@@ -75,17 +69,11 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + CollectableBuffer + Default
                 &mut primitives,
                 &mut staging_buffers,
                 &staging_primitives.opaque.single,
-                context,
-                gltf.clone(),
-                pending_textures.clone(),
             ),
             double: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
                 &staging_primitives.opaque.double,
-                context,
-                gltf.clone(),
-                pending_textures.clone(),
             ),
         },
         alpha_clipped: permutations::FaceSides {
@@ -93,17 +81,11 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + CollectableBuffer + Default
                 &mut primitives,
                 &mut staging_buffers,
                 &staging_primitives.alpha_clipped.single,
-                context,
-                gltf.clone(),
-                pending_textures.clone(),
             ),
             double: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
                 &staging_primitives.alpha_clipped.double,
-                context,
-                gltf.clone(),
-                pending_textures.clone(),
             ),
         },
         alpha_blended: permutations::FaceSides {
@@ -111,17 +93,11 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + CollectableBuffer + Default
                 &mut primitives,
                 &mut staging_buffers,
                 &staging_primitives.alpha_blended.single,
-                context,
-                gltf.clone(),
-                pending_textures.clone(),
             ),
             double: collect_primitives(
                 &mut primitives,
                 &mut staging_buffers,
                 &staging_primitives.alpha_blended.double,
-                context,
-                gltf,
-                pending_textures.clone(),
             ),
         },
     };
@@ -133,16 +109,12 @@ fn collect_all_primitives<'a, T: HttpClient, B: 'a + CollectableBuffer + Default
 // futures.
 fn collect_primitives<
     'a,
-    T: HttpClient,
     B: CollectableBuffer + 'a,
     I: IntoIterator<Item = &'a StagingPrimitive<B>>,
 >(
     primitives: &mut Vec<Primitive>,
     staging_buffers: &mut B,
     staging_primitives: I,
-    context: &Context<T>,
-    gltf: Arc<goth_gltf::Gltf<Extensions>>,
-    pending_textures: Arc<HashMap<usize, PendingTexture>>,
 ) -> Ranges {
     let primitives_start = primitives.len();
     let indices_start = staging_buffers.num_indices();
@@ -156,32 +128,9 @@ fn collect_primitives<
             lods: staging_primitive
                 .lods
                 .iter()
-                .map(|lod| {
-                    let material_bindings = MaterialBindings::new(
-                        &context.device,
-                        &context.queue,
-                        context.bind_group_layouts.clone(),
-                        &lod.material_settings,
-                    );
-
-                    let bind_group = Arc::new(ArcSwap::from_pointee(
-                        material_bindings
-                            .create_initial_bind_group(&context.device, &context.texture_settings),
-                    ));
-
-                    spawn_texture_loading_futures(
-                        bind_group.clone(),
-                        material_bindings,
-                        lod.material_index,
-                        gltf.clone(),
-                        context,
-                        pending_textures.clone(),
-                    );
-
-                    PrimitiveLod {
-                        index_buffer_range: staging_buffers.collect(&lod.buffers),
-                        bind_group,
-                    }
+                .map(|lod| PrimitiveLod {
+                    index_buffer_range: staging_buffers.collect(&lod.buffers),
+                    material_index: lod.material_index,
                 })
                 .collect(),
         });
@@ -318,6 +267,7 @@ pub struct Model {
     pub primitive_ranges: PrimitiveRanges,
     pub index_buffer_range: Range<u32>,
     pub vertex_buffer_range: Range<u32>,
+    pub material_bind_groups: Vec<MaterialBindGroup>,
 }
 
 impl Model {
@@ -337,12 +287,12 @@ impl Model {
         let mut staging_primitives: permutations::BlendMode<permutations::FaceSides<Vec<_>>> =
             Default::default();
 
-        let pending_textures = Arc::new(start_loading_all_material_textures(
+        let material_bind_groups = start_loading_all_material_textures(
             &gltf,
             root_url.clone(),
             context.textures_context(),
             buffer_view_map.clone(),
-        )?);
+        )?;
 
         let mut ignored_nodes: HashSet<usize> = HashSet::new();
 
@@ -386,18 +336,11 @@ impl Model {
 
                 for mesh in mesh_lods.clone() {
                     let primitive = &mesh.primitives[primitive_index];
-
-                    let material_index = primitive.material.unwrap_or(0);
-                    let material = &gltf.materials[material_index];
-
                     let reader = PrimitiveReader::new(&gltf, primitive, &buffer_view_map);
 
-                    let buffers = StagingBuffers::new(&reader)?;
-
                     lods.push(StagingPrimitiveLod {
-                        buffers,
-                        material_settings: load_material_settings(material, &reader),
-                        material_index,
+                        buffers: StagingBuffers::new(&reader)?,
+                        material_index: primitive.material.unwrap_or(0),
                     });
                 }
 
@@ -434,7 +377,7 @@ impl Model {
         // Collect all the buffers for the primitives into one big staging buffer
         // and collect all the primitive ranges into one big vector.
         let (mut primitive_ranges, mut primitives, mut staging_buffers) =
-            collect_all_primitives(context, gltf, &staging_primitives, pending_textures);
+            collect_all_primitives(&staging_primitives);
 
         let mut command_encoder =
             context
@@ -490,6 +433,7 @@ impl Model {
             primitive_ranges,
             index_buffer_range,
             vertex_buffer_range,
+            material_bind_groups,
         })
     }
 }
@@ -500,6 +444,7 @@ pub struct AnimatedModel {
     pub index_buffer_range: Range<u32>,
     pub vertex_buffer_range: Range<u32>,
     pub animation_data: AnimatedModelData,
+    pub material_bind_groups: Vec<MaterialBindGroup>,
 }
 
 impl AnimatedModel {
@@ -519,12 +464,12 @@ impl AnimatedModel {
         let mut staging_primitives: permutations::BlendMode<permutations::FaceSides<Vec<_>>> =
             Default::default();
 
-        let pending_textures = Arc::new(start_loading_all_material_textures(
+        let material_bind_groups = start_loading_all_material_textures(
             &gltf,
             root_url.clone(),
             context.textures_context(),
             buffer_view_map.clone(),
-        )?);
+        )?;
 
         for (node_index, mesh_index) in gltf
             .nodes
@@ -579,7 +524,6 @@ impl AnimatedModel {
                             },
                             base: buffers,
                         },
-                        material_settings: load_material_settings(material, &reader),
                         material_index,
                     }],
                     transform: Similarity::IDENTITY,
@@ -591,7 +535,7 @@ impl AnimatedModel {
         // Collect all the buffers for the primitives into one big staging buffer
         // and collect all the primitive ranges into one big vector.
         let (mut primitive_ranges, mut primitives, mut staging_buffers) =
-            collect_all_primitives(context, gltf.clone(), &staging_primitives, pending_textures);
+            collect_all_primitives(&staging_primitives);
 
         let mut command_encoder =
             context
@@ -712,6 +656,7 @@ impl AnimatedModel {
                 inverse_bind_transforms,
                 animation_joints,
             },
+            material_bind_groups,
         })
     }
 
@@ -734,7 +679,6 @@ struct StagingPrimitive<T> {
 
 struct StagingPrimitiveLod<T> {
     buffers: T,
-    material_settings: shared_structs::MaterialSettings,
     material_index: usize,
 }
 
@@ -750,7 +694,7 @@ pub struct Primitive {
 #[derive(Debug)]
 pub struct PrimitiveLod {
     pub index_buffer_range: Range<u32>,
-    pub bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
+    pub material_index: usize,
 }
 
 trait CollectableBuffer {
@@ -838,190 +782,5 @@ impl CollectableBuffer for AnimatedStagingBuffers {
 
     fn num_indices(&self) -> u32 {
         self.base.indices.len() as u32
-    }
-}
-
-fn spawn_texture_loading_futures<T: HttpClient>(
-    bind_group: Arc<ArcSwap<wgpu::BindGroup>>,
-    material_bindings: MaterialBindings,
-    material_index: usize,
-    gltf: Arc<goth_gltf::Gltf<Extensions>>,
-    context: &Context<T>,
-    pending_textures: Arc<HashMap<usize, PendingTexture>>,
-) {
-    let material = match gltf.materials.get(material_index) {
-        Some(material) => material.clone(),
-        None => {
-            log::warn!(
-                "Material index {} is out of range of {}",
-                material_index,
-                gltf.materials.len()
-            );
-            return;
-        }
-    };
-
-    let pbr = material.pbr_metallic_roughness;
-    let context = context.clone();
-
-    spawn({
-        async move {
-            let albedo_texture = {
-                let pending_textures = pending_textures.clone();
-                let gltf = gltf.clone();
-
-                async move {
-                    anyhow::Ok(match pbr.base_color_texture {
-                        Some(texture) => {
-                            pending_textures
-                                .get(&image_index_from_texture_index(texture.index, &gltf)?)
-                                .unwrap()
-                                .clone()
-                                .await
-                        }
-                        None => None,
-                    })
-                }
-            };
-
-            let metallic_roughness_texture = {
-                let pending_textures = pending_textures.clone();
-                let gltf = gltf.clone();
-
-                async move {
-                    anyhow::Ok(match pbr.metallic_roughness_texture {
-                        Some(texture) => {
-                            pending_textures
-                                .get(&image_index_from_texture_index(texture.index, &gltf)?)
-                                .unwrap()
-                                .clone()
-                                .await
-                        }
-                        None => None,
-                    })
-                }
-            };
-
-            let normal_texture = {
-                let pending_textures = pending_textures.clone();
-                let gltf = gltf.clone();
-
-                async move {
-                    anyhow::Ok(match material.normal_texture {
-                        Some(texture) => {
-                            pending_textures
-                                .get(&image_index_from_texture_index(texture.index, &gltf)?)
-                                .unwrap()
-                                .clone()
-                                .await
-                        }
-                        None => None,
-                    })
-                }
-            };
-
-            let emissive_texture = {
-                let pending_textures = pending_textures.clone();
-                let gltf = gltf.clone();
-
-                async move {
-                    anyhow::Ok(match material.emissive_texture {
-                        Some(texture) => {
-                            pending_textures
-                                .get(&image_index_from_texture_index(texture.index, &gltf)?)
-                                .unwrap()
-                                .clone()
-                                .await
-                        }
-                        None => None,
-                    })
-                }
-            };
-
-            let (albedo_texture, metallic_roughness_texture, normal_texture, emissive_texture) =
-                futures::future::join4(
-                    albedo_texture,
-                    metallic_roughness_texture,
-                    normal_texture,
-                    emissive_texture,
-                )
-                .await;
-            let incoming_textures = super::materials::Textures {
-                albedo: albedo_texture?,
-                metallic_roughness: metallic_roughness_texture?,
-                normal: normal_texture?,
-                emissive: emissive_texture?,
-            };
-
-            bind_group.store(Arc::new(material_bindings.create_bind_group(
-                &context.device,
-                &context.texture_settings,
-                incoming_textures,
-            )));
-
-            Ok(())
-        }
-    });
-}
-
-fn load_material_settings(
-    material: &goth_gltf::Material<Extensions>,
-    reader: &PrimitiveReader,
-) -> shared_structs::MaterialSettings {
-    // Workaround for some exporters (Scaniverse) exporting scanned models that are meant to be
-    // rendered unlit but don't set the material flag.
-    let unlit = material.extensions.khr_materials_unlit.is_some()
-        || reader.primitive.attributes.normal.is_none();
-
-    let pbr = &material.pbr_metallic_roughness;
-
-    let emissive_strength = material
-        .extensions
-        .khr_materials_emissive_strength
-        .map(|emissive_strength| emissive_strength.emissive_strength)
-        .unwrap_or(1.0);
-
-    let texture_transform = pbr
-        .base_color_texture
-        .as_ref()
-        .map(|info| info.extensions)
-        .or_else(|| {
-            pbr.metallic_roughness_texture
-                .as_ref()
-                .map(|info| info.extensions)
-        })
-        .or_else(|| material.normal_texture.as_ref().map(|info| info.extensions))
-        .or_else(|| {
-            material
-                .emissive_texture
-                .as_ref()
-                .map(|info| info.extensions)
-        })
-        .and_then(|extensions| extensions.khr_texture_transform);
-
-    let emissive_factor = Vec3::from(material.emissive_factor) * emissive_strength;
-
-    shared_structs::MaterialSettings {
-        base_color_factor: pbr.base_color_factor.into(),
-        emissive_factor_x: emissive_factor.x,
-        emissive_factor_y: emissive_factor.y,
-        emissive_factor_z: emissive_factor.z,
-        metallic_factor: pbr.metallic_factor,
-        roughness_factor: pbr.roughness_factor,
-        is_unlit: unlit as u32,
-        normal_map_scale: material
-            .normal_texture
-            .as_ref()
-            .map(|info| info.scale)
-            .unwrap_or(1.0),
-        texture_transform_offset: texture_transform
-            .map(|transform| Vec2::from(transform.offset))
-            .unwrap_or(Vec2::ZERO),
-        texture_transform_scale: texture_transform
-            .map(|transform| Vec2::from(transform.scale))
-            .unwrap_or(Vec2::ONE),
-        texture_transform_rotation: texture_transform
-            .map(|transform| transform.rotation)
-            .unwrap_or(0.0),
     }
 }

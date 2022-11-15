@@ -535,67 +535,48 @@ pub struct ModelBindGroups {
     bind_groups: Vec<arc_swap::Guard<Arc<wgpu::BindGroup>>>,
     // We use a `Vec` of offsets here to avoid needing a `Vec<Vec<Arc<wgpu::BindGroup>>>`
     // This means we can just clear the `Vec`s instead of re-allocating.
-    model_offsets: Vec<usize>,
-    primitive_offsets: Vec<usize>,
+    offsets: Vec<usize>,
 }
 
 impl ModelBindGroups {
     fn collect(&mut self, query: &ModelQuery) {
         self.bind_groups.clear();
-        self.model_offsets.clear();
-        self.primitive_offsets.clear();
+        self.offsets.clear();
 
-        // This is mutable because it involves potentially swapping out the dummy bind groups
-        // for loaded ones.
         query.for_each(|(model, _)| {
-            self.model_offsets.push(self.primitive_offsets.len());
-
-            // Todo: we could do a check if the model has any instances here
-            // and not write the bind groups if not, which would mean that we don't have to do a check
-            // however many times we do a `render_all_primitives` call. But that'd be less clear and
-            // I'm not sure if it's worthwhile.
-
-            for primitive in &model.0.primitives {
-                self.primitive_offsets.push(self.bind_groups.len());
-
-                self.bind_groups
-                    .extend(primitive.lods.iter().map(|lod| lod.bind_group.load()));
-            }
+            self.offsets.push(self.bind_groups.len());
+            self.bind_groups.extend(
+                model
+                    .0
+                    .material_bind_groups
+                    .iter()
+                    .map(|bind_group| bind_group.load()),
+            );
         })
     }
 
     fn collect_animated(&mut self, query: &AnimatedModelQuery) {
         self.bind_groups.clear();
-        self.model_offsets.clear();
+        self.offsets.clear();
 
-        // This is mutable because it involves potentially swapping out the dummy bind groups
-        // for loaded ones.
         query.for_each(|(model, ..)| {
-            self.model_offsets.push(self.primitive_offsets.len());
-
-            // Todo: we could do a check if the model has any instances here
-            // and not write the bind groups if not, which would mean that we don't have to do a check
-            // however many times we do a `render_all_primitives` call. But that'd be less clear and
-            // I'm not sure if it's worthwhile.
-
-            for primitive in &model.0.primitives {
-                self.primitive_offsets.push(self.bind_groups.len());
-
-                self.bind_groups
-                    .extend(primitive.lods.iter().map(|lod| lod.bind_group.load()));
-            }
+            self.offsets.push(self.bind_groups.len());
+            self.bind_groups.extend(
+                model
+                    .0
+                    .material_bind_groups
+                    .iter()
+                    .map(|bind_group| bind_group.load()),
+            );
         })
     }
 
-    fn bind_groups_for_model_primitive(
+    fn get_bind_group(
         &self,
         model_index: usize,
-        primitive_index: usize,
-    ) -> &[arc_swap::Guard<Arc<wgpu::BindGroup>>] {
-        let primitive_offset =
-            self.primitive_offsets[self.model_offsets[model_index] + primitive_index];
-
-        &self.bind_groups[primitive_offset..]
+        material_index: usize,
+    ) -> &arc_swap::Guard<Arc<wgpu::BindGroup>> {
+        &self.bind_groups[self.offsets[model_index] + material_index]
     }
 }
 
@@ -618,20 +599,20 @@ fn render_all_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
         for (lod_index, lod) in instance_ranges.lods.iter().enumerate() {
             let instance_ranges = &lod.ranges[range.clone()];
 
-            for ((primitive_index, primitive), instance_range) in
-                range.clone().zip(primitives).zip(instance_ranges)
-            {
+            for (primitive, instance_range) in primitives.iter().zip(instance_ranges) {
                 if instance_range.is_empty() {
                     continue;
                 }
 
-                let bind_groups = &model_bind_groups
-                    .bind_groups_for_model_primitive(model_index, primitive_index);
+                let primitive = &primitive.lods[lod_index];
 
-                render_pass.set_bind_group(1, &bind_groups[lod_index], &[]);
+                let bind_group =
+                    &model_bind_groups.get_bind_group(model_index, primitive.material_index);
+
+                render_pass.set_bind_group(1, bind_group, &[]);
 
                 render_pass.draw_indexed(
-                    primitive.lods[lod_index].index_buffer_range.clone(),
+                    primitive.index_buffer_range.clone(),
                     0,
                     instance_range.clone(),
                 );
@@ -656,17 +637,17 @@ fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
         for (lod_index, lod) in instance_ranges.lods.iter().enumerate() {
             let instance_ranges = &lod.ranges[range.clone()];
 
-            for ((primitive_index, primitive), instance_range) in
-                range.clone().zip(primitives).zip(instance_ranges)
-            {
+            for (primitive, instance_range) in primitives.iter().zip(instance_ranges) {
                 if instance_range.is_empty() {
                     continue;
                 }
 
-                let bind_groups = &model_bind_groups
-                    .bind_groups_for_model_primitive(model_index, primitive_index);
+                let primitive = &primitive.lods[lod_index];
 
-                render_pass.set_bind_group(1, &bind_groups[lod_index], &[]);
+                let bind_group =
+                    model_bind_groups.get_bind_group(model_index, primitive.material_index);
+
+                render_pass.set_bind_group(1, bind_group, &[]);
 
                 let mut joint_buffer_index = 0;
                 let mut instance_offset = instance_range.start;
@@ -680,7 +661,7 @@ fn render_all_animated_primitives<'a, G: Fn(&PrimitiveRanges) -> Range<usize>>(
                         render_pass.set_bind_group(2, &joint_buffer.bind_group, &[]);
 
                         render_pass.draw_indexed(
-                            primitive.lods[lod_index].index_buffer_range.clone(),
+                            primitive.index_buffer_range.clone(),
                             0,
                             instance_offset..end,
                         );

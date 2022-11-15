@@ -6,14 +6,19 @@ pub type PendingTexture =
 pub type PendingTexture =
     future::Shared<std::pin::Pin<Box<dyn Future<Output = Option<Arc<Texture>>> + Send + 'static>>>;
 
+use crate::assets::materials::MaterialBindings;
 use crate::assets::textures::{self, load_image_with_mime_type, ImageSource};
 use crate::assets::HttpClient;
 use crate::{spawn, Texture};
+use arc_swap::ArcSwap;
 use futures::future::{self, FutureExt, OptionFuture};
+use glam::{Vec2, Vec3};
 use gltf_helpers::Extensions;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
+
+pub type MaterialBindGroup = Arc<ArcSwap<wgpu::BindGroup>>;
 
 pub fn image_index_from_texture_index(
     texture_index: usize,
@@ -47,9 +52,9 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
     root_url: url::Url,
     textures_context: textures::Context<T>,
     buffer_view_map: Arc<HashMap<usize, Vec<u8>>>,
-) -> anyhow::Result<HashMap<usize, PendingTexture>> {
+) -> anyhow::Result<Vec<MaterialBindGroup>> {
     let mut pending_textures = Default::default();
-    //let mut materials = Vec::new();
+    let mut materials = Vec::new();
 
     for material in &gltf.materials {
         let albedo_future =
@@ -113,29 +118,51 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
             None
         };
 
+        let material_settings = load_material_settings(material);
+
+        let material_bindings = MaterialBindings::new(
+            &textures_context.device,
+            &textures_context.queue,
+            textures_context.bind_group_layouts.clone(),
+            &material_settings,
+        );
+
+        let bind_group = Arc::new(ArcSwap::from_pointee(
+            material_bindings
+                .create_initial_bind_group(&textures_context.device, &textures_context.settings),
+        ));
+
+        materials.push(bind_group.clone());
+
+        let device = textures_context.device.clone();
+        let settings = textures_context.settings.clone();
+
         spawn(async move {
             let (albedo_texture, metallic_roughness_texture, normal_texture, emissive_texture) =
                 futures::future::join4(
-                    OptionFuture::from(albedo_future),
-                    OptionFuture::from(metallic_roughness_future),
-                    OptionFuture::from(normal_future),
-                    OptionFuture::from(emissive_future),
+                    OptionFuture::from(albedo_future).map(|option| option.flatten()),
+                    OptionFuture::from(metallic_roughness_future).map(|option| option.flatten()),
+                    OptionFuture::from(normal_future).map(|option| option.flatten()),
+                    OptionFuture::from(emissive_future).map(|option| option.flatten()),
                 )
                 .await;
 
-            // todo: do something with these
-            let _incoming_textures = crate::assets::materials::Textures {
-                albedo: albedo_texture,
-                metallic_roughness: metallic_roughness_texture,
-                normal: normal_texture,
-                emissive: emissive_texture,
-            };
+            bind_group.store(Arc::new(material_bindings.create_bind_group(
+                &device,
+                &settings,
+                crate::assets::materials::Textures {
+                    albedo: albedo_texture,
+                    metallic_roughness: metallic_roughness_texture,
+                    normal: normal_texture,
+                    emissive: emissive_texture,
+                },
+            )));
 
             Ok(())
         });
     }
 
-    Ok(pending_textures)
+    Ok(materials)
 }
 
 fn start_loading_texture<T: HttpClient>(
@@ -225,4 +252,62 @@ fn start_loading_texture<T: HttpClient>(
     pending_textures.insert(image_index, future.clone());
 
     Ok(future)
+}
+
+fn load_material_settings(
+    material: &goth_gltf::Material<Extensions>,
+) -> shared_structs::MaterialSettings {
+    let unlit = material.extensions.khr_materials_unlit.is_some();
+
+    let pbr = &material.pbr_metallic_roughness;
+
+    let emissive_strength = material
+        .extensions
+        .khr_materials_emissive_strength
+        .map(|emissive_strength| emissive_strength.emissive_strength)
+        .unwrap_or(1.0);
+
+    let texture_transform = pbr
+        .base_color_texture
+        .as_ref()
+        .map(|info| info.extensions)
+        .or_else(|| {
+            pbr.metallic_roughness_texture
+                .as_ref()
+                .map(|info| info.extensions)
+        })
+        .or_else(|| material.normal_texture.as_ref().map(|info| info.extensions))
+        .or_else(|| {
+            material
+                .emissive_texture
+                .as_ref()
+                .map(|info| info.extensions)
+        })
+        .and_then(|extensions| extensions.khr_texture_transform);
+
+    let emissive_factor = Vec3::from(material.emissive_factor) * emissive_strength;
+
+    shared_structs::MaterialSettings {
+        base_color_factor: pbr.base_color_factor.into(),
+        emissive_factor_x: emissive_factor.x,
+        emissive_factor_y: emissive_factor.y,
+        emissive_factor_z: emissive_factor.z,
+        metallic_factor: pbr.metallic_factor,
+        roughness_factor: pbr.roughness_factor,
+        is_unlit: unlit as u32,
+        normal_map_scale: material
+            .normal_texture
+            .as_ref()
+            .map(|info| info.scale)
+            .unwrap_or(1.0),
+        texture_transform_offset: texture_transform
+            .map(|transform| Vec2::from(transform.offset))
+            .unwrap_or(Vec2::ZERO),
+        texture_transform_scale: texture_transform
+            .map(|transform| Vec2::from(transform.scale))
+            .unwrap_or(Vec2::ONE),
+        texture_transform_rotation: texture_transform
+            .map(|transform| transform.rotation)
+            .unwrap_or(0.0),
+    }
 }
