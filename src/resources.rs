@@ -1,52 +1,75 @@
+use bevy_ecs::system::Resource;
 use renderer_core::{
     arc_swap::ArcSwap,
+    assets::textures,
     culling::{BoundingSphereCullingParams, CullingFrustum},
     glam::{Mat4, Quat, Vec3},
-    GpuInstance, LineVertex,
+    ibl, GpuInstance, LineVertex,
 };
 use std::sync::Arc;
 
+#[derive(Resource)]
 pub struct Device(pub Arc<wgpu::Device>);
+#[derive(Resource)]
 pub struct Queue(pub Arc<wgpu::Queue>);
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct WindowChanges {
     pub cursor_grab: Option<bool>,
     pub cursor_visible: Option<bool>,
     pub fullscreen: Option<bool>,
 }
 
+#[derive(Resource)]
 pub struct FrameTime(pub f64);
 
+#[derive(Resource)]
 pub struct NewIblCubemap(pub Option<url::Url>);
+#[derive(Resource)]
 pub struct LutUrl(pub url::Url);
 
+#[derive(Resource)]
 pub struct EventQueue(pub Vec<winit::event::Event<'static, ()>>);
 
+#[derive(Resource)]
 pub struct Pipelines(pub Arc<renderer_core::Pipelines>);
+#[derive(Resource)]
 pub struct BindGroupLayouts(pub Arc<renderer_core::BindGroupLayouts>);
 
+#[derive(Resource)]
 pub(crate) struct UniformBuffer(pub(crate) Arc<wgpu::Buffer>);
+#[derive(Resource)]
 pub(crate) struct MainBindGroup(pub(crate) Arc<ArcSwap<wgpu::BindGroup>>);
+#[derive(Resource)]
 pub(crate) struct SkyboxUniformBuffer(pub(crate) wgpu::Buffer);
+#[derive(Resource)]
 pub(crate) struct SkyboxUniformBindGroup(pub(crate) wgpu::BindGroup);
 
+#[derive(Resource)]
 pub struct IndexBuffer(pub Arc<renderer_core::IndexBuffer>);
+#[derive(Resource)]
 pub struct VertexBuffers(pub Arc<renderer_core::VertexBuffers>);
+#[derive(Resource)]
 pub struct AnimatedVertexBuffers(pub Arc<renderer_core::AnimatedVertexBuffers>);
+#[derive(Resource)]
 pub(crate) struct InstanceBuffer(pub(crate) renderer_core::VecGpuBuffer<GpuInstance>);
 
+#[derive(Resource)]
 pub(crate) struct LineBuffer {
     pub(crate) staging: Vec<LineVertex>,
     pub(crate) buffer: renderer_core::VecGpuBuffer<LineVertex>,
 }
 
+#[derive(Resource)]
 pub(crate) struct IntermediateDepthFramebuffer(pub(crate) CachedFramebuffer);
+#[derive(Resource)]
 pub(crate) struct IntermediateColorFramebuffer(pub(crate) CachedFramebuffer);
+#[derive(Resource)]
 pub(crate) struct CompositeBindGroup(pub(crate) Option<wgpu::BindGroup>);
+#[derive(Resource)]
 pub(crate) struct ClampSampler(pub(crate) Arc<wgpu::Sampler>);
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub(crate) struct CachedFramebuffer {
     inner: Option<ResourceWithSize<renderer_core::Texture>>,
 }
@@ -86,17 +109,20 @@ impl CachedFramebuffer {
 }
 
 // A resource that's stored alongside a wgpu extent for cache invalidation purposes.
+#[derive(Resource)]
 struct ResourceWithSize<T> {
     resource: T,
     size: wgpu::Extent3d,
 }
 
+#[derive(Resource)]
 pub(crate) struct SurfaceFrameView {
     pub(crate) view: wgpu::TextureView,
     pub(crate) width: u32,
     pub(crate) height: u32,
 }
 
+#[derive(Resource)]
 pub struct Camera {
     pub position: Vec3,
     pub rotation: Quat,
@@ -125,7 +151,7 @@ impl Default for Camera {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct CullingParams {
     pub bounding_sphere_params: BoundingSphereParams,
     pub frustum: Option<CullingFrustum>,
@@ -144,3 +170,15 @@ impl Default for BoundingSphereParams {
         Self::SingleView(Default::default())
     }
 }
+
+#[derive(Resource)]
+pub struct TextureSettings(pub textures::Settings);
+
+#[derive(Resource)]
+pub struct PipelineOptions(pub renderer_core::PipelineOptions);
+
+#[derive(Resource)]
+pub struct HttpClient<T: renderer_core::assets::HttpClient>(pub T);
+
+#[derive(Resource)]
+pub struct IblResources(pub Arc<ibl::IblResources>);

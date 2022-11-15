@@ -21,14 +21,14 @@ pub use wgpu;
 pub use winit;
 
 pub use renderer_core::{
-    assets::{textures, HttpClient},
+    assets::{self, textures},
     culling::CullingFrustum,
     glam::Vec3,
 };
 
 use resources::{
-    Camera, CullingParams, Device, EventQueue, LutUrl, NewIblCubemap, Queue, SurfaceFrameView,
-    WindowChanges,
+    Camera, CullingParams, Device, EventQueue, HttpClient, LutUrl, NewIblCubemap, PipelineOptions,
+    Queue, SurfaceFrameView, TextureSettings, WindowChanges,
 };
 
 #[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
@@ -46,12 +46,12 @@ pub enum Stage {
     Rendering,
 }
 
-pub struct XrPlugin<T: HttpClient = SimpleHttpClient> {
+pub struct XrPlugin<T: assets::HttpClient = SimpleHttpClient> {
     pub mode: Mode,
     pub http_client: T,
 }
 
-impl<T: HttpClient + Default> XrPlugin<T> {
+impl<T: assets::HttpClient + Default> XrPlugin<T> {
     pub fn new(mode: Mode) -> Self {
         Self {
             mode,
@@ -60,16 +60,16 @@ impl<T: HttpClient + Default> XrPlugin<T> {
     }
 }
 
-impl<T: HttpClient> Plugin for XrPlugin<T> {
+impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
     fn build(&self, app: &mut App) {
         app.insert_resource(Camera::default());
         app.insert_resource(EventQueue(Default::default()));
-        app.insert_resource(textures::Settings {
+        app.insert_resource(TextureSettings(textures::Settings {
             anisotropy_clamp: Some(std::num::NonZeroU8::new(16).unwrap()),
-        });
+        }));
         app.insert_resource(NewIblCubemap(None));
         app.insert_resource(WindowChanges::default());
-        app.insert_resource(self.http_client.clone());
+        app.insert_resource(HttpClient(self.http_client.clone()));
         app.insert_resource(LutUrl(
             url::Url::parse("http://localhost:8000/assets/lut_ggx.png").unwrap(),
         ));
@@ -391,7 +391,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
 
     app.insert_resource(Device(device.clone()))
         .insert_resource(Queue(Arc::new(initialised_state.queue)))
-        .insert_resource(initialised_state.pipeline_options);
+        .insert_resource(PipelineOptions(initialised_state.pipeline_options));
 
     match initialised_state.mode_specific {
         #[cfg(feature = "webgl")]
