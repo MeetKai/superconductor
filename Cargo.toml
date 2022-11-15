@@ -63,15 +63,9 @@ wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "d1a9ad7801022d2b73
 
 [profile.dev]
 debug = true
-
-[profile.dev.package.image]
+[profile.dev.package."*"]
 opt-level = 3
-
-[profile.dev.package.png]
+[profile.dev.package.renderer-core]
 opt-level = 3
-
-[profile.dev.package.adler]
-opt-level = 3
-
-[profile.dev.package.miniz_oxide]
+[profile.dev.package.superconductor]
 opt-level = 3
