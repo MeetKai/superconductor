@@ -199,7 +199,7 @@ pub(crate) fn push_joints(
 pub(crate) fn push_entity_instances(
     camera: Res<Camera>,
     culling_params: Res<CullingParams>,
-    surface_frame_view: Res<SurfaceFrameView>,
+    surface_frame_view: Option<Res<SurfaceFrameView>>,
     mut instance_query: Query<(&InstanceOf, &Instance, Option<&JointsOffset>)>,
     mut model_query: Query<(&mut Instances, Option<&Model>, Option<&AnimatedModel>)>,
 ) {
@@ -222,8 +222,10 @@ pub(crate) fn push_entity_instances(
                                 primitive.bounding_sphere.radius * primitive_transform.scale;
                             let visible_radius = bounding_sphere_radius / distance_to_camera;
                             let mesh_area = visible_radius * visible_radius * std::f32::consts::PI;
+                            // There isn't a way to get the window dimensions in WebXR mode so we just use default values.
+                            let (width, height) = surface_frame_view.as_ref().map(|view| (view.width, view.height)).unwrap_or((1024, 1024));
                             let aspect_ratio =
-                                surface_frame_view.width as f32 / surface_frame_view.height as f32;
+                                width as f32 / height as f32;
 
                             let screen_area = {
                                 let y = (59.0_f32.to_radians() / 2.0).tan();
@@ -706,6 +708,7 @@ struct ViewData {
 
 #[cfg(feature = "webgl")]
 pub(crate) fn update_webxr_uniform_buffers(
+    mut camera: ResMut<Camera>,
     pose: bevy_ecs::prelude::NonSend<web_sys::XrViewerPose>,
     pipeline_options: Res<PipelineOptions>,
     queue: Res<Queue>,
@@ -746,6 +749,9 @@ pub(crate) fn update_webxr_uniform_buffers(
     } else {
         (Default::default(), false)
     };
+
+    // Update the camera position for code that uses that (like lod selection).
+    camera.position = (left_view_data.instance.translation + right_view_data.instance.translation) / 2.0;
 
     let mut settings = Settings::INLINE_SRGB;
 
