@@ -23,7 +23,7 @@ gltf-helpers = { path = "../gltf-helpers" }
 base64 = "0.13.1"
 range-alloc = { git = "https://github.com/expenses/gfx", rev = "6afbeb6d9733e295404f4fe0ac936591e277a26e" }
 parking_lot = "0.12.1"
-image = { version = "0.24.4", default-features = false, features = ["jpeg", "png"] }
+image = { version = "0.24.5", default-features = false, features = ["jpeg", "png"] }
 arc-swap = "1.5.1"
 basis-universal = { git = "https://github.com/expenses/basis-universal-rs", rev = "d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610" }
 async-std = "1.12.0"

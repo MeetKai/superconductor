@@ -58,8 +58,8 @@ members = [
 ]
 
 [patch.crates-io]
-wgpu = { git = "https://github.com/expenses/wgpu", rev = "9f6d6d88d1bdfaa3300ece267f489164090f3d11" }
-wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "9f6d6d88d1bdfaa3300ece267f489164090f3d11" }
+wgpu = { git = "https://github.com/expenses/wgpu", rev = "d1a9ad7801022d2b733746e9d13152ce2705519b" }
+wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "d1a9ad7801022d2b733746e9d13152ce2705519b" }
 
 [profile.dev]
 debug = true

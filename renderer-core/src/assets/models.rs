@@ -152,6 +152,7 @@ fn collect_primitives<
             bounding_box: staging_primitive.bounding_box,
             bounding_sphere: staging_primitive.bounding_sphere,
             transform: staging_primitive.transform,
+            screen_coverages: staging_primitive.screen_coverages.clone(),
             lods: staging_primitive
                 .lods
                 .iter()
@@ -363,7 +364,7 @@ impl Model {
 
             let mesh = &gltf.meshes[mesh_index];
 
-            let meshes = std::iter::once(mesh).chain(
+            let mesh_lods = std::iter::once(mesh).chain(
                 node.extensions
                     .msft_lod
                     .iter()
@@ -373,27 +374,16 @@ impl Model {
                     .filter_map(|mesh_index| gltf.meshes.get(mesh_index)),
             );
 
-            let mut screen_coverage = Vec::new();
-
-            if let Some(msft_screencoverage) = &node.extras.msft_screencoverage {
-                let mut prev = 1.0;
-
-                for &value in msft_screencoverage {
-                    screen_coverage.push(prev..value);
-                    prev = value;
-                }
-            }
-
             let num_primitives = mesh.primitives.len();
 
-            for mesh in meshes.clone() {
-                assert_eq!(mesh.primitives.len(), num_primitives);
+            for mesh_lod in mesh_lods.clone() {
+                assert_eq!(mesh_lod.primitives.len(), num_primitives);
             }
 
             for primitive_index in 0..num_primitives {
                 let mut lods = Vec::new();
 
-                for (mesh_index, mesh) in meshes.clone().enumerate() {
+                for mesh in mesh_lods.clone() {
                     let primitive = &mesh.primitives[primitive_index];
 
                     let material_index = primitive.material.unwrap_or(0);
@@ -407,7 +397,6 @@ impl Model {
                         buffers,
                         material_settings: load_material_settings(material, &reader),
                         material_index,
-                        screen_coverage: screen_coverage[mesh_index].clone(),
                     });
                 }
 
@@ -436,6 +425,7 @@ impl Model {
                     bounding_sphere: BoundingSphere::new(&lods[0].buffers.positions),
                     lods,
                     transform,
+                    screen_coverages: node.extras.msft_screencoverage.clone().unwrap_or_default(),
                 });
             }
         }
@@ -590,9 +580,9 @@ impl AnimatedModel {
                         },
                         material_settings: load_material_settings(material, &reader),
                         material_index,
-                        screen_coverage: 1.0..0.0,
                     }],
                     transform: Similarity::IDENTITY,
+                    screen_coverages: Vec::new(),
                 });
             }
         }
@@ -738,13 +728,13 @@ struct StagingPrimitive<T> {
     bounding_box: BoundingBox,
     bounding_sphere: BoundingSphere,
     transform: Similarity,
+    screen_coverages: Vec<f32>,
 }
 
 struct StagingPrimitiveLod<T> {
     buffers: T,
     material_settings: shared_structs::MaterialSettings,
     material_index: usize,
-    screen_coverage: Range<f32>,
 }
 
 pub struct Primitive {
@@ -752,6 +742,7 @@ pub struct Primitive {
     pub bounding_box: BoundingBox,
     pub bounding_sphere: BoundingSphere,
     pub transform: Similarity,
+    pub screen_coverages: Vec<f32>,
 }
 
 pub struct PrimitiveLod {

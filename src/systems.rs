@@ -213,33 +213,36 @@ pub(crate) fn push_entity_instances(
                     for (primitive_id, primitive) in model.0.primitives.iter().enumerate() {
                         let primitive_transform = instance.0 * primitive.transform;
 
-                        let distance_to_camera =
-                            primitive_transform.translation.distance(camera.position);
-                        let bounding_sphere_radius =
-                            primitive.bounding_sphere.radius * primitive_transform.scale;
-                        let visible_radius = bounding_sphere_radius / distance_to_camera;
-                        let mesh_area = visible_radius * visible_radius * std::f32::consts::PI;
-                        let aspect_ratio =
-                            surface_frame_view.width as f32 / surface_frame_view.height as f32;
-
                         // calculate the size of the min z frustum rectangle or something (I have removed min_z from both sides of the equation).
                         // https://github.com/BabylonJS/Babylon.js/blob/d25bc29091d47f51bd2f0f98fb0f16d25517675f/packages/dev/core/src/Cameras/camera.ts#L149-L150
                         // todo: research more.
+                        let screen_coverage = {
+                            let distance_to_camera =
+                                primitive_transform.translation.distance(camera.position);
+                            let bounding_sphere_radius =
+                                primitive.bounding_sphere.radius * primitive_transform.scale;
+                            let visible_radius = bounding_sphere_radius / distance_to_camera;
+                            let mesh_area = visible_radius * visible_radius * std::f32::consts::PI;
+                            let aspect_ratio =
+                                surface_frame_view.width as f32 / surface_frame_view.height as f32;
 
-                        let screen_area = {
-                            let y = (59.0_f32.to_radians() / 2.0).tan();
-                            let x = y * aspect_ratio;
-                            x * y
+                            let screen_area = {
+                                let y = (59.0_f32.to_radians() / 2.0).tan();
+                                let x = y * aspect_ratio;
+                                x * y
+                            };
+
+                            mesh_area / screen_area
                         };
 
-                        let screen_coverage = mesh_area / screen_area;
-
-                        let lod = if screen_coverage > 0.7 {
-                            0
-                        } else if screen_coverage > 0.3 {
-                            1
-                        } else {
-                            2
+                        // Chose the lod that the screen coverage fits into.
+                        let lod = match primitive.screen_coverages.binary_search_by(|value| {
+                            screen_coverage
+                                .partial_cmp(value)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        }) {
+                            Ok(exact) => exact,
+                            Err(closest) => closest,
                         };
 
                         let mut passed_culling_check = match culling_params.bounding_sphere_params {
