@@ -1,6 +1,7 @@
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
+use bevy_ecs::system::Resource;
 use superconductor::{
     bevy_app, bevy_ecs, components, renderer_core,
     resources::{Camera, EventQueue, LutUrl, NewIblCubemap, WindowChanges},
@@ -67,7 +68,7 @@ impl Plugin for SuperconductorPlugin {
 
         let model = app
             .world
-            .spawn()
+            .spawn_empty()
             .insert(components::ModelUrl(
                 url::Url::options()
                     .base_url(Some(&href))
@@ -82,7 +83,7 @@ impl Plugin for SuperconductorPlugin {
             for z in 0..10 {
                 for y in 0..10 {
                     app.world
-                        .spawn()
+                        .spawn_empty()
                         .insert(components::InstanceOf(model))
                         .insert(components::Instance(renderer_core::Instance::new(
                             Vec3::new(x as f32, y as f32, z as f32) * 2.5,
@@ -100,7 +101,7 @@ impl Plugin for SuperconductorPlugin {
             .build();
 
         app.insert_resource(KeyboardState::default());
-        app.insert_resource(camera_rig);
+        app.insert_resource(CameraRig(camera_rig));
 
         app.add_system(rotate_entities);
         app.add_system(handle_keyboard_input);
@@ -221,7 +222,7 @@ struct Spinning;
 #[derive(Component)]
 struct VrmInstance;
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 struct KeyboardState {
     forwards: bool,
     right: bool,
@@ -240,7 +241,7 @@ fn rotate_entities(mut query: Query<&mut components::Instance, With<Spinning>>) 
 fn handle_keyboard_input(
     mut events: ResMut<EventQueue>,
     mut keyboard_state: ResMut<KeyboardState>,
-    mut camera_rig: ResMut<dolly::rig::CameraRig>,
+    mut camera_rig: ResMut<CameraRig>,
     mut window_changes: ResMut<WindowChanges>,
     mut fullscreen: Local<bool>,
 ) {
@@ -291,6 +292,7 @@ fn handle_keyboard_input(
                 } => {
                     if keyboard_state.cursor_grab {
                         camera_rig
+                            .0
                             .driver_mut::<dolly::drivers::YawPitch>()
                             .rotate_yaw_pitch(-0.1 * delta_x as f32, -0.1 * delta_y as f32);
                     }
@@ -305,23 +307,27 @@ fn handle_keyboard_input(
 fn update_camera(
     keyboard_state: Res<KeyboardState>,
     mut camera: ResMut<Camera>,
-    mut camera_rig: ResMut<dolly::rig::CameraRig>,
+    mut camera_rig: ResMut<CameraRig>,
 ) {
     let forwards = keyboard_state.forwards as i32 - keyboard_state.backwards as i32;
     let right = keyboard_state.right as i32 - keyboard_state.left as i32;
 
-    let move_vec = camera_rig.final_transform.rotation
+    let move_vec = camera_rig.0.final_transform.rotation
         * Vec3::new(right as f32, 0.0, -forwards as f32).clamp_length_max(1.0);
 
     let delta_time = 1.0 / 60.0;
     let speed = 3.0;
 
     camera_rig
+        .0
         .driver_mut::<dolly::drivers::Position>()
         .translate(move_vec * delta_time * speed);
 
-    camera_rig.update(delta_time);
+    camera_rig.0.update(delta_time);
 
-    camera.position = camera_rig.final_transform.position;
-    camera.rotation = camera_rig.final_transform.rotation;
+    camera.position = camera_rig.0.final_transform.position;
+    camera.rotation = camera_rig.0.final_transform.rotation;
 }
+
+#[derive(Resource)]
+pub struct CameraRig(dolly::rig::CameraRig);

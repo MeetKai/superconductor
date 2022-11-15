@@ -5,19 +5,18 @@ use crate::components::{
 };
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, BoundingSphereParams, Camera, ClampSampler,
-    CompositeBindGroup, CullingParams, Device, IndexBuffer, InstanceBuffer,
-    IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LineBuffer, LutUrl, MainBindGroup,
-    NewIblCubemap, Pipelines, Queue, SkyboxUniformBindGroup, SkyboxUniformBuffer, SurfaceFrameView,
-    UniformBuffer, VertexBuffers,
+    CompositeBindGroup, CullingParams, Device, HttpClient, IblResources, IndexBuffer,
+    InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LineBuffer, LutUrl,
+    MainBindGroup, NewIblCubemap, PipelineOptions, Pipelines, Queue, SkyboxUniformBindGroup,
+    SkyboxUniformBuffer, SurfaceFrameView, TextureSettings, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
     arc_swap::{ArcSwap, ArcSwapOption},
-    assets::{textures, HttpClient},
-    bytemuck, create_main_bind_group,
+    assets, bytemuck, create_main_bind_group,
     culling::{BoundingSphereCullingParams, CullingFrustum},
     glam::Mat4,
-    ibl::IblResources,
+    ibl,
     shared_structs::{self, Settings},
     spawn, GpuInstance, Texture,
 };
@@ -29,14 +28,14 @@ pub(crate) mod rendering;
 // todo: probably merge all the setup systems or move them into the main code.
 pub(crate) fn create_bind_group_layouts_and_pipelines(
     device: Res<Device>,
-    pipeline_options: Res<renderer_core::PipelineOptions>,
+    pipeline_options: Res<PipelineOptions>,
     mut commands: Commands,
 ) {
     let device = &device.0;
 
-    let bind_group_layouts = renderer_core::BindGroupLayouts::new(device, &pipeline_options);
+    let bind_group_layouts = renderer_core::BindGroupLayouts::new(device, &pipeline_options.0);
 
-    let pipelines = renderer_core::Pipelines::new(device, &bind_group_layouts, &pipeline_options);
+    let pipelines = renderer_core::Pipelines::new(device, &bind_group_layouts, &pipeline_options.0);
 
     commands.insert_resource(BindGroupLayouts(Arc::new(bind_group_layouts)));
     commands.insert_resource(Pipelines(Arc::new(pipelines)));
@@ -366,13 +365,13 @@ pub(crate) fn upload_lines(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn allocate_bind_groups<T: HttpClient>(
+pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
-    texture_settings: Res<textures::Settings>,
-    http_client: Res<T>,
+    texture_settings: Res<TextureSettings>,
+    http_client: Res<HttpClient<T>>,
     lut_url: Res<LutUrl>,
     mut commands: Commands,
 ) {
@@ -382,7 +381,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     let bind_group_layouts = &bind_group_layouts.0;
 
     // todo: this is very messy.
-    let ibl_resources = Arc::new(IblResources {
+    let ibl_resources = Arc::new(ibl::IblResources {
         lut: ArcSwap::from(Arc::new(Texture::new(device.create_texture(
             &wgpu::TextureDescriptor {
                 label: Some("dummy ibl lut"),
@@ -433,7 +432,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
         address_mode_v: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
-        anisotropy_clamp: texture_settings.anisotropy_clamp,
+        anisotropy_clamp: texture_settings.0.anisotropy_clamp,
         ..Default::default()
     }));
 
@@ -464,7 +463,7 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     commands.insert_resource(UniformBuffer(uniform_buffer.clone()));
     commands.insert_resource(MainBindGroup(main_bind_group.clone()));
     commands.insert_resource(ClampSampler(clamp_sampler.clone()));
-    commands.insert_resource(ibl_resources.clone());
+    commands.insert_resource(IblResources(ibl_resources.clone()));
 
     commands.insert_resource(SkyboxUniformBuffer(skybox_uniform_buffer));
     commands.insert_resource(SkyboxUniformBindGroup(skybox_uniform_bind_group));
@@ -472,10 +471,10 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
         queue: queue.clone(),
-        http_client: http_client.clone(),
+        http_client: http_client.0.clone(),
         bind_group_layouts: bind_group_layouts.clone(),
         pipelines: pipelines.clone(),
-        settings: texture_settings.clone(),
+        settings: texture_settings.0.clone(),
     };
 
     let lut_url = lut_url.0.clone();
@@ -548,18 +547,18 @@ pub(crate) fn allocate_bind_groups<T: HttpClient>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn update_ibl_resources<T: HttpClient>(
+pub(crate) fn update_ibl_resources<T: assets::HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
     pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
-    texture_settings: Res<textures::Settings>,
+    texture_settings: Res<TextureSettings>,
     mut new_ibl_cubemap: ResMut<NewIblCubemap>,
-    ibl_resources: Res<Arc<IblResources>>,
+    ibl_resources: Res<IblResources>,
     clamp_sampler: Res<ClampSampler>,
     main_bind_group: Res<MainBindGroup>,
     uniform_buffer: Res<UniformBuffer>,
-    http_client: Res<T>,
+    http_client: Res<HttpClient<T>>,
 ) {
     let new_ibl_cubemap = match new_ibl_cubemap.0.take() {
         Some(new_ibl_cubemap) => new_ibl_cubemap,
@@ -574,15 +573,15 @@ pub(crate) fn update_ibl_resources<T: HttpClient>(
     let bind_group_layouts = &bind_group_layouts.0;
     let clamp_sampler = clamp_sampler.0.clone();
     let uniform_buffer = uniform_buffer.0.clone();
-    let ibl_resources = ibl_resources.clone();
+    let ibl_resources = ibl_resources.0.clone();
 
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
         queue: queue.clone(),
-        http_client: http_client.clone(),
+        http_client: http_client.0.clone(),
         bind_group_layouts: bind_group_layouts.clone(),
         pipelines: pipelines.clone(),
-        settings: texture_settings.clone(),
+        settings: texture_settings.0.clone(),
     };
 
     let queue = queue.clone();
@@ -622,7 +621,7 @@ pub(crate) fn update_ibl_resources<T: HttpClient>(
 }
 
 pub(crate) fn update_desktop_uniform_buffers(
-    pipeline_options: Res<renderer_core::PipelineOptions>,
+    pipeline_options: Res<PipelineOptions>,
     queue: Res<Queue>,
     uniform_buffer: Res<UniformBuffer>,
     skybox_uniform_buffer: Res<SkyboxUniformBuffer>,
@@ -660,7 +659,7 @@ pub(crate) fn update_desktop_uniform_buffers(
         settings |= Settings::INLINE_SRGB;
     }
 
-    if pipeline_options.inline_tonemapping {
+    if pipeline_options.0.inline_tonemapping {
         settings |= Settings::INLINE_TONEMAPPING;
     }
 
@@ -708,7 +707,7 @@ struct ViewData {
 #[cfg(feature = "webgl")]
 pub(crate) fn update_webxr_uniform_buffers(
     pose: bevy_ecs::prelude::NonSend<web_sys::XrViewerPose>,
-    pipeline_options: Res<renderer_core::PipelineOptions>,
+    pipeline_options: Res<PipelineOptions>,
     queue: Res<Queue>,
     uniform_buffer: Res<UniformBuffer>,
     skybox_uniform_buffer: Res<SkyboxUniformBuffer>,
@@ -750,11 +749,11 @@ pub(crate) fn update_webxr_uniform_buffers(
 
     let mut settings = Settings::INLINE_SRGB;
 
-    if pipeline_options.flip_viewport {
+    if pipeline_options.0.flip_viewport {
         settings |= Settings::FLIP_VIEWPORT;
     }
 
-    if pipeline_options.inline_tonemapping {
+    if pipeline_options.0.inline_tonemapping {
         settings |= Settings::INLINE_TONEMAPPING;
     }
 
@@ -816,7 +815,7 @@ pub(crate) fn update_webxr_uniform_buffers(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn start_loading_models<T: HttpClient>(
+pub(crate) fn start_loading_models<T: assets::HttpClient>(
     static_models: Query<(Entity, &ModelUrl), Added<ModelUrl>>,
     animated_models: Query<(Entity, &AnimatedModelUrl), Added<AnimatedModelUrl>>,
     device: Res<Device>,
@@ -828,8 +827,8 @@ pub(crate) fn start_loading_models<T: HttpClient>(
         Res<VertexBuffers>,
         Res<AnimatedVertexBuffers>,
     ),
-    texture_settings: Res<textures::Settings>,
-    http_client: Res<T>,
+    texture_settings: Res<TextureSettings>,
+    http_client: Res<HttpClient<T>>,
     mut commands: Commands,
 ) {
     let device = &device.0;
@@ -840,7 +839,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
         let vertex_buffers = vertex_buffers.0.clone();
         let animated_vertex_buffers = animated_vertex_buffers.0.clone();
         let index_buffer = index_buffer.0.clone();
-        let texture_settings = texture_settings.clone();
+        let texture_settings = texture_settings.0.clone();
 
         let model_setter = Arc::new(ArcSwapOption::empty());
 
@@ -858,7 +857,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
                 device,
                 queue,
                 bind_group_layouts,
-                http_client: http_client.clone(),
+                http_client: http_client.0.clone(),
                 index_buffer,
                 vertex_buffers,
                 animated_vertex_buffers,
@@ -890,7 +889,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
         let vertex_buffers = vertex_buffers.0.clone();
         let animated_vertex_buffers = animated_vertex_buffers.0.clone();
         let index_buffer = index_buffer.0.clone();
-        let texture_settings = texture_settings.clone();
+        let texture_settings = texture_settings.0.clone();
 
         let model_setter = Arc::new(ArcSwapOption::empty());
 
@@ -908,7 +907,7 @@ pub(crate) fn start_loading_models<T: HttpClient>(
                 device,
                 queue,
                 bind_group_layouts,
-                http_client: http_client.clone(),
+                http_client: http_client.0.clone(),
                 index_buffer,
                 vertex_buffers,
                 animated_vertex_buffers,

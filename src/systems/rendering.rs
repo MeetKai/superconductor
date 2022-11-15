@@ -1,6 +1,6 @@
 use crate::resources::{
     self, AnimatedVertexBuffers, Device, IndexBuffer, InstanceBuffer, LineBuffer, MainBindGroup,
-    Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
+    PipelineOptions, Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
 };
 use renderer_core::{
     arc_swap, assets::models::Ranges, permutations, pipelines::DEPTH_FORMAT, LineVertex,
@@ -53,7 +53,7 @@ pub(crate) fn render_desktop(
     main_bind_group: Res<MainBindGroup>,
     skybox_uniform_bind_group: Res<SkyboxUniformBindGroup>,
     surface_frame_view: Res<SurfaceFrameView>,
-    pipeline_options: Res<renderer_core::PipelineOptions>,
+    pipeline_options: Res<PipelineOptions>,
     mut intermediate_depth_framebuffer: ResMut<resources::IntermediateDepthFramebuffer>,
     (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer, line_buffer): (
         Res<IndexBuffer>,
@@ -158,7 +158,7 @@ pub(crate) fn render_desktop(
         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
             view: &depth_attachment.view,
             depth_ops: Some(wgpu::Operations {
-                load: if pipeline_options.depth_prepass {
+                load: if pipeline_options.0.depth_prepass {
                     wgpu::LoadOp::Load
                 } else {
                     wgpu::LoadOp::Clear(0.0)
@@ -203,7 +203,7 @@ pub(crate) fn render_webxr(
     mut intermediate_color_framebuffer: ResMut<resources::IntermediateColorFramebuffer>,
     mut intermediate_depth_framebuffer: ResMut<resources::IntermediateDepthFramebuffer>,
     mut composite_bind_group: ResMut<resources::CompositeBindGroup>,
-    pipeline_options: Res<renderer_core::PipelineOptions>,
+    pipeline_options: Res<PipelineOptions>,
     clamp_sampler: Res<resources::ClampSampler>,
     (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer, line_buffer): (
         Res<IndexBuffer>,
@@ -249,12 +249,13 @@ pub(crate) fn render_webxr(
     );
 
     let num_views = pipeline_options
+        .0
         .multiview
         .map(|views| views.get())
         .unwrap_or(1);
 
     let (intermediate_color_framebuffer, composite_bind_group) =
-        if pipeline_options.render_direct_to_framebuffer() {
+        if pipeline_options.0.render_direct_to_framebuffer() {
             (None, None)
         } else {
             let intermediate_color_framebuffer = intermediate_color_framebuffer.0.get(
@@ -270,7 +271,7 @@ pub(crate) fn render_webxr(
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
                     // Always true at the moment.
-                    format: if pipeline_options.inline_tonemapping {
+                    format: if pipeline_options.0.inline_tonemapping {
                         wgpu::TextureFormat::Rgba8Unorm
                     } else {
                         wgpu::TextureFormat::Rgba16Float
@@ -308,7 +309,7 @@ pub(crate) fn render_webxr(
             )
         };
 
-    let depth_attachment = if pipeline_options.render_direct_to_framebuffer() {
+    let depth_attachment = if pipeline_options.0.render_direct_to_framebuffer() {
         BorrowedOrOwned::Owned(create_view_from_device_framebuffer(
             device,
             framebuffer,
