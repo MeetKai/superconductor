@@ -209,6 +209,8 @@ pub(crate) fn push_entity_instances(
         match model_query.get_mut(instance_of.0) {
             Ok((mut instances, model, animated_model)) => {
                 if let Some(model) = model {
+                    instances.reserve_space(&model.0.primitives);
+
                     for (primitive_id, primitive) in model.0.primitives.iter().enumerate() {
                         let primitive_transform = instance.0 * primitive.transform;
 
@@ -223,9 +225,11 @@ pub(crate) fn push_entity_instances(
                             let visible_radius = bounding_sphere_radius / distance_to_camera;
                             let mesh_area = visible_radius * visible_radius * std::f32::consts::PI;
                             // There isn't a way to get the window dimensions in WebXR mode so we just use default values.
-                            let (width, height) = surface_frame_view.as_ref().map(|view| (view.width, view.height)).unwrap_or((1024, 1024));
-                            let aspect_ratio =
-                                width as f32 / height as f32;
+                            let (width, height) = surface_frame_view
+                                .as_ref()
+                                .map(|view| (view.width, view.height))
+                                .unwrap_or((1024, 1024));
+                            let aspect_ratio = width as f32 / height as f32;
 
                             let screen_area = {
                                 let y = (59.0_f32.to_radians() / 2.0).tan();
@@ -292,6 +296,8 @@ pub(crate) fn push_entity_instances(
                         );
                     }
                 } else if let Some(animated_model) = animated_model {
+                    instances.reserve_space(&animated_model.0.primitives);
+
                     for (primitive_id, primitive) in animated_model.0.primitives.iter().enumerate()
                     {
                         let primitive_transform = instance.0 * primitive.transform;
@@ -333,14 +339,14 @@ pub(crate) fn upload_instances(
 
         for primitives in instances.primitives.iter() {
             for (lod_index, lod) in primitives.lods.iter().enumerate() {
-                instance_ranges.extend(
+                instance_ranges.push(
                     lod_index,
-                    std::iter::once(instance_buffer.0.push(
+                    instance_buffer.0.push(
                         &lod.instances,
                         &device.0,
                         &queue.0,
                         &mut command_encoder,
-                    )),
+                    ),
                 );
             }
         }
@@ -751,7 +757,8 @@ pub(crate) fn update_webxr_uniform_buffers(
     };
 
     // Update the camera position for code that uses that (like lod selection).
-    camera.position = (left_view_data.instance.translation + right_view_data.instance.translation) / 2.0;
+    camera.position =
+        (left_view_data.instance.translation + right_view_data.instance.translation) / 2.0;
 
     let mut settings = Settings::INLINE_SRGB;
 

@@ -58,7 +58,7 @@ impl Plugin for SuperconductorPlugin {
         let href = "http://localhost:8000";
         let href = url::Url::parse(&href).unwrap();
 
-        let mut model_url = std::borrow::Cow::Borrowed("/assets/models/lod.glb");
+        let mut model_url = std::borrow::Cow::Borrowed("/assets/models/zen-garden.glb");
 
         for (key, value) in href.query_pairs() {
             if key == "model" {
@@ -79,20 +79,14 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::InstanceRanges::default())
             .id();
 
-        for x in 0..10 {
-            for z in 0..10 {
-                for y in 0..10 {
-                    app.world
-                        .spawn_empty()
-                        .insert(components::InstanceOf(model))
-                        .insert(components::Instance(renderer_core::Instance::new(
-                            Vec3::new(x as f32, y as f32, z as f32) * 2.5,
-                            1.0,
-                            Default::default(),
-                        )));
-                }
-            }
-        }
+        app.world
+            .spawn_empty()
+            .insert(components::InstanceOf(model))
+            .insert(components::Instance(renderer_core::Instance::new(
+                Vec3::ZERO,
+                1.0,
+                Default::default(),
+            )));
 
         let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()
             .with(dolly::drivers::Position::new(Vec3::new(0.0, 1.75, 0.0)))

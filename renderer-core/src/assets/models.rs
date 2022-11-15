@@ -312,6 +312,7 @@ async fn collect_buffer_view_map<T: HttpClient>(
     Ok(Arc::new(buffer_view_map))
 }
 
+#[derive(Debug)]
 pub struct Model {
     pub primitives: Vec<Primitive>,
     pub primitive_ranges: PrimitiveRanges,
@@ -737,6 +738,7 @@ struct StagingPrimitiveLod<T> {
     material_index: usize,
 }
 
+#[derive(Debug)]
 pub struct Primitive {
     pub lods: Vec<PrimitiveLod>,
     pub bounding_box: BoundingBox,
@@ -745,6 +747,7 @@ pub struct Primitive {
     pub screen_coverages: Vec<f32>,
 }
 
+#[derive(Debug)]
 pub struct PrimitiveLod {
     pub index_buffer_range: Range<u32>,
     pub bind_group: Arc<ArcSwap<wgpu::BindGroup>>,

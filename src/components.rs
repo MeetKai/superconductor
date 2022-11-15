@@ -34,6 +34,7 @@ mod instances {
         pub lods: Vec<Lod>,
     }
 
+    #[derive(Clone, Default)]
     pub struct Lod {
         pub instances: Vec<renderer_core::GpuInstance>,
     }
@@ -45,6 +46,14 @@ impl Instances {
             for lod in &mut primitives.lods {
                 lod.instances.clear();
             }
+        }
+    }
+
+    pub fn reserve_space(&mut self, model_primitives: &[models::Primitive]) {
+        for primitive_index in self.primitives.len()..model_primitives.len() {
+            self.primitives.push(instances::Primitive {
+                lods: vec![instances::Lod::default(); model_primitives[primitive_index].lods.len()],
+            });
         }
     }
 
@@ -71,7 +80,7 @@ impl Instances {
     }
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Debug)]
 pub struct InstanceRanges {
     pub lods: Vec<instance_ranges::Lod>,
 }
@@ -79,6 +88,7 @@ pub struct InstanceRanges {
 mod instance_ranges {
     use super::*;
 
+    #[derive(Debug)]
     pub struct Lod {
         pub ranges: Vec<Range<u32>>,
     }
@@ -91,11 +101,11 @@ impl InstanceRanges {
         }
     }
 
-    pub fn extend(&mut self, lod: usize, ranges: impl Iterator<Item = Range<u32>>) {
+    pub fn push(&mut self, lod: usize, range: Range<u32>) {
         while lod >= self.lods.len() {
             self.lods.push(instance_ranges::Lod { ranges: Vec::new() });
         }
-        self.lods[lod].ranges.extend(ranges);
+        self.lods[lod].ranges.push(range);
     }
 }
 
