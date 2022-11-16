@@ -1,10 +1,9 @@
 use bevy_ecs::system::Resource;
 use renderer_core::{
-    arc_swap::ArcSwap,
     assets::textures,
     culling::{BoundingSphereCullingParams, CullingFrustum},
     glam::{Mat4, Quat, Vec3},
-    ibl, GpuInstance, LineVertex,
+    GpuInstance, LineVertex, MutableBindGroup,
 };
 use std::sync::Arc;
 
@@ -39,11 +38,7 @@ pub struct BindGroupLayouts(pub Arc<renderer_core::BindGroupLayouts>);
 #[derive(Resource)]
 pub(crate) struct UniformBuffer(pub(crate) Arc<wgpu::Buffer>);
 #[derive(Resource)]
-pub(crate) struct MainBindGroup(pub(crate) Arc<ArcSwap<wgpu::BindGroup>>);
-#[derive(Resource)]
-pub(crate) struct SkyboxUniformBuffer(pub(crate) wgpu::Buffer);
-#[derive(Resource)]
-pub(crate) struct SkyboxUniformBindGroup(pub(crate) wgpu::BindGroup);
+pub(crate) struct MainBindGroup(pub(crate) Arc<MutableBindGroup>);
 
 #[derive(Resource)]
 pub struct IndexBuffer(pub Arc<renderer_core::IndexBuffer>);
@@ -66,8 +61,6 @@ pub(crate) struct IntermediateDepthFramebuffer(pub(crate) CachedFramebuffer);
 pub(crate) struct IntermediateColorFramebuffer(pub(crate) CachedFramebuffer);
 #[derive(Resource)]
 pub(crate) struct CompositeBindGroup(pub(crate) Option<wgpu::BindGroup>);
-#[derive(Resource)]
-pub(crate) struct ClampSampler(pub(crate) Arc<wgpu::Sampler>);
 
 #[derive(Default, Resource)]
 pub(crate) struct CachedFramebuffer {
@@ -179,6 +172,3 @@ pub struct PipelineOptions(pub renderer_core::PipelineOptions);
 
 #[derive(Resource)]
 pub struct HttpClient<T: renderer_core::assets::HttpClient>(pub T);
-
-#[derive(Resource)]
-pub struct IblResources(pub Arc<ibl::IblResources>);

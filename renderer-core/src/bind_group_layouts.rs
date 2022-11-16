@@ -1,10 +1,7 @@
 pub struct BindGroupLayouts {
     pub uniform: wgpu::BindGroupLayout,
     pub model: wgpu::BindGroupLayout,
-    pub mirror_uniform: wgpu::BindGroupLayout,
     pub tonemap: wgpu::BindGroupLayout,
-    pub ui_texture: wgpu::BindGroupLayout,
-    pub skybox: wgpu::BindGroupLayout,
     pub uint_texture: wgpu::BindGroupLayout,
     pub sampled_texture: wgpu::BindGroupLayout,
     pub joints: wgpu::BindGroupLayout,
@@ -85,10 +82,6 @@ impl BindGroupLayouts {
                     uniform_entry(4, wgpu::ShaderStages::FRAGMENT),
                 ],
             }),
-            mirror_uniform: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("mirror bind group layout"),
-                entries: &[uniform_entry(0, wgpu::ShaderStages::VERTEX)],
-            }),
             model: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("model bind group layout"),
                 entries: &[
@@ -110,14 +103,6 @@ impl BindGroupLayouts {
                         texture_array_entry(1)
                     },
                 ],
-            }),
-            ui_texture: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("ui texture bind group layout"),
-                entries: &[texture_entry(0)],
-            }),
-            skybox: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("skybox bind group layout"),
-                entries: &[uniform_entry(0, wgpu::ShaderStages::VERTEX)],
             }),
             uint_texture: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("uint texture bind group layout"),

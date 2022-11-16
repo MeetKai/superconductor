@@ -1,9 +1,9 @@
 mod bind_group_layouts;
 mod buffers;
 pub mod culling;
+pub mod mutable_bind_group;
 
 pub mod assets;
-pub mod ibl;
 pub mod instance;
 pub mod permutations;
 pub mod pipelines;
@@ -13,6 +13,7 @@ pub use arc_swap;
 pub use bytemuck;
 pub use glam;
 pub use gltf_helpers;
+pub use mutable_bind_group::MutableBindGroup;
 pub use shared_structs;
 
 pub use bind_group_layouts::BindGroupLayouts;
@@ -205,6 +206,7 @@ pub fn create_view_from_device_framebuffer(
     })
 }
 
+#[derive(Debug)]
 pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
@@ -227,41 +229,6 @@ impl Texture {
             texture,
         }
     }
-}
-
-pub fn create_main_bind_group(
-    device: &wgpu::Device,
-    ibl_resources: &ibl::IblResources,
-    uniform_buffer: &wgpu::Buffer,
-    clamp_sampler: &wgpu::Sampler,
-    bind_group_layouts: &BindGroupLayouts,
-) -> wgpu::BindGroup {
-    device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("main bind group"),
-        layout: &bind_group_layouts.uniform,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(clamp_sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::TextureView(&ibl_resources.lut.load().view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::TextureView(&ibl_resources.cubemap.load().view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: ibl_resources.sphere_harmonics.as_entire_binding(),
-            },
-        ],
-    })
 }
 
 #[cfg(feature = "wasm")]

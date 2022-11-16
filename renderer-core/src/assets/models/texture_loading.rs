@@ -6,19 +6,18 @@ pub type PendingTexture =
 pub type PendingTexture =
     future::Shared<std::pin::Pin<Box<dyn Future<Output = Option<Arc<Texture>>> + Send + 'static>>>;
 
-use crate::assets::materials::MaterialBindings;
 use crate::assets::textures::{self, load_image_with_mime_type, ImageSource};
 use crate::assets::HttpClient;
 use crate::{spawn, Texture};
-use arc_swap::ArcSwap;
 use futures::future::{self, FutureExt, OptionFuture};
 use glam::{Vec2, Vec3};
 use gltf_helpers::Extensions;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
+use wgpu::util::DeviceExt;
 
-pub type MaterialBindGroup = Arc<ArcSwap<wgpu::BindGroup>>;
+pub type MaterialBindGroup = Arc<crate::MutableBindGroup>;
 
 pub fn image_index_from_texture_index(
     texture_index: usize,
@@ -45,6 +44,31 @@ pub fn image_index_from_texture_index(
         Some(source) => Ok(source),
         None => Err(anyhow::anyhow!("Texture {} has no source", texture_index)),
     }
+}
+
+fn load_single_pixel_image(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    format: wgpu::TextureFormat,
+    bytes: &[u8; 4],
+) -> Arc<Texture> {
+    Arc::new(Texture::new(device.create_texture_with_data(
+        queue,
+        &wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+        },
+        bytes,
+    )))
 }
 
 pub fn start_loading_all_material_textures<T: HttpClient>(
@@ -120,22 +144,63 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
 
         let material_settings = load_material_settings(material);
 
-        let material_bindings = MaterialBindings::new(
-            &textures_context.device,
-            &textures_context.queue,
-            textures_context.bind_group_layouts.clone(),
-            &material_settings,
-        );
+        let material_settings = Arc::new(textures_context.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("material settings"),
+                contents: bytemuck::bytes_of(&material_settings),
+                usage: wgpu::BufferUsages::UNIFORM,
+            },
+        ));
 
-        let bind_group = Arc::new(ArcSwap::from_pointee(
-            material_bindings
-                .create_initial_bind_group(&textures_context.device, &textures_context.settings),
+        let linear_sampler = Arc::new(textures_context.device.create_sampler(
+            &wgpu::SamplerDescriptor {
+                address_mode_u: wgpu::AddressMode::Repeat,
+                address_mode_v: wgpu::AddressMode::Repeat,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Linear,
+                anisotropy_clamp: textures_context.settings.anisotropy_clamp,
+                ..Default::default()
+            },
+        ));
+
+        let bind_group = Arc::new(crate::MutableBindGroup::new(
+            &textures_context.device,
+            &textures_context.bind_group_layouts.model,
+            vec![
+                crate::mutable_bind_group::Entry::Texture(load_single_pixel_image(
+                    &textures_context.device,
+                    &textures_context.queue,
+                    wgpu::TextureFormat::Rgba8UnormSrgb,
+                    &[255, 255, 255, 255],
+                )),
+                crate::mutable_bind_group::Entry::Texture(load_single_pixel_image(
+                    &textures_context.device,
+                    &textures_context.queue,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    &[127, 127, 255, 255],
+                )),
+                crate::mutable_bind_group::Entry::Texture(load_single_pixel_image(
+                    &textures_context.device,
+                    &textures_context.queue,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    &[0, 255, 0, 255],
+                )),
+                crate::mutable_bind_group::Entry::Texture(load_single_pixel_image(
+                    &textures_context.device,
+                    &textures_context.queue,
+                    wgpu::TextureFormat::Rgba8UnormSrgb,
+                    &[255, 255, 255, 255],
+                )),
+                crate::mutable_bind_group::Entry::Buffer(material_settings),
+                crate::mutable_bind_group::Entry::Sampler(linear_sampler),
+            ],
         ));
 
         materials.push(bind_group.clone());
 
         let device = textures_context.device.clone();
-        let settings = textures_context.settings.clone();
+        let bind_group_layouts = textures_context.bind_group_layouts.clone();
 
         spawn(async move {
             let (albedo_texture, metallic_roughness_texture, normal_texture, emissive_texture) =
@@ -147,16 +212,24 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
                 )
                 .await;
 
-            bind_group.store(Arc::new(material_bindings.create_bind_group(
-                &device,
-                &settings,
-                crate::assets::materials::Textures {
-                    albedo: albedo_texture,
-                    metallic_roughness: metallic_roughness_texture,
-                    normal: normal_texture,
-                    emissive: emissive_texture,
-                },
-            )));
+            bind_group.mutate(&device, &bind_group_layouts.model, |entries| {
+                if let Some(albedo_texture) = albedo_texture {
+                    entries[0] = crate::mutable_bind_group::Entry::Texture(albedo_texture);
+                }
+
+                if let Some(normal_texture) = normal_texture {
+                    entries[1] = crate::mutable_bind_group::Entry::Texture(normal_texture);
+                }
+
+                if let Some(metallic_roughness_texture) = metallic_roughness_texture {
+                    entries[2] =
+                        crate::mutable_bind_group::Entry::Texture(metallic_roughness_texture);
+                }
+
+                if let Some(emissive_texture) = emissive_texture {
+                    entries[3] = crate::mutable_bind_group::Entry::Texture(emissive_texture);
+                }
+            });
 
             Ok(())
         });

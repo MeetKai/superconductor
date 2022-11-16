@@ -5,7 +5,7 @@
     no_std
 )]
 
-use shared_structs::{JointTransform, MaterialSettings, SkyboxUniforms, Uniforms, Settings};
+use shared_structs::{JointTransform, MaterialSettings, Uniforms, Settings};
 use spirv_std::{
     arch::IndexUnchecked,
     glam::{self, const_vec3, Mat3, UVec4, Vec2, Vec3, Vec4},
@@ -571,7 +571,6 @@ pub fn tonemap(
 pub fn vertex_skybox(
     #[spirv(vertex_index)] vertex_index: i32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
-    #[spirv(descriptor_set = 1, binding = 0, uniform)] skybox_uniforms: &SkyboxUniforms,
     #[spirv(position)] builtin_pos: &mut Vec4,
     #[spirv(view_index)] view_index: i32,
     ray: &mut Vec3,
@@ -585,9 +584,9 @@ pub fn vertex_skybox(
         1.0,
     );
 
-    let unprojected: Vec4 = skybox_uniforms.projection_inverse(view_index) * pos;
+    let unprojected: Vec4 = uniforms.projection_inverse(view_index) * pos;
 
-    *ray = glam::Quat::from_vec4(skybox_uniforms.view_inverse(view_index)) * unprojected.truncate();
+    *ray = glam::Quat::from_vec4(uniforms.view_inverse(view_index)) * unprojected.truncate();
 
     *builtin_pos = pos;
 

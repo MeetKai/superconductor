@@ -4,23 +4,23 @@ use crate::components::{
     PendingAnimatedModel, PendingModel,
 };
 use crate::resources::{
-    AnimatedVertexBuffers, BindGroupLayouts, BoundingSphereParams, Camera, ClampSampler,
-    CompositeBindGroup, CullingParams, Device, HttpClient, IblResources, IndexBuffer,
-    InstanceBuffer, IntermediateColorFramebuffer, IntermediateDepthFramebuffer, LineBuffer, LutUrl,
-    MainBindGroup, NewIblCubemap, PipelineOptions, Pipelines, Queue, SkyboxUniformBindGroup,
-    SkyboxUniformBuffer, SurfaceFrameView, TextureSettings, UniformBuffer, VertexBuffers,
+    AnimatedVertexBuffers, BindGroupLayouts, BoundingSphereParams, Camera, CompositeBindGroup,
+    CullingParams, Device, HttpClient, IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer,
+    IntermediateDepthFramebuffer, LineBuffer, LutUrl, MainBindGroup, NewIblCubemap,
+    PipelineOptions, Pipelines, Queue, SurfaceFrameView, TextureSettings, UniformBuffer,
+    VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
-    arc_swap::{ArcSwap, ArcSwapOption},
-    assets, bytemuck, create_main_bind_group,
+    arc_swap::ArcSwapOption,
+    assets, bytemuck,
     culling::{BoundingSphereCullingParams, CullingFrustum},
     glam::Mat4,
-    ibl,
     shared_structs::{self, Settings},
-    spawn, GpuInstance, Texture,
+    spawn, GpuInstance, MutableBindGroup, Texture,
 };
 use std::sync::Arc;
+use wgpu::util::DeviceExt;
 
 pub(crate) mod debugging;
 pub(crate) mod rendering;
@@ -388,46 +388,6 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     let pipelines = &pipelines.0;
     let bind_group_layouts = &bind_group_layouts.0;
 
-    // todo: this is very messy.
-    let ibl_resources = Arc::new(ibl::IblResources {
-        lut: ArcSwap::from(Arc::new(Texture::new(device.create_texture(
-            &wgpu::TextureDescriptor {
-                label: Some("dummy ibl lut"),
-                size: wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
-                sample_count: 1,
-                mip_level_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-            },
-        )))),
-        cubemap: ArcSwap::from(Arc::new(Texture::new_cubemap(device.create_texture(
-            &wgpu::TextureDescriptor {
-                label: Some("dummy ibl cubemap"),
-                size: wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 6,
-                },
-                sample_count: 1,
-                mip_level_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                format: wgpu::TextureFormat::Rgba16Float,
-            },
-        )))),
-        sphere_harmonics: device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("sphere harmonics buffer"),
-            size: 144,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        }),
-    });
-
     let uniform_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("uniform buffer"),
         size: std::mem::size_of::<shared_structs::Uniforms>() as u64,
@@ -444,37 +404,55 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         ..Default::default()
     }));
 
-    let skybox_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("skybox uniform buffer"),
-        size: std::mem::size_of::<shared_structs::SkyboxUniforms>() as u64,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-        mapped_at_creation: false,
-    });
-
-    let skybox_uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("skybox uniform bind group"),
-        layout: &bind_group_layouts.skybox,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: skybox_uniform_buffer.as_entire_binding(),
-        }],
-    });
-
-    let main_bind_group = Arc::new(ArcSwap::from_pointee(create_main_bind_group(
+    let main_bind_group = Arc::new(MutableBindGroup::new(
         device,
-        &ibl_resources,
-        &uniform_buffer,
-        &clamp_sampler,
-        bind_group_layouts,
-    )));
+        &bind_group_layouts.uniform,
+        vec![
+            renderer_core::mutable_bind_group::Entry::Buffer(uniform_buffer.clone()),
+            renderer_core::mutable_bind_group::Entry::Sampler(clamp_sampler),
+            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
+                device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("dummy ibl lut"),
+                    size: wgpu::Extent3d {
+                        width: 1,
+                        height: 1,
+                        depth_or_array_layers: 1,
+                    },
+                    sample_count: 1,
+                    mip_level_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                }),
+            ))),
+            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new_cubemap(
+                device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("dummy ibl cubemap"),
+                    size: wgpu::Extent3d {
+                        width: 1,
+                        height: 1,
+                        depth_or_array_layers: 6,
+                    },
+                    sample_count: 1,
+                    mip_level_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                    format: wgpu::TextureFormat::Rgba16Float,
+                }),
+            ))),
+            renderer_core::mutable_bind_group::Entry::Buffer(Arc::new(device.create_buffer(
+                &wgpu::BufferDescriptor {
+                    label: Some("sphere harmonics buffer"),
+                    size: 144,
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                },
+            ))),
+        ],
+    ));
 
-    commands.insert_resource(UniformBuffer(uniform_buffer.clone()));
+    commands.insert_resource(UniformBuffer(uniform_buffer));
     commands.insert_resource(MainBindGroup(main_bind_group.clone()));
-    commands.insert_resource(ClampSampler(clamp_sampler.clone()));
-    commands.insert_resource(IblResources(ibl_resources.clone()));
-
-    commands.insert_resource(SkyboxUniformBuffer(skybox_uniform_buffer));
-    commands.insert_resource(SkyboxUniformBindGroup(skybox_uniform_bind_group));
 
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
@@ -490,12 +468,12 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     spawn(async move {
         // todo: yuck.
         // This results in only the skybox being rendered:
-        //let bytes = &include_bytes!("../../lut_ggx.png")[..];
-        let bytes = textures_context
-            .http_client
-            .fetch_bytes(&lut_url, None)
-            .await
-            .unwrap();
+        let bytes = &include_bytes!("../demo/web/assets/lut_ggx.png")[..];
+        /*let bytes = textures_context
+        .http_client
+        .fetch_bytes(&lut_url, None)
+        .await
+        .unwrap();*/
 
         let result = renderer_core::assets::textures::load_image_crate_image(
             &bytes[..],
@@ -506,15 +484,13 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
 
         match result {
             Ok((lut_texture, _size)) => {
-                ibl_resources.lut.store(lut_texture);
-
-                main_bind_group.store(Arc::new(create_main_bind_group(
+                main_bind_group.mutate(
                     &textures_context.device,
-                    &ibl_resources,
-                    &uniform_buffer,
-                    &clamp_sampler,
-                    &textures_context.bind_group_layouts,
-                )));
+                    &textures_context.bind_group_layouts.uniform,
+                    |entries| {
+                        entries[2] = renderer_core::mutable_bind_group::Entry::Texture(lut_texture);
+                    },
+                );
 
                 Ok(())
             }
@@ -562,10 +538,7 @@ pub(crate) fn update_ibl_resources<T: assets::HttpClient>(
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<TextureSettings>,
     mut new_ibl_cubemap: ResMut<NewIblCubemap>,
-    ibl_resources: Res<IblResources>,
-    clamp_sampler: Res<ClampSampler>,
     main_bind_group: Res<MainBindGroup>,
-    uniform_buffer: Res<UniformBuffer>,
     http_client: Res<HttpClient<T>>,
 ) {
     let new_ibl_cubemap = match new_ibl_cubemap.0.take() {
@@ -579,9 +552,6 @@ pub(crate) fn update_ibl_resources<T: assets::HttpClient>(
     let queue = &queue.0;
     let pipelines = &pipelines.0;
     let bind_group_layouts = &bind_group_layouts.0;
-    let clamp_sampler = clamp_sampler.0.clone();
-    let uniform_buffer = uniform_buffer.0.clone();
-    let ibl_resources = ibl_resources.0.clone();
 
     let textures_context = renderer_core::assets::textures::Context {
         device: device.clone(),
@@ -592,8 +562,6 @@ pub(crate) fn update_ibl_resources<T: assets::HttpClient>(
         settings: texture_settings.0.clone(),
     };
 
-    let queue = queue.clone();
-
     spawn(async move {
         match renderer_core::assets::textures::load_ibl_cubemap(
             textures_context.clone(),
@@ -602,20 +570,24 @@ pub(crate) fn update_ibl_resources<T: assets::HttpClient>(
         .await
         {
             Ok(ibl_data) => {
-                ibl_resources.cubemap.store(ibl_data.texture);
-                queue.write_buffer(
-                    &ibl_resources.sphere_harmonics,
-                    0,
-                    &ibl_data.padded_sphere_harmonics_bytes,
-                );
-
-                main_bind_group.store(Arc::new(create_main_bind_group(
+                main_bind_group.mutate(
                     &textures_context.device,
-                    &ibl_resources,
-                    &uniform_buffer,
-                    &clamp_sampler,
-                    &textures_context.bind_group_layouts,
-                )));
+                    &textures_context.bind_group_layouts.uniform,
+                    |entries| {
+                        entries[3] =
+                            renderer_core::mutable_bind_group::Entry::Texture(ibl_data.texture);
+                        entries[4] = renderer_core::mutable_bind_group::Entry::Buffer(Arc::new(
+                            textures_context.device.create_buffer_init(
+                                &wgpu::util::BufferInitDescriptor {
+                                    label: Some("sphere harmonics buffer"),
+                                    contents: &ibl_data.padded_sphere_harmonics_bytes,
+                                    usage: wgpu::BufferUsages::UNIFORM
+                                        | wgpu::BufferUsages::COPY_DST,
+                                },
+                            ),
+                        ));
+                    },
+                );
 
                 Ok(())
             }
@@ -632,7 +604,6 @@ pub(crate) fn update_desktop_uniform_buffers(
     pipeline_options: Res<PipelineOptions>,
     queue: Res<Queue>,
     uniform_buffer: Res<UniformBuffer>,
-    skybox_uniform_buffer: Res<SkyboxUniformBuffer>,
     surface_frame_view: Res<SurfaceFrameView>,
     camera: Res<Camera>,
     mut culling_params: ResMut<CullingParams>,
@@ -674,6 +645,10 @@ pub(crate) fn update_desktop_uniform_buffers(
     let uniforms = renderer_core::shared_structs::Uniforms {
         left_projection_view: projection_view.into(),
         right_projection_view: projection_view.into(),
+        left_projection_inverse: perspective_matrix.inverse().into(),
+        right_projection_inverse: perspective_matrix.inverse().into(),
+        left_view_inverse: camera.rotation.into(),
+        right_view_inverse: camera.rotation.into(),
         left_eye_x: camera.position.x,
         left_eye_y: camera.position.y,
         left_eye_z: camera.position.z,
@@ -688,19 +663,6 @@ pub(crate) fn update_desktop_uniform_buffers(
         &uniform_buffer.0,
         0,
         renderer_core::bytemuck::bytes_of(&uniforms),
-    );
-
-    let skybox_uniforms = shared_structs::SkyboxUniforms {
-        left_projection_inverse: perspective_matrix.inverse().into(),
-        right_projection_inverse: perspective_matrix.inverse().into(),
-        left_view_inverse: camera.rotation.into(),
-        right_view_inverse: camera.rotation.into(),
-    };
-
-    queue.write_buffer(
-        &skybox_uniform_buffer.0,
-        0,
-        bytemuck::bytes_of(&skybox_uniforms),
     );
 }
 
@@ -719,7 +681,6 @@ pub(crate) fn update_webxr_uniform_buffers(
     pipeline_options: Res<PipelineOptions>,
     queue: Res<Queue>,
     uniform_buffer: Res<UniformBuffer>,
-    skybox_uniform_buffer: Res<SkyboxUniformBuffer>,
     mut culling_params: ResMut<CullingParams>,
 ) {
     let queue = &queue.0;
@@ -773,6 +734,10 @@ pub(crate) fn update_webxr_uniform_buffers(
     let uniforms = renderer_core::shared_structs::Uniforms {
         left_projection_view: (left_view_data.projection * left_view_data.view).into(),
         right_projection_view: (right_view_data.projection * right_view_data.view).into(),
+        left_projection_inverse: left_view_data.projection.inverse().into(),
+        right_projection_inverse: right_view_data.projection.inverse().into(),
+        left_view_inverse: left_view_data.instance.rotation.into(),
+        right_view_inverse: right_view_data.instance.rotation.into(),
         left_eye_x: left_view_data.instance.translation.x,
         left_eye_y: left_view_data.instance.translation.y,
         left_eye_z: left_view_data.instance.translation.z,
@@ -787,19 +752,6 @@ pub(crate) fn update_webxr_uniform_buffers(
         &uniform_buffer.0,
         0,
         renderer_core::bytemuck::bytes_of(&uniforms),
-    );
-
-    let skybox_uniforms = shared_structs::SkyboxUniforms {
-        left_projection_inverse: left_view_data.projection.inverse().into(),
-        right_projection_inverse: right_view_data.projection.inverse().into(),
-        left_view_inverse: left_view_data.instance.rotation.into(),
-        right_view_inverse: right_view_data.instance.rotation.into(),
-    };
-
-    queue.write_buffer(
-        &skybox_uniform_buffer.0,
-        0,
-        bytemuck::bytes_of(&skybox_uniforms),
     );
 
     *culling_params = CullingParams {

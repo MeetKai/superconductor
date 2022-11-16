@@ -23,6 +23,45 @@ pub struct Uniforms {
     // we need to pad it to 16 bytes by adding a few more bytes.
     #[cfg(not(target_arch = "spirv"))]
     pub _padding: u32,
+    // For the skybox
+    pub left_projection_inverse: FlatMat4,
+    pub right_projection_inverse: FlatMat4,
+    pub left_view_inverse: Vec4,
+    pub right_view_inverse: Vec4,
+}
+
+impl Uniforms {
+    pub fn projection_view(&self, view_index: i32) -> Mat4 {
+        Mat4::from(if view_index != 0 {
+            self.right_projection_view
+        } else {
+            self.left_projection_view
+        })
+    }
+
+    pub fn eye_position(&self, view_index: i32) -> Vec3 {
+        if view_index != 0 {
+            Vec3::new(self.right_eye_x, self.right_eye_y, self.right_eye_z)
+        } else {
+            Vec3::new(self.left_eye_x, self.left_eye_y, self.left_eye_z)
+        }
+    }
+
+    pub fn projection_inverse(&self, view_index: i32) -> Mat4 {
+        Mat4::from(if view_index != 0 {
+            self.right_projection_inverse
+        } else {
+            self.left_projection_inverse
+        })
+    }
+
+    pub fn view_inverse(&self, view_index: i32) -> Vec4 {
+        if view_index != 0 {
+            self.right_view_inverse
+        } else {
+            self.left_view_inverse
+        }
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -59,24 +98,6 @@ impl BitOr for Settings {
 impl BitOrAssign for Settings {
     fn bitor_assign(&mut self, rhs: Self) {
         *self = *self | rhs;
-    }
-}
-
-impl Uniforms {
-    pub fn projection_view(&self, view_index: i32) -> Mat4 {
-        Mat4::from(if view_index != 0 {
-            self.right_projection_view
-        } else {
-            self.left_projection_view
-        })
-    }
-
-    pub fn eye_position(&self, view_index: i32) -> Vec3 {
-        if view_index != 0 {
-            Vec3::new(self.right_eye_x, self.right_eye_y, self.right_eye_z)
-        } else {
-            Vec3::new(self.left_eye_x, self.left_eye_y, self.left_eye_z)
-        }
     }
 }
 

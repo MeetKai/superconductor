@@ -1,6 +1,6 @@
 use crate::resources::{
     self, AnimatedVertexBuffers, Device, IndexBuffer, InstanceBuffer, LineBuffer, MainBindGroup,
-    PipelineOptions, Pipelines, Queue, SkyboxUniformBindGroup, SurfaceFrameView, VertexBuffers,
+    PipelineOptions, Pipelines, Queue, SurfaceFrameView, VertexBuffers,
 };
 use renderer_core::{
     arc_swap, assets::models::Ranges, permutations, pipelines::DEPTH_FORMAT, LineVertex,
@@ -51,7 +51,6 @@ type AnimatedModelQuery<'world, 'state, 'component> = Query<
 pub(crate) fn render_desktop(
     (device, queue, pipelines): (Res<Device>, Res<Queue>, Res<Pipelines>),
     main_bind_group: Res<MainBindGroup>,
-    skybox_uniform_bind_group: Res<SkyboxUniformBindGroup>,
     surface_frame_view: Res<SurfaceFrameView>,
     pipeline_options: Res<PipelineOptions>,
     mut intermediate_depth_framebuffer: ResMut<resources::IntermediateDepthFramebuffer>,
@@ -177,7 +176,6 @@ pub(crate) fn render_desktop(
             index_buffer: &index_buffer,
             instance_buffer: &instance_buffer.0.buffer,
             main_bind_group: &main_bind_group,
-            skybox_uniform_bind_group: &skybox_uniform_bind_group.0,
             pipelines,
             static_model_bind_groups: &static_model_bind_groups,
             animated_model_bind_groups: &animated_model_bind_groups,
@@ -199,12 +197,10 @@ pub(crate) fn render_webxr(
     (device, queue, pipelines): (Res<Device>, Res<Queue>, Res<Pipelines>),
     bind_group_layouts: Res<resources::BindGroupLayouts>,
     main_bind_group: Res<MainBindGroup>,
-    skybox_uniform_bind_group: Res<SkyboxUniformBindGroup>,
     mut intermediate_color_framebuffer: ResMut<resources::IntermediateColorFramebuffer>,
     mut intermediate_depth_framebuffer: ResMut<resources::IntermediateDepthFramebuffer>,
     mut composite_bind_group: ResMut<resources::CompositeBindGroup>,
     pipeline_options: Res<PipelineOptions>,
-    clamp_sampler: Res<resources::ClampSampler>,
     (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer, line_buffer): (
         Res<IndexBuffer>,
         Res<VertexBuffers>,
@@ -285,13 +281,22 @@ pub(crate) fn render_webxr(
             // when the size changes. But we don't re-create the bind group which is going to lead
             // to a crash if we ever try and resize the framebuffer.
             let composite_bind_group = composite_bind_group.0.get_or_insert_with(|| {
+                let clamp_sampler = Arc::new(device.create_sampler(&wgpu::SamplerDescriptor {
+                    address_mode_u: wgpu::AddressMode::ClampToEdge,
+                    address_mode_v: wgpu::AddressMode::ClampToEdge,
+                    mag_filter: wgpu::FilterMode::Linear,
+                    min_filter: wgpu::FilterMode::Linear,
+                    anisotropy_clamp: None,
+                    ..Default::default()
+                }));
+
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("composite bind group"),
                     layout: &bind_group_layouts.tonemap,
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
-                            resource: wgpu::BindingResource::Sampler(&clamp_sampler.0),
+                            resource: wgpu::BindingResource::Sampler(&clamp_sampler),
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
@@ -378,7 +383,6 @@ pub(crate) fn render_webxr(
             index_buffer: &index_buffer,
             instance_buffer: &instance_buffer.0.buffer,
             main_bind_group: &main_bind_group,
-            skybox_uniform_bind_group: &skybox_uniform_bind_group.0,
             pipelines,
             static_model_bind_groups: &static_model_bind_groups,
             animated_model_bind_groups: &animated_model_bind_groups,
@@ -472,7 +476,6 @@ struct Context<'a> {
     index_buffer: &'a wgpu::Buffer,
     instance_buffer: &'a wgpu::Buffer,
     main_bind_group: &'a wgpu::BindGroup,
-    skybox_uniform_bind_group: &'a wgpu::BindGroup,
     pipelines: &'a renderer_core::Pipelines,
     static_model_bind_groups: &'a ModelBindGroups,
     animated_model_bind_groups: &'a ModelBindGroups,
@@ -516,7 +519,6 @@ fn render_everything<'a>(
     }
 
     render_pass.set_pipeline(&context.pipelines.skybox);
-    render_pass.set_bind_group(1, context.skybox_uniform_bind_group, &[]);
     render_pass.draw(0..3, 0..1);
 
     render_mode(

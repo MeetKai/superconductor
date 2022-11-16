@@ -1,4 +1,3 @@
-pub mod materials;
 pub mod models;
 pub mod textures;
 

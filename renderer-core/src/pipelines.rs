@@ -254,13 +254,6 @@ impl Pipelines {
             stencil: wgpu::StencilState::default(),
         };
 
-        let skybox_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("skybox pipeline layout"),
-                bind_group_layouts: &[&bind_group_layouts.uniform, &bind_group_layouts.skybox],
-                push_constant_ranges: &[],
-            });
-
         let fragment_opaque = wgpu::FragmentState {
             module: &device.create_shader_module(if options.multiview.is_none() {
                 wgpu::include_spirv!("../../compiled-shaders/single_view_fragment.spv")
@@ -505,7 +498,7 @@ impl Pipelines {
             tonemap: tonemap_pipeline,
             skybox: device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("skybox pipeline"),
-                layout: Some(&skybox_pipeline_layout),
+                layout: Some(&uniform_only_pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &device.create_shader_module(if options.multiview.is_none() {
                         wgpu::include_spirv!("../../compiled-shaders/single_view_vertex_skybox.spv")
