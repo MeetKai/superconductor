@@ -54,7 +54,7 @@ impl Plugin for SuperconductorPlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "wasm")]
         let href = web_sys::window().unwrap().location().href().unwrap();
-        #[cfg(not(feature = "webgl"))]
+        #[cfg(not(feature = "wasm"))]
         let href = "http://localhost:8000";
         let href = url::Url::parse(&href).unwrap();
 

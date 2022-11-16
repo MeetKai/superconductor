@@ -157,7 +157,7 @@ impl Pipelines {
         }];
 
         let prefix = if options.multiview.is_none() {
-            "single_view::"
+            "single_view__"
         } else {
             ""
         };
