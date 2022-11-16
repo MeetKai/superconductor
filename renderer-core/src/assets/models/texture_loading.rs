@@ -80,6 +80,16 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
     let mut pending_textures = Default::default();
     let mut materials = Vec::new();
 
+    let material_settings = gltf.materials.iter().map(load_material_settings).collect::<Vec<_>>();
+
+    let material_settings_buffer = Arc::new(textures_context.device.create_buffer_init(
+        &wgpu::util::BufferInitDescriptor {
+            label: Some("material settings"),
+            contents: bytemuck::cast_slice(&material_settings),
+            usage: wgpu::BufferUsages::UNIFORM,
+        },
+    ));
+
     for material in &gltf.materials {
         let albedo_future =
             if let Some(tex_info) = material.pbr_metallic_roughness.base_color_texture.as_ref() {
@@ -142,16 +152,6 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
             None
         };
 
-        let material_settings = load_material_settings(material);
-
-        let material_settings = Arc::new(textures_context.device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("material settings"),
-                contents: bytemuck::bytes_of(&material_settings),
-                usage: wgpu::BufferUsages::UNIFORM,
-            },
-        ));
-
         let linear_sampler = Arc::new(textures_context.device.create_sampler(
             &wgpu::SamplerDescriptor {
                 address_mode_u: wgpu::AddressMode::Repeat,
@@ -192,7 +192,7 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
                     wgpu::TextureFormat::Rgba8UnormSrgb,
                     &[255, 255, 255, 255],
                 )),
-                crate::mutable_bind_group::Entry::Buffer(material_settings),
+                crate::mutable_bind_group::Entry::Buffer(material_settings_buffer.clone()),
                 crate::mutable_bind_group::Entry::Sampler(linear_sampler),
             ],
         ));
