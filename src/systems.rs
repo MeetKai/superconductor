@@ -408,7 +408,7 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         device,
         &bind_group_layouts.uniform,
         vec![
-            renderer_core::mutable_bind_group::Entry::Buffer(uniform_buffer.clone()),
+            renderer_core::mutable_bind_group::Entry::Buffer(uniform_buffer.clone(), 0),
             renderer_core::mutable_bind_group::Entry::Sampler(clamp_sampler),
             renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
                 device.create_texture(&wgpu::TextureDescriptor {
@@ -440,14 +440,15 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
                     format: wgpu::TextureFormat::Rgba16Float,
                 }),
             ))),
-            renderer_core::mutable_bind_group::Entry::Buffer(Arc::new(device.create_buffer(
-                &wgpu::BufferDescriptor {
+            renderer_core::mutable_bind_group::Entry::Buffer(
+                Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("sphere harmonics buffer"),
                     size: 144,
                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
-                },
-            ))),
+                })),
+                0,
+            ),
         ],
     ));
 
@@ -576,16 +577,17 @@ pub(crate) fn update_ibl_resources<T: assets::HttpClient>(
                     |entries| {
                         entries[3] =
                             renderer_core::mutable_bind_group::Entry::Texture(ibl_data.texture);
-                        entries[4] = renderer_core::mutable_bind_group::Entry::Buffer(Arc::new(
-                            textures_context.device.create_buffer_init(
+                        entries[4] = renderer_core::mutable_bind_group::Entry::Buffer(
+                            Arc::new(textures_context.device.create_buffer_init(
                                 &wgpu::util::BufferInitDescriptor {
                                     label: Some("sphere harmonics buffer"),
                                     contents: &ibl_data.padded_sphere_harmonics_bytes,
                                     usage: wgpu::BufferUsages::UNIFORM
                                         | wgpu::BufferUsages::COPY_DST,
                                 },
-                            ),
-                        ));
+                            )),
+                            0,
+                        );
                     },
                 );
 

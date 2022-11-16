@@ -73,7 +73,7 @@ pub(crate) fn render_desktop(
 
     let vertex_buffers = vertex_buffers.0.buffers.load();
     let animated_vertex_buffers = animated_vertex_buffers.0.buffers.load();
-    let index_buffer = index_buffer.0.buffer.load();
+    let index_buffer = index_buffer.0.buffer();
 
     let depth_attachment = intermediate_depth_framebuffer.0.get(
         device,
@@ -225,7 +225,7 @@ pub(crate) fn render_webxr(
 
     let vertex_buffers = vertex_buffers.0.buffers.load();
     let animated_vertex_buffers = animated_vertex_buffers.0.buffers.load();
-    let index_buffer = index_buffer.0.buffer.load();
+    let index_buffer = index_buffer.0.buffer();
 
     let xr_session: web_sys::XrSession = frame.session();
 

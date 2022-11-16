@@ -44,7 +44,13 @@ fn bind_group_from_entries(
         .map(|(i, entry)| wgpu::BindGroupEntry {
             binding: i as u32,
             resource: match entry {
-                Entry::Buffer(buffer) => buffer.as_entire_binding(),
+                Entry::Buffer(buffer, offset) => {
+                    wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer,
+                        offset: *offset,
+                        size: None,
+                    })
+                }
                 Entry::Texture(texture) => wgpu::BindingResource::TextureView(&texture.view),
                 Entry::Sampler(sampler) => wgpu::BindingResource::Sampler(sampler),
             },
@@ -60,7 +66,7 @@ fn bind_group_from_entries(
 
 #[derive(Debug)]
 pub enum Entry {
-    Buffer(Arc<wgpu::Buffer>),
+    Buffer(Arc<wgpu::Buffer>, u64),
     Texture(Arc<Texture>),
     Sampler(Arc<wgpu::Sampler>),
 }

@@ -105,59 +105,70 @@ impl<T: bytemuck::Pod> VecGpuBuffer<T> {
     }
 }
 
-pub struct IndexBuffer {
+pub struct AllocatedBuffer<T> {
     allocator: parking_lot::Mutex<range_alloc::RangeAllocator<u32>>,
     pub buffer: arc_swap::ArcSwap<wgpu::Buffer>,
+    usage: wgpu::BufferUsages,
+    _phantom: std::marker::PhantomData<T>,
+    label: &'static str,
 }
 
-impl IndexBuffer {
+impl<T: bytemuck::Pod> AllocatedBuffer<T> {
     fn size_in_bytes(size: u32) -> u64 {
-        size as u64 * size_of::<u32>() as u64
+        size as u64 * size_of::<T>() as u64
     }
 
-    pub fn new(capacity: u32, device: &wgpu::Device) -> Self {
+    pub fn new(
+        capacity: u32,
+        device: &wgpu::Device,
+        usage: wgpu::BufferUsages,
+        label: &'static str,
+    ) -> Self {
         Self {
             allocator: parking_lot::Mutex::new(range_alloc::RangeAllocator::new(0..capacity)),
             buffer: arc_swap::ArcSwap::from_pointee(device.create_buffer(
                 &wgpu::BufferDescriptor {
-                    label: Some("index buffer"),
+                    label: Some(label),
                     size: Self::size_in_bytes(capacity),
-                    usage: wgpu::BufferUsages::INDEX
-                        | wgpu::BufferUsages::COPY_DST
-                        | wgpu::BufferUsages::COPY_SRC,
+                    usage: usage | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
                     mapped_at_creation: false,
                 },
             )),
+            label,
+            usage,
+            _phantom: Default::default(),
         }
     }
 
     pub fn insert(
         &self,
-        indices: &[u32],
+        values: &[T],
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Range<u32> {
-        let length = indices.len() as u32;
+    ) -> (Range<u32>, Option<Arc<wgpu::Buffer>>) {
+        let length = values.len() as u32;
 
         // Use the allocator to find a range in the buffer to write to,
         // resizing the buffer in needed and returning the correct buffer to write to
         // (as `ArcSwap::load` does not always return the newest value).
-        let (buffer, range) = {
+        let (buffer, range, resized) = {
             let mut allocator = self.allocator.lock();
 
             match allocator.allocate_range(length) {
-                Ok(range) => (self.buffer.load_full(), range),
+                Ok(range) => (self.buffer.load_full(), range, false),
                 Err(_) => {
                     let new_buffer = Self::resize(
                         &mut allocator,
                         &self.buffer,
+                        self.usage,
+                        self.label,
                         length,
                         device,
                         command_encoder,
                     );
                     let range = allocator.allocate_range(length).expect("just resized");
-                    (new_buffer, range)
+                    (new_buffer, range, true)
                 }
             }
         };
@@ -165,15 +176,17 @@ impl IndexBuffer {
         queue.write_buffer(
             &buffer,
             Self::size_in_bytes(range.start),
-            bytemuck::cast_slice(indices),
+            bytemuck::cast_slice(values),
         );
 
-        range
+        (range, if resized { Some(buffer) } else { None })
     }
 
     fn resize(
         allocator: &mut range_alloc::RangeAllocator<u32>,
         buffer: &ArcSwap<wgpu::Buffer>,
+        usage: wgpu::BufferUsages,
+        label: &'static str,
         required_capacity: u32,
         device: &wgpu::Device,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -189,7 +202,8 @@ impl IndexBuffer {
         let new_capacity = (old_capacity + required_capacity).max(old_capacity * 2);
 
         log::info!(
-            "Growing index buffer from {} to {}",
+            "Growing {} from {} to {}",
+            label,
             old_capacity,
             new_capacity
         );
@@ -197,11 +211,9 @@ impl IndexBuffer {
         allocator.grow_to(new_capacity);
 
         let new_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("index buffer"),
+            label: Some(label),
             size: Self::size_in_bytes(new_capacity),
-            usage: wgpu::BufferUsages::INDEX
-                | wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC,
+            usage: usage | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         }));
 
@@ -216,6 +228,38 @@ impl IndexBuffer {
         buffer.store(new_buffer.clone());
 
         new_buffer
+    }
+}
+
+pub struct IndexBuffer {
+    inner: AllocatedBuffer<u32>,
+}
+
+impl IndexBuffer {
+    pub fn new(capacity: u32, device: &wgpu::Device) -> Self {
+        Self {
+            inner: AllocatedBuffer::new(
+                capacity,
+                device,
+                wgpu::BufferUsages::INDEX,
+                "index buffer",
+            ),
+        }
+    }
+
+    pub fn insert(
+        &self,
+        indices: &[u32],
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Range<u32> {
+        let (range, _new_buffer) = self.inner.insert(indices, device, queue, command_encoder);
+        range
+    }
+
+    pub fn buffer(&self) -> arc_swap::Guard<Arc<wgpu::Buffer>> {
+        self.inner.buffer.load()
     }
 }
 
