@@ -3,7 +3,7 @@ use renderer_core::{
     assets::textures,
     culling::{BoundingSphereCullingParams, CullingFrustum},
     glam::{Mat4, Quat, Vec3},
-    shared_structs, GpuInstance, LineVertex, MutableBindGroup,
+    GpuInstance, LineVertex, MutableBindGroup,
 };
 use std::sync::Arc;
 

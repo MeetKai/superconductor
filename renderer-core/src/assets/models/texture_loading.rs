@@ -80,7 +80,11 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
     let mut pending_textures = Default::default();
     let mut materials = Vec::new();
 
-    let material_settings = gltf.materials.iter().map(load_material_settings).collect::<Vec<_>>();
+    let material_settings = gltf
+        .materials
+        .iter()
+        .map(load_material_settings)
+        .collect::<Vec<_>>();
 
     let material_settings_buffer = Arc::new(textures_context.device.create_buffer_init(
         &wgpu::util::BufferInitDescriptor {
@@ -90,7 +94,7 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
         },
     ));
 
-    for material in &gltf.materials {
+    for (material_index, material) in gltf.materials.iter().enumerate() {
         let albedo_future =
             if let Some(tex_info) = material.pbr_metallic_roughness.base_color_texture.as_ref() {
                 Some(start_loading_texture(
@@ -192,7 +196,11 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
                     wgpu::TextureFormat::Rgba8UnormSrgb,
                     &[255, 255, 255, 255],
                 )),
-                crate::mutable_bind_group::Entry::Buffer(material_settings_buffer.clone()),
+                crate::mutable_bind_group::Entry::Buffer(
+                    material_settings_buffer.clone(),
+                    (material_index * std::mem::size_of::<shared_structs::MaterialSettings>())
+                        as u64,
+                ),
                 crate::mutable_bind_group::Entry::Sampler(linear_sampler),
             ],
         ));
