@@ -12,7 +12,8 @@ pub struct LineVertex {
 pub struct GpuInstance {
     pub similarity: gltf_helpers::Similarity,
     pub joints_offset: u32,
-    pub _padding: [u32; 3],
+    pub material_index: u32,
+    pub _padding: [u32; 2],
 }
 
 pub type Instance = gltf_helpers::Similarity;

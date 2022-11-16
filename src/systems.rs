@@ -291,6 +291,7 @@ pub(crate) fn push_entity_instances(
                             GpuInstance {
                                 similarity: primitive_transform,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
+                                material_index: primitive.lods[lod].material_index as u32,
                                 _padding: Default::default(),
                             },
                         );
@@ -309,6 +310,7 @@ pub(crate) fn push_entity_instances(
                             GpuInstance {
                                 similarity: primitive_transform,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
+                                material_index: primitive.lods[0].material_index as u32,
                                 _padding: Default::default(),
                             },
                         );

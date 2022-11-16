@@ -7,12 +7,15 @@ pub fn vertex(
     uv: Vec2,
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
+    #[spirv(flat)] joints_offset: u32,
+    #[spirv(flat)] material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
     #[spirv(position)] builtin_pos: &mut Vec4,
     out_position: &mut Vec3,
     out_normal: &mut Vec3,
     out_uv: &mut Vec2,
+    #[spirv(flat)] out_material_index: &mut u32,
 ) {
     super::vertex(
         position,
@@ -20,6 +23,8 @@ pub fn vertex(
         uv,
         instance_translation_and_scale,
         instance_rotation,
+        joints_offset,
+        material_index,
         uniforms,
         material_settings,
         builtin_pos,
@@ -27,6 +32,7 @@ pub fn vertex(
         out_position,
         out_normal,
         out_uv,
+        out_material_index,
     );
 }
 
@@ -38,6 +44,7 @@ pub fn animated_vertex(
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
     #[spirv(flat)] joints_offset: u32,
+    #[spirv(flat)] material_index: u32,
     #[spirv(flat)] joint_indices: UVec4,
     joint_weights: Vec4,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
@@ -48,6 +55,7 @@ pub fn animated_vertex(
     out_position: &mut Vec3,
     out_normal: &mut Vec3,
     out_uv: &mut Vec2,
+    #[spirv(flat)] out_material_index: &mut u32,
 ) {
     super::animated_vertex(
         position,
@@ -56,6 +64,7 @@ pub fn animated_vertex(
         instance_translation_and_scale,
         instance_rotation,
         joints_offset,
+        material_index,
         joint_indices,
         joint_weights,
         uniforms,
@@ -66,6 +75,7 @@ pub fn animated_vertex(
         out_position,
         out_normal,
         out_uv,
+        out_material_index,
     );
 }
 
@@ -74,6 +84,7 @@ pub fn fragment(
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
+    #[spirv(flat)] material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
@@ -92,6 +103,7 @@ pub fn fragment(
         position,
         normal,
         uv,
+        material_index,
         uniforms,
         sampler,
         ibl_lut,
@@ -114,6 +126,7 @@ pub fn fragment_alpha_blended(
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
+    #[spirv(flat)] material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
@@ -132,6 +145,7 @@ pub fn fragment_alpha_blended(
         position,
         normal,
         uv,
+        material_index,
         uniforms,
         sampler,
         ibl_lut,
@@ -154,6 +168,7 @@ pub fn fragment_alpha_clipped(
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
+    #[spirv(flat)] material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
@@ -172,6 +187,7 @@ pub fn fragment_alpha_clipped(
         position,
         normal,
         uv,
+        material_index,
         uniforms,
         sampler,
         ibl_lut,

@@ -31,6 +31,8 @@ pub fn vertex(
     uv: Vec2,
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
+    #[spirv(flat)] _joints_offset: u32,
+    #[spirv(flat)] material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
     #[spirv(position)] builtin_pos: &mut Vec4,
@@ -38,6 +40,7 @@ pub fn vertex(
     out_position: &mut Vec3,
     out_normal: &mut Vec3,
     out_uv: &mut Vec2,
+    #[spirv(flat)] out_material_index: &mut u32,
 ) {
     let instance_scale = instance_translation_and_scale.w;
     let instance_translation = instance_translation_and_scale.truncate();
@@ -47,6 +50,7 @@ pub fn vertex(
     *out_position = position;
     *out_normal = instance_rotation * normal;
     *out_uv = material_settings.transform_uv(uv);
+    *out_material_index = material_index;
 
     if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
@@ -61,6 +65,7 @@ pub fn animated_vertex(
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
     #[spirv(flat)] joints_offset: u32,
+    #[spirv(flat)] material_index: u32,
     #[spirv(flat)] joint_indices: UVec4,
     joint_weights: Vec4,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
@@ -72,6 +77,7 @@ pub fn animated_vertex(
     out_position: &mut Vec3,
     out_normal: &mut Vec3,
     out_uv: &mut Vec2,
+    #[spirv(flat)] out_material_index: &mut u32,
 ) {
     let instance_scale = instance_translation_and_scale.w;
     let instance_translation = instance_translation_and_scale.truncate();
@@ -104,6 +110,7 @@ pub fn animated_vertex(
     *out_position = position;
     *out_normal = instance_rotation * normal;
     *out_uv = material_settings.transform_uv(uv);
+    *out_material_index = material_index;
 
     if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
@@ -170,6 +177,7 @@ pub fn fragment(
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
+    #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
@@ -197,6 +205,8 @@ pub fn fragment(
         &emissive_texture,
         &material_settings,
     );
+
+    //material_params.base.albedo_colour = debug_colour_for_id(material_index);
 
     if material_settings.is_unlit != 0 {
         // we don't want to use tonemapping for unlit materials.
@@ -258,6 +268,7 @@ pub fn fragment_alpha_blended(
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
+    #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
@@ -346,6 +357,7 @@ pub fn fragment_alpha_clipped(
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
+    #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
