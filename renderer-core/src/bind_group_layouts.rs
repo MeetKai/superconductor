@@ -31,6 +31,17 @@ impl BindGroupLayouts {
             },
         };
 
+        let d3_texture_entry = |binding| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            count: None,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D3,
+                multisampled: false,
+            },
+        };
+
         let texture_array_entry = |binding| wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
@@ -80,6 +91,10 @@ impl BindGroupLayouts {
                     texture_entry(2),
                     cubemap_entry(3),
                     uniform_entry(4, wgpu::ShaderStages::FRAGMENT),
+                    d3_texture_entry(5),
+                    d3_texture_entry(6),
+                    d3_texture_entry(7),
+                    d3_texture_entry(8),
                 ],
             }),
             model: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

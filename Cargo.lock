@@ -2518,6 +2518,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "glam",
+ "num-traits",
 ]
 
 [[package]]
@@ -3209,7 +3210,7 @@ dependencies = [
 [[package]]
 name = "wgpu"
 version = "0.14.0"
-source = "git+https://github.com/expenses/wgpu?rev=d1a9ad7801022d2b733746e9d13152ce2705519b#d1a9ad7801022d2b733746e9d13152ce2705519b"
+source = "git+https://github.com/expenses/wgpu?rev=0e2fd7d1d19ff6b235c2b1dd45aca5cb4d839487#0e2fd7d1d19ff6b235c2b1dd45aca5cb4d839487"
 dependencies = [
  "arrayvec 0.7.2",
  "js-sys",
@@ -3230,7 +3231,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "0.14.0"
-source = "git+https://github.com/expenses/wgpu?rev=d1a9ad7801022d2b733746e9d13152ce2705519b#d1a9ad7801022d2b733746e9d13152ce2705519b"
+source = "git+https://github.com/expenses/wgpu?rev=0e2fd7d1d19ff6b235c2b1dd45aca5cb4d839487#0e2fd7d1d19ff6b235c2b1dd45aca5cb4d839487"
 dependencies = [
  "arrayvec 0.7.2",
  "bit-vec",
@@ -3253,7 +3254,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "0.14.0"
-source = "git+https://github.com/expenses/wgpu?rev=d1a9ad7801022d2b733746e9d13152ce2705519b#d1a9ad7801022d2b733746e9d13152ce2705519b"
+source = "git+https://github.com/expenses/wgpu?rev=0e2fd7d1d19ff6b235c2b1dd45aca5cb4d839487#0e2fd7d1d19ff6b235c2b1dd45aca5cb4d839487"
 dependencies = [
  "android_system_properties",
  "arrayvec 0.7.2",
@@ -3291,7 +3292,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "0.14.0"
-source = "git+https://github.com/expenses/wgpu?rev=d1a9ad7801022d2b733746e9d13152ce2705519b#d1a9ad7801022d2b733746e9d13152ce2705519b"
+source = "git+https://github.com/expenses/wgpu?rev=0e2fd7d1d19ff6b235c2b1dd45aca5cb4d839487#0e2fd7d1d19ff6b235c2b1dd45aca5cb4d839487"
 dependencies = [
  "bitflags",
 ]

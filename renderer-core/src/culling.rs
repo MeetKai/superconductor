@@ -20,7 +20,6 @@ impl BoundingBox {
         Self { max, min }
     }
 
-
     #[rustfmt::skip]
     pub fn line_points(&self) -> [Vec3; 24] {
         let min = self.min;

@@ -5,7 +5,7 @@
     no_std
 )]
 
-use shared_structs::{JointTransform, MaterialSettings, Uniforms, Settings};
+use shared_structs::{JointTransform, MaterialSettings, Settings, Uniforms, eval_spherical_harmonics_nonlinear};
 use spirv_std::{
     arch::IndexUnchecked,
     glam::{self, const_vec3, Mat3, UVec4, Vec2, Vec3, Vec4},
@@ -14,8 +14,6 @@ use spirv_std::{
 };
 
 type SampledImage = Image!(2D, type=f32, sampled);
-
-pub type SphereHarmonics = [Vec3; 9];
 
 mod single_view;
 
@@ -182,7 +180,10 @@ pub fn fragment(
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
     #[spirv(descriptor_set = 0, binding = 3)] ibl_cubemap: &Image!(cube, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 4, uniform)] sphere_harmonics: &SphereHarmonics,
+    #[spirv(descriptor_set = 0, binding = 5)] spherical_harmonics_0: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 6)] spherical_harmonics_1: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 7)] spherical_harmonics_2: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 8)] spherical_harmonics_3: &Image!(3D, type=f32, sampled),
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -193,6 +194,19 @@ pub fn fragment(
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
+    let rescaled = uniforms.probes_array().rescale(position);
+
+    let sample_spherical_harmonics = |texture: &Image!(3D, type=f32, sampled)| {
+        let sample: Vec4 = texture.sample_by_lod(*clamp_sampler, rescaled, 0.0);
+        sample.truncate()
+    };
+
+    let spherical_harmonics = [
+        sample_spherical_harmonics(spherical_harmonics_0),
+        sample_spherical_harmonics(spherical_harmonics_1),
+        sample_spherical_harmonics(spherical_harmonics_2),
+        sample_spherical_harmonics(spherical_harmonics_3),
+    ];
     let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
     let metallic_roughness_texture =
         TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv);
@@ -243,7 +257,7 @@ pub fn fragment(
         view,
         material_params.base,
         lut_values,
-        |normal| sample_sphere_harmonics(*sphere_harmonics, normal),
+        |normal| eval_spherical_harmonics_nonlinear(spherical_harmonics, normal),
     );
 
     let specular_output = glam_pbr::get_ibl_radiance_ggx(
@@ -273,7 +287,6 @@ pub fn fragment_alpha_blended(
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
     #[spirv(descriptor_set = 0, binding = 3)] ibl_cubemap: &Image!(cube, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 4, uniform)] sphere_harmonics: &SphereHarmonics,
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -327,13 +340,13 @@ pub fn fragment_alpha_blended(
         },
     );
 
-    let diffuse_output = glam_pbr::ibl_irradiance_lambertian(
+    let diffuse_output = Vec3::ZERO;/*glam_pbr::ibl_irradiance_lambertian(
         normal,
         view,
         material_params.base,
         lut_values,
-        |normal| sample_sphere_harmonics(*sphere_harmonics, normal),
-    );
+        |normal| sample_spherical_harmonics(*spherical_harmonics, normal),
+    );*/
 
     let specular_output = glam_pbr::get_ibl_radiance_ggx(
         normal,
@@ -362,7 +375,6 @@ pub fn fragment_alpha_clipped(
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
     #[spirv(descriptor_set = 0, binding = 3)] ibl_cubemap: &Image!(cube, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 4, uniform)] sphere_harmonics: &SphereHarmonics,
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -421,13 +433,13 @@ pub fn fragment_alpha_clipped(
         },
     );
 
-    let diffuse_output = glam_pbr::ibl_irradiance_lambertian(
+    let diffuse_output = Vec3::ZERO;/*glam_pbr::ibl_irradiance_lambertian(
         normal,
         view,
         material_params.base,
         lut_values,
-        |normal| sample_sphere_harmonics(*sphere_harmonics, normal),
-    );
+        |normal| sample_spherical_harmonics(*spherical_harmonics, normal),
+    );*/
 
     let specular_output = glam_pbr::get_ibl_radiance_ggx(
         normal,
@@ -663,36 +675,6 @@ const DEBUG_COLOURS: [Vec3; 16] = [
 
 fn debug_colour_for_id(id: u32) -> Vec3 {
     unsafe { *DEBUG_COLOURS.index_unchecked(id as usize % DEBUG_COLOURS.len()) }
-}
-
-pub fn sphere_harmonics_lerp(a: SphereHarmonics, b: SphereHarmonics, factor: f32) -> SphereHarmonics {
-    [
-        a[0].lerp(b[0], factor),
-        a[1].lerp(b[1], factor),
-        a[2].lerp(b[2], factor),
-        a[3].lerp(b[3], factor),
-        a[4].lerp(b[4], factor),
-        a[5].lerp(b[5], factor),
-        a[6].lerp(b[6], factor),
-        a[7].lerp(b[7], factor),
-        a[8].lerp(b[8], factor),
-    ]
-}
-
-fn sample_sphere_harmonics(sphere_harmonics: SphereHarmonics, normal: Vec3) -> Vec3 {
-    let x = normal.x;
-    let y = normal.y;
-    let z = normal.z;
-
-    sphere_harmonics[0]
-        + sphere_harmonics[1] * (y)
-        + sphere_harmonics[2] * (z)
-        + sphere_harmonics[3] * (x)
-        + sphere_harmonics[4] * (y * x)
-        + sphere_harmonics[5] * (y * z)
-        + sphere_harmonics[6] * (3.0 * z * z - 1.0)
-        + sphere_harmonics[7] * (z * x)
-        + sphere_harmonics[8] * (x * x - y * y)
 }
 
 #[spirv(vertex)]

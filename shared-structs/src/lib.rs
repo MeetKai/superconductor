@@ -2,6 +2,7 @@
 
 use core::ops::{BitOr, BitOrAssign, Mul};
 use glam::{Mat2, Mat4, Vec2, Vec3, Vec4};
+use num_traits::Float;
 
 #[derive(Clone, Copy)]
 #[cfg_attr(
@@ -12,6 +13,12 @@ use glam::{Mat2, Mat4, Vec2, Vec3, Vec4};
 pub struct Uniforms {
     pub left_projection_view: FlatMat4,
     pub right_projection_view: FlatMat4,
+    // For the skybox
+    pub left_projection_inverse: FlatMat4,
+    pub right_projection_inverse: FlatMat4,
+    pub left_view_inverse: Vec4,
+    pub right_view_inverse: Vec4,
+    // Decomposed vectors
     pub left_eye_x: f32,
     pub left_eye_y: f32,
     pub left_eye_z: f32,
@@ -19,15 +26,16 @@ pub struct Uniforms {
     pub right_eye_y: f32,
     pub right_eye_z: f32,
     pub settings: Settings,
+    pub probes_array_bottom_left_x: f32,
+    pub probes_array_bottom_left_y: f32,
+    pub probes_array_bottom_left_z: f32,
+    pub probes_array_scale_x: f32,
+    pub probes_array_scale_y: f32,
+    pub probes_array_scale_z: f32,
     // As the struct is 16-byte aligned due to the Vec4s in the FlatMat4s,
     // we need to pad it to 16 bytes by adding a few more bytes.
     #[cfg(not(target_arch = "spirv"))]
-    pub _padding: u32,
-    // For the skybox
-    pub left_projection_inverse: FlatMat4,
-    pub right_projection_inverse: FlatMat4,
-    pub left_view_inverse: Vec4,
-    pub right_view_inverse: Vec4,
+    pub _padding: [u32; 3],
 }
 
 impl Uniforms {
@@ -61,6 +69,32 @@ impl Uniforms {
         } else {
             self.left_view_inverse
         }
+    }
+
+    pub fn probes_array(&self) -> ProbesArray {
+        ProbesArray {
+            bottom_left: Vec3::new(
+                self.probes_array_bottom_left_x,
+                self.probes_array_bottom_left_y,
+                self.probes_array_bottom_left_z,
+            ),
+            scale: Vec3::new(
+                self.probes_array_scale_x,
+                self.probes_array_scale_y,
+                self.probes_array_scale_z,
+            ),
+        }
+    }
+}
+
+pub struct ProbesArray {
+    bottom_left: Vec3,
+    scale: Vec3,
+}
+
+impl ProbesArray {
+    pub fn rescale(&self, position: Vec3) -> Vec3 {
+        (position - self.bottom_left) / self.scale
     }
 }
 
@@ -251,4 +285,68 @@ impl Mul<Vec3> for JointTransform {
     fn mul(self, vector: Vec3) -> Vec3 {
         self.translation() + (self.scale() * (self.rotation * vector))
     }
+}
+
+pub type L1SphericalHarmonics = [Vec3; 4];
+
+// See https://grahamhazel.com/blog/2017/12/22/converting-sh-radiance-to-irradiance/
+// https://web.archive.org/web/20160313132301/http://www.geomerics.com/wp-content/uploads/2015/08/CEDEC_Geomerics_ReconstructingDiffuseLighting1.pdf
+// https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/gdc2018-precomputedgiobalilluminationinfrostbite.pdf
+pub fn eval_spherical_harmonics_nonlinear(harmonics: L1SphericalHarmonics, normal: Vec3) -> Vec3 {
+    fn eval_scalar(r_0: f32, r_1: Vec3, normal: Vec3) -> f32 {
+        let r1_len = r_1.length();
+        let r1_r0_ratio = r1_len / r_0;
+
+        let a = (1.0 - r1_r0_ratio) / (1.0 + r1_r0_ratio);
+        let p = 1.0 + 2.0 * r1_r0_ratio;
+        let q = 0.5 * (1.0 + (r_1 / r1_len).dot(normal));
+
+        r_0 * (a + (1.0 - a) * (p + 1.0) * q.powf(p))
+    }
+
+    Vec3::new(
+        eval_scalar(
+            harmonics[0].x,
+            Vec3::new(harmonics[1].x, harmonics[2].x, harmonics[3].x),
+            normal,
+        ),
+        eval_scalar(
+            harmonics[0].y,
+            Vec3::new(harmonics[1].y, harmonics[2].y, harmonics[3].y),
+            normal,
+        ),
+        eval_scalar(
+            harmonics[0].z,
+            Vec3::new(harmonics[1].z, harmonics[2].z, harmonics[3].z),
+            normal,
+        ),
+    )
+}
+
+#[test]
+fn test_spherical_harmonics() {
+    let mut harmonics = L1SphericalHarmonics::default();
+
+    fn add_sample_to_harmonics(harmonics: &mut L1SphericalHarmonics, sample: Vec3, normal: Vec3) {
+        harmonics[0] += sample;
+        harmonics[1] += sample * normal.x;
+        harmonics[2] += sample * normal.y;
+        harmonics[3] += sample * normal.z;
+    }
+
+    fn eval_spherical_harmonics_linear(harmonics: L1SphericalHarmonics, normal: Vec3) -> Vec3 {
+        harmonics[0] + harmonics[1] * normal.x + harmonics[2] * normal.y + harmonics[3] * normal.z
+    }
+
+    add_sample_to_harmonics(&mut harmonics, Vec3::splat(1.0), Vec3::Y);
+    
+
+    assert_eq!(
+        eval_spherical_harmonics_nonlinear(harmonics, Vec3::Y),
+        Vec3::splat(4.0)
+    );
+    assert_eq!(
+        eval_spherical_harmonics_nonlinear(harmonics, -Vec3::Y),
+        Vec3::splat(0.0)
+    );
 }

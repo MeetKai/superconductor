@@ -7,15 +7,15 @@ use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, BoundingSphereParams, Camera, CompositeBindGroup,
     CullingParams, Device, HttpClient, IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer,
     IntermediateDepthFramebuffer, LineBuffer, LutUrl, MainBindGroup, NewIblCubemap,
-    PipelineOptions, Pipelines, Queue, SurfaceFrameView, TextureSettings, UniformBuffer,
-    VertexBuffers,
+    PipelineOptions, Pipelines, ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings,
+    UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
     arc_swap::ArcSwapOption,
     assets, bytemuck,
     culling::{BoundingSphereCullingParams, CullingFrustum},
-    glam::Mat4,
+    glam::{Mat4, Vec3, Vec4},
     shared_structs::{self, Settings},
     spawn, GpuInstance, MutableBindGroup, Texture,
 };
@@ -406,6 +406,12 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         ..Default::default()
     }));
 
+    let dims = wgpu::Extent3d {
+        width: 50,
+        height: 25,
+        depth_or_array_layers: 25,
+    };
+
     let main_bind_group = Arc::new(MutableBindGroup::new(
         device,
         &bind_group_layouts.uniform,
@@ -451,6 +457,66 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
                 })),
                 0,
             ),
+            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
+                device.create_texture_with_data(
+                    &queue,
+                    &wgpu::TextureDescriptor {
+                        label: Some("sphere harmonics coefficient 0"),
+                        size: dims,
+                        sample_count: 1,
+                        mip_level_count: 1,
+                        dimension: wgpu::TextureDimension::D3,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                        format: wgpu::TextureFormat::Rgba32Float,
+                    },
+                    include_bytes!("coefs/0.bin"),
+                ),
+            ))),
+            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
+                device.create_texture_with_data(
+                    &queue,
+                    &wgpu::TextureDescriptor {
+                        label: Some("sphere harmonics coefficient 1"),
+                        size: dims,
+                        sample_count: 1,
+                        mip_level_count: 1,
+                        dimension: wgpu::TextureDimension::D3,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                        format: wgpu::TextureFormat::Rgba32Float,
+                    },
+                    include_bytes!("coefs/1.bin"),
+                ),
+            ))),
+            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
+                device.create_texture_with_data(
+                    &queue,
+                    &wgpu::TextureDescriptor {
+                        label: Some("sphere harmonics coefficient 2"),
+                        size: dims,
+                        sample_count: 1,
+                        mip_level_count: 1,
+                        dimension: wgpu::TextureDimension::D3,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                        format: wgpu::TextureFormat::Rgba32Float,
+                    },
+                    include_bytes!("coefs/2.bin"),
+                ),
+            ))),
+            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
+                device.create_texture_with_data(
+                    &queue,
+                    &wgpu::TextureDescriptor {
+                        label: Some("sphere harmonics coefficient 3"),
+                        size: dims,
+                        sample_count: 1,
+                        mip_level_count: 1,
+                        dimension: wgpu::TextureDimension::D3,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                        format: wgpu::TextureFormat::Rgba32Float,
+                    },
+                    include_bytes!("coefs/3.bin"),
+                ),
+            ))),
         ],
     ));
 
@@ -610,6 +676,7 @@ pub(crate) fn update_desktop_uniform_buffers(
     uniform_buffer: Res<UniformBuffer>,
     surface_frame_view: Res<SurfaceFrameView>,
     camera: Res<Camera>,
+    probes_array: Res<ProbesArrayInfo>,
     mut culling_params: ResMut<CullingParams>,
 ) {
     let queue = &queue.0;
@@ -659,6 +726,12 @@ pub(crate) fn update_desktop_uniform_buffers(
         right_eye_x: camera.position.x,
         right_eye_y: camera.position.y,
         right_eye_z: camera.position.z,
+        probes_array_scale_x: probes_array.scale.x,
+        probes_array_scale_y: probes_array.scale.y,
+        probes_array_scale_z: probes_array.scale.z,
+        probes_array_bottom_left_x: probes_array.bottom_left.x,
+        probes_array_bottom_left_y: probes_array.bottom_left.y,
+        probes_array_bottom_left_z: probes_array.bottom_left.z,
         settings,
         _padding: Default::default(),
     };
@@ -685,6 +758,7 @@ pub(crate) fn update_webxr_uniform_buffers(
     pipeline_options: Res<PipelineOptions>,
     queue: Res<Queue>,
     uniform_buffer: Res<UniformBuffer>,
+    probes_array: Res<ProbesArrayInfo>,
     mut culling_params: ResMut<CullingParams>,
 ) {
     let queue = &queue.0;
@@ -748,6 +822,12 @@ pub(crate) fn update_webxr_uniform_buffers(
         right_eye_x: right_view_data.instance.translation.x,
         right_eye_y: right_view_data.instance.translation.y,
         right_eye_z: right_view_data.instance.translation.z,
+        probes_array_scale_x: probes_array.scale.x,
+        probes_array_scale_y: probes_array.scale.y,
+        probes_array_scale_z: probes_array.scale.z,
+        probes_array_bottom_left_x: probes_array.bottom_left.x,
+        probes_array_bottom_left_y: probes_array.bottom_left.y,
+        probes_array_bottom_left_z: probes_array.bottom_left.z,
         settings,
         _padding: Default::default(),
     };

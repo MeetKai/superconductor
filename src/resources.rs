@@ -172,3 +172,18 @@ pub struct PipelineOptions(pub renderer_core::PipelineOptions);
 
 #[derive(Resource)]
 pub struct HttpClient<T: renderer_core::assets::HttpClient>(pub T);
+
+#[derive(Resource)]
+pub struct ProbesArrayInfo {
+    pub bottom_left: Vec3,
+    pub scale: Vec3,
+}
+
+impl ProbesArrayInfo {
+    pub fn new(center: Vec3, scale: Vec3) -> Self {
+        Self {
+            bottom_left: center - scale / 2.0,
+            scale,
+        }
+    }
+}

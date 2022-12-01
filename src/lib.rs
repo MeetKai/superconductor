@@ -28,7 +28,7 @@ pub use renderer_core::{
 
 use resources::{
     Camera, CullingParams, Device, EventQueue, HttpClient, LutUrl, NewIblCubemap, PipelineOptions,
-    Queue, SurfaceFrameView, TextureSettings, WindowChanges,
+    ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings, WindowChanges,
 };
 
 #[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
@@ -74,6 +74,7 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
             url::Url::parse("http://localhost:8000/assets/lut_ggx.png").unwrap(),
         ));
         app.insert_resource(CullingParams::default());
+        app.insert_resource(ProbesArrayInfo::new(Vec3::ZERO, Vec3::ONE));
 
         app.add_startup_stage(
             StartupStage::PipelineCreation,
