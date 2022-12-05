@@ -2,6 +2,7 @@
 
 use core::ops::{BitOr, BitOrAssign, Mul};
 use glam::{Mat2, Mat4, Vec2, Vec3, Vec4};
+#[cfg(target_arch = "spirv")]
 use num_traits::Float;
 
 #[derive(Clone, Copy)]

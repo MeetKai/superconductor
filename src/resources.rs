@@ -24,8 +24,6 @@ pub struct FrameTime(pub f64);
 
 #[derive(Resource)]
 pub struct NewIblCubemap(pub Option<url::Url>);
-#[derive(Resource)]
-pub struct LutUrl(pub url::Url);
 
 #[derive(Resource)]
 pub struct EventQueue(pub Vec<winit::event::Event<'static, ()>>);

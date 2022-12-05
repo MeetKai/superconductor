@@ -27,7 +27,7 @@ pub use renderer_core::{
 };
 
 use resources::{
-    Camera, CullingParams, Device, EventQueue, HttpClient, LutUrl, NewIblCubemap, PipelineOptions,
+    Camera, CullingParams, Device, EventQueue, HttpClient, NewIblCubemap, PipelineOptions,
     ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings, WindowChanges,
 };
 
@@ -70,9 +70,6 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
         app.insert_resource(NewIblCubemap(None));
         app.insert_resource(WindowChanges::default());
         app.insert_resource(HttpClient(self.http_client.clone()));
-        app.insert_resource(LutUrl(
-            url::Url::parse("http://localhost:8000/assets/lut_ggx.png").unwrap(),
-        ));
         app.insert_resource(CullingParams::default());
         app.insert_resource(ProbesArrayInfo::new(Vec3::ZERO, Vec3::ONE));
 

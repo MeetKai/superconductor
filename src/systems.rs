@@ -6,16 +6,16 @@ use crate::components::{
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, BoundingSphereParams, Camera, CompositeBindGroup,
     CullingParams, Device, HttpClient, IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer,
-    IntermediateDepthFramebuffer, LineBuffer, LutUrl, MainBindGroup, NewIblCubemap,
-    PipelineOptions, Pipelines, ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings,
-    UniformBuffer, VertexBuffers,
+    IntermediateDepthFramebuffer, LineBuffer, MainBindGroup, NewIblCubemap, PipelineOptions,
+    Pipelines, ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings, UniformBuffer,
+    VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
     arc_swap::ArcSwapOption,
     assets, bytemuck,
     culling::{BoundingSphereCullingParams, CullingFrustum},
-    glam::{Mat4, Vec3, Vec4},
+    glam::Mat4,
     shared_structs::{self, Settings},
     spawn, GpuInstance, MutableBindGroup, Texture,
 };
@@ -378,16 +378,12 @@ pub(crate) fn upload_lines(
 pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
-    pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<TextureSettings>,
-    http_client: Res<HttpClient<T>>,
-    lut_url: Res<LutUrl>,
     mut commands: Commands,
 ) {
     let device = &device.0;
     let queue = &queue.0;
-    let pipelines = &pipelines.0;
     let bind_group_layouts = &bind_group_layouts.0;
 
     let uniform_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
@@ -498,17 +494,6 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
 
     commands.insert_resource(UniformBuffer(uniform_buffer));
     commands.insert_resource(MainBindGroup(main_bind_group.clone()));
-
-    let textures_context = renderer_core::assets::textures::Context {
-        device: device.clone(),
-        queue: queue.clone(),
-        http_client: http_client.0.clone(),
-        bind_group_layouts: bind_group_layouts.clone(),
-        pipelines: pipelines.clone(),
-        settings: texture_settings.0.clone(),
-    };
-
-    let lut_url = lut_url.0.clone();
 
     commands.insert_resource(IndexBuffer(Arc::new(renderer_core::IndexBuffer::new(
         1024, device,

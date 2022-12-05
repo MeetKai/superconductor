@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use bevy_ecs::system::Resource;
 use superconductor::{
     bevy_app, bevy_ecs, components, renderer_core,
-    resources::{Camera, EventQueue, LutUrl, NewIblCubemap, ProbesArrayInfo, WindowChanges},
+    resources::{Camera, EventQueue, NewIblCubemap, ProbesArrayInfo, WindowChanges},
     url, winit,
     winit::event::{ElementState, VirtualKeyCode},
     Mode, Vec3,
