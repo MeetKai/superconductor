@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use bevy_ecs::system::Resource;
 use superconductor::{
     bevy_app, bevy_ecs, components, renderer_core,
-    resources::{Camera, EventQueue, LutUrl, NewIblCubemap, WindowChanges, ProbesArrayInfo},
+    resources::{Camera, EventQueue, LutUrl, NewIblCubemap, ProbesArrayInfo, WindowChanges},
     url, winit,
     winit::event::{ElementState, VirtualKeyCode},
     Mode, Vec3,
@@ -58,7 +58,7 @@ impl Plugin for SuperconductorPlugin {
         let href = "http://localhost:8000";
         let href = url::Url::parse(&href).unwrap();
 
-        let mut model_url = std::borrow::Cow::Borrowed("/assets/models/box.glb");
+        let mut model_url = std::borrow::Cow::Borrowed("/assets/models/Sponza/glTF/Sponza.gltf");
 
         for (key, value) in href.query_pairs() {
             if key == "model" {
@@ -79,6 +79,30 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::InstanceRanges::default())
             .id();
 
+        /*
+        let squid = app
+            .world
+            .spawn_empty()
+            .insert(components::AnimatedModelUrl(
+                url::Url::options()
+                    .base_url(Some(&href))
+                    .parse("/assets/models/squid6.gltf")
+                    .unwrap(),
+            ))
+            .insert(components::Instances::default())
+            .insert(components::InstanceRanges::default())
+            .id();
+
+        app.world
+            .spawn_empty()
+            .insert(components::InstanceOf(squid))
+            .insert(components::Instance(renderer_core::Instance::new(
+                Vec3::new(-9.81, 3.324, 0.285),
+                1.0,
+                Default::default(),
+            )));
+            */
+
         app.world
             .spawn_empty()
             .insert(components::InstanceOf(model))
@@ -88,13 +112,13 @@ impl Plugin for SuperconductorPlugin {
                 Default::default(),
             )));
 
-        let monke = app
+        let probes = app
             .world
             .spawn_empty()
             .insert(components::ModelUrl(
                 url::Url::options()
                     .base_url(Some(&href))
-                    .parse("/assets/models/monke.glb")
+                    .parse("/assets/models/probes.glb")
                     .unwrap(),
             ))
             .insert(components::Instances::default())
@@ -103,13 +127,37 @@ impl Plugin for SuperconductorPlugin {
 
         app.world
             .spawn_empty()
-            .insert(components::InstanceOf(monke))
+            .insert(components::InstanceOf(probes))
+            .insert(components::Instance(renderer_core::Instance::new(
+                Vec3::ZERO,
+                0.1,
+                Default::default(),
+            )));
+
+        /*
+        let helmet = app
+            .world
+            .spawn_empty()
+            .insert(components::ModelUrl(
+                url::Url::options()
+                    .base_url(Some(&href))
+                    .parse("/assets/models/DamagedHelmet.glb")
+                    .unwrap(),
+            ))
+            .insert(components::Instances::default())
+            .insert(components::InstanceRanges::default())
+            .id();
+
+
+        app.world
+            .spawn_empty()
+            .insert(components::InstanceOf(helmet))
             .insert(components::Instance(renderer_core::Instance::new(
                 Vec3::ZERO,
                 1.0,
                 Default::default(),
-            )))
-            .insert(Spinning);
+            )));
+            */
 
         let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()
             .with(dolly::drivers::Position::new(Vec3::new(0.0, 1.75, 0.0)))
@@ -132,16 +180,13 @@ impl Plugin for SuperconductorPlugin {
         app.insert_resource(NewIblCubemap(Some(
             url::Url::options()
                 .base_url(Some(&href))
-                .parse("/assets/cubemaps/forest.ktx2")
+                .parse("/assets/cubemaps/san.ktx2")
                 .unwrap(),
         )));
-        app.insert_resource(LutUrl(
-            url::Url::options()
-                .base_url(Some(&href))
-                .parse("/assets/lut_ggx.png")
-                .unwrap(),
+        app.insert_resource(ProbesArrayInfo::new(
+            Vec3::new(-0.5, 6.0, 0.3),
+            Vec3::new(21.8, 12.0, 9.8),
         ));
-        app.insert_resource(ProbesArrayInfo::new(Vec3::new(-0.5, 6.0, 0.3), Vec3::new(21.8, 12.0, 9.8)));
     }
 }
 
@@ -252,7 +297,10 @@ struct KeyboardState {
 
 fn rotate_entities(mut query: Query<&mut components::Instance, With<Spinning>>) {
     query.for_each_mut(|mut instance| {
-        instance.0.rotation *= renderer_core::glam::Quat::from_rotation_y(0.01)
+        instance.0.translation.z = (instance.0.translation.z - 0.025);
+        if instance.0.translation.z < -5.0 {
+            instance.0.translation.z += 10.0;
+        }
     });
 }
 
@@ -334,7 +382,7 @@ fn update_camera(
         * Vec3::new(right as f32, 0.0, -forwards as f32).clamp_length_max(1.0);
 
     let delta_time = 1.0 / 60.0;
-    let speed = 30.0;
+    let speed = 3.0;
 
     camera_rig
         .0

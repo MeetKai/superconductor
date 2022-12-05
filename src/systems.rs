@@ -418,21 +418,6 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         vec![
             renderer_core::mutable_bind_group::Entry::Buffer(uniform_buffer.clone(), 0),
             renderer_core::mutable_bind_group::Entry::Sampler(clamp_sampler),
-            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
-                device.create_texture(&wgpu::TextureDescriptor {
-                    label: Some("dummy ibl lut"),
-                    size: wgpu::Extent3d {
-                        width: 1,
-                        height: 1,
-                        depth_or_array_layers: 1,
-                    },
-                    sample_count: 1,
-                    mip_level_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                    format: wgpu::TextureFormat::Rgba8Unorm,
-                }),
-            ))),
             renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new_cubemap(
                 device.create_texture(&wgpu::TextureDescriptor {
                     label: Some("dummy ibl cubemap"),
@@ -448,15 +433,6 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
                     format: wgpu::TextureFormat::Rgba16Float,
                 }),
             ))),
-            renderer_core::mutable_bind_group::Entry::Buffer(
-                Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("sphere harmonics buffer"),
-                    size: 144,
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                })),
-                0,
-            ),
             renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
                 device.create_texture_with_data(
                     &queue,
@@ -534,43 +510,6 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
 
     let lut_url = lut_url.0.clone();
 
-    spawn(async move {
-        // todo: yuck.
-        // This results in only the skybox being rendered:
-        let bytes = &include_bytes!("../demo/web/assets/lut_ggx.png")[..];
-        /*let bytes = textures_context
-        .http_client
-        .fetch_bytes(&lut_url, None)
-        .await
-        .unwrap();*/
-
-        let result = renderer_core::assets::textures::load_image_crate_image(
-            &bytes[..],
-            false,
-            false,
-            &textures_context,
-        );
-
-        match result {
-            Ok((lut_texture, _size)) => {
-                main_bind_group.mutate(
-                    &textures_context.device,
-                    &textures_context.bind_group_layouts.uniform,
-                    |entries| {
-                        entries[2] = renderer_core::mutable_bind_group::Entry::Texture(lut_texture);
-                    },
-                );
-
-                Ok(())
-            }
-            Err(error) => Err(anyhow::anyhow!(
-                "Got an error while trying to load {}: {}",
-                lut_url,
-                error
-            )),
-        }
-    });
-
     commands.insert_resource(IndexBuffer(Arc::new(renderer_core::IndexBuffer::new(
         1024, device,
     ))));
@@ -643,19 +582,8 @@ pub(crate) fn update_ibl_resources<T: assets::HttpClient>(
                     &textures_context.device,
                     &textures_context.bind_group_layouts.uniform,
                     |entries| {
-                        entries[3] =
+                        entries[2] =
                             renderer_core::mutable_bind_group::Entry::Texture(ibl_data.texture);
-                        entries[4] = renderer_core::mutable_bind_group::Entry::Buffer(
-                            Arc::new(textures_context.device.create_buffer_init(
-                                &wgpu::util::BufferInitDescriptor {
-                                    label: Some("sphere harmonics buffer"),
-                                    contents: &ibl_data.padded_sphere_harmonics_bytes,
-                                    usage: wgpu::BufferUsages::UNIFORM
-                                        | wgpu::BufferUsages::COPY_DST,
-                                },
-                            )),
-                            0,
-                        );
                     },
                 );
 

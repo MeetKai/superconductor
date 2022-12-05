@@ -238,7 +238,7 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
 
     let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
     let instance = wgpu::Instance::new(backend);
-    let surface = unsafe { instance.create_surface(&canvas) };
+    let surface = unsafe { instance.create_surface(&canvas) }.unwrap();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -336,7 +336,7 @@ pub async fn initialise_desktop() -> InitialisedState {
 
     let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
     let instance = wgpu::Instance::new(backend);
-    let surface = unsafe { instance.create_surface(&window) };
+    let surface = unsafe { instance.create_surface(&window) }.unwrap();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -368,6 +368,8 @@ pub async fn initialise_desktop() -> InitialisedState {
         .await
         .expect("Unable to find a suitable GPU adapter!");
 
+    let surface_capabilites = surface.get_capabilities(&adapter);
+
     InitialisedState {
         mode_specific: ModeSpecificState::Desktop { window, event_loop },
         device,
@@ -375,7 +377,7 @@ pub async fn initialise_desktop() -> InitialisedState {
         pipeline_options: renderer_core::PipelineOptions {
             multiview: None,
             inline_tonemapping: true,
-            framebuffer_format: surface.get_supported_formats(&adapter)[0],
+            framebuffer_format: surface_capabilites.formats[0],
             // wgpu handles this for us.
             flip_viewport: false,
             depth_prepass: false,

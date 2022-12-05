@@ -88,13 +88,11 @@ impl BindGroupLayouts {
                 entries: &[
                     uniform_entry(0, wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT),
                     sampler_entry(1),
-                    texture_entry(2),
-                    cubemap_entry(3),
-                    uniform_entry(4, wgpu::ShaderStages::FRAGMENT),
+                    cubemap_entry(2),
+                    d3_texture_entry(3),
+                    d3_texture_entry(4),
                     d3_texture_entry(5),
                     d3_texture_entry(6),
-                    d3_texture_entry(7),
-                    d3_texture_entry(8),
                 ],
             }),
             model: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

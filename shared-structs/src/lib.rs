@@ -289,37 +289,34 @@ impl Mul<Vec3> for JointTransform {
 
 pub type L1SphericalHarmonics = [Vec3; 4];
 
+pub fn spherical_harmonics_channel_vectors(harmonics: L1SphericalHarmonics) -> (Vec3, Vec3, Vec3) {
+    (
+        Vec3::new(harmonics[1].x, harmonics[2].x, harmonics[3].x),
+        Vec3::new(harmonics[1].y, harmonics[2].y, harmonics[3].y),
+        Vec3::new(harmonics[1].z, harmonics[2].z, harmonics[3].z),
+    )
+}
+
 // See https://grahamhazel.com/blog/2017/12/22/converting-sh-radiance-to-irradiance/
 // https://web.archive.org/web/20160313132301/http://www.geomerics.com/wp-content/uploads/2015/08/CEDEC_Geomerics_ReconstructingDiffuseLighting1.pdf
 // https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/gdc2018-precomputedgiobalilluminationinfrostbite.pdf
 pub fn eval_spherical_harmonics_nonlinear(harmonics: L1SphericalHarmonics, normal: Vec3) -> Vec3 {
-    fn eval_scalar(r_0: f32, r_1: Vec3, normal: Vec3) -> f32 {
-        let r1_len = r_1.length();
-        let r1_r0_ratio = r1_len / r_0;
+    fn eval_scalar(r_0: f32, r_1_div_r_0: Vec3, normal: Vec3) -> f32 {
+        let r1_r0_ratio = r_1_div_r_0.length();
 
         let a = (1.0 - r1_r0_ratio) / (1.0 + r1_r0_ratio);
         let p = 1.0 + 2.0 * r1_r0_ratio;
-        let q = 0.5 * (1.0 + (r_1 / r1_len).dot(normal));
+        let q = 0.5 * (1.0 + r_1_div_r_0.dot(normal));
 
         r_0 * (a + (1.0 - a) * (p + 1.0) * q.powf(p))
     }
 
+    let (red_vector, green_vector, blue_vector) = spherical_harmonics_channel_vectors(harmonics);
+
     Vec3::new(
-        eval_scalar(
-            harmonics[0].x,
-            Vec3::new(harmonics[1].x, harmonics[2].x, harmonics[3].x),
-            normal,
-        ),
-        eval_scalar(
-            harmonics[0].y,
-            Vec3::new(harmonics[1].y, harmonics[2].y, harmonics[3].y),
-            normal,
-        ),
-        eval_scalar(
-            harmonics[0].z,
-            Vec3::new(harmonics[1].z, harmonics[2].z, harmonics[3].z),
-            normal,
-        ),
+        eval_scalar(harmonics[0].x, red_vector, normal),
+        eval_scalar(harmonics[0].y, green_vector, normal),
+        eval_scalar(harmonics[0].z, blue_vector, normal),
     )
 }
 
@@ -339,7 +336,6 @@ fn test_spherical_harmonics() {
     }
 
     add_sample_to_harmonics(&mut harmonics, Vec3::splat(1.0), Vec3::Y);
-    
 
     assert_eq!(
         eval_spherical_harmonics_nonlinear(harmonics, Vec3::Y),

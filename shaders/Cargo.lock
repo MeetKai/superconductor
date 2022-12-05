@@ -46,7 +46,7 @@ dependencies = [
 [[package]]
 name = "glam-pbr"
 version = "0.1.0"
-source = "git+https://github.com/expenses/glam-pbr#c5636489dd602dbed51ea9f586b004a7b262b54d"
+source = "git+https://github.com/expenses/glam-pbr#d328c47458c82a78bb98f45e31a76005229595ff"
 dependencies = [
  "glam",
  "num-traits",

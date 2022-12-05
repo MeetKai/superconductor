@@ -5,7 +5,9 @@
     no_std
 )]
 
-use shared_structs::{JointTransform, MaterialSettings, Settings, Uniforms, eval_spherical_harmonics_nonlinear};
+use shared_structs::{
+    eval_spherical_harmonics_nonlinear, JointTransform, MaterialSettings, Settings, Uniforms,
+};
 use spirv_std::{
     arch::IndexUnchecked,
     glam::{self, const_vec3, Mat3, UVec4, Vec2, Vec3, Vec4},
@@ -170,6 +172,32 @@ impl ExtendedMaterialParams {
     }
 }
 
+type Image3D = Image!(3D, type=f32, sampled);
+
+fn sample_spherical_harmonics(
+    uniforms: &Uniforms,
+    position: Vec3,
+    sampler: Sampler,
+    l_0: &Image3D,
+    l_1_x: &Image3D,
+    l_1_y: &Image3D,
+    l_1_z: &Image3D,
+) -> [Vec3; 4] {
+    let rescaled = uniforms.probes_array().rescale(position);
+
+    let sample_texture = |texture: &Image3D| {
+        let sample: Vec4 = texture.sample_by_lod(sampler, rescaled, 0.0);
+        sample.truncate()
+    };
+
+    [
+        sample_texture(l_0),
+        sample_texture(l_1_x),
+        sample_texture(l_1_y),
+        sample_texture(l_1_z),
+    ]
+}
+
 #[spirv(fragment)]
 pub fn fragment(
     position: Vec3,
@@ -178,12 +206,10 @@ pub fn fragment(
     #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 3)] ibl_cubemap: &Image!(cube, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 5)] spherical_harmonics_0: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 6)] spherical_harmonics_1: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 7)] spherical_harmonics_2: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 8)] spherical_harmonics_3: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image!(3D, type=f32, sampled),
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -194,19 +220,16 @@ pub fn fragment(
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
-    let rescaled = uniforms.probes_array().rescale(position);
+    let spherical_harmonics = sample_spherical_harmonics(
+        uniforms,
+        position,
+        *clamp_sampler,
+        sh_l_0,
+        sh_l_1_x,
+        sh_l_1_y,
+        sh_l_1_z,
+    );
 
-    let sample_spherical_harmonics = |texture: &Image!(3D, type=f32, sampled)| {
-        let sample: Vec4 = texture.sample_by_lod(*clamp_sampler, rescaled, 0.0);
-        sample.truncate()
-    };
-
-    let spherical_harmonics = [
-        sample_spherical_harmonics(spherical_harmonics_0),
-        sample_spherical_harmonics(spherical_harmonics_1),
-        sample_spherical_harmonics(spherical_harmonics_2),
-        sample_spherical_harmonics(spherical_harmonics_3),
-    ];
     let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
     let metallic_roughness_texture =
         TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv);
@@ -219,8 +242,6 @@ pub fn fragment(
         &emissive_texture,
         &material_settings,
     );
-
-    //material_params.base.albedo_colour = debug_colour_for_id(material_index);
 
     if material_settings.is_unlit != 0 {
         // we don't want to use tonemapping for unlit materials.
@@ -241,35 +262,14 @@ pub fn fragment(
     );
     let view = glam_pbr::View(view_vector);
 
-    let lut_values = glam_pbr::ggx_lut_lookup(
-        normal,
-        view,
-        material_params.base,
-        |normal_dot_view: f32, perceptual_roughness: glam_pbr::PerceptualRoughness| {
-            let uv = Vec2::new(normal_dot_view, perceptual_roughness.0);
-            let sample: Vec4 = ibl_lut.sample_by_lod(*clamp_sampler, uv, 0.0);
-            Vec2::new(sample.x, sample.y)
-        },
-    );
+    let diffuse_output = material_params.base.diffuse_colour()
+        * eval_spherical_harmonics_nonlinear(spherical_harmonics, normal.0);
 
-    let diffuse_output = glam_pbr::ibl_irradiance_lambertian(
+    let specular_output = spherical_harmonics_specular_approximation(
+        spherical_harmonics,
         normal,
         view,
         material_params.base,
-        lut_values,
-        |normal| eval_spherical_harmonics_nonlinear(spherical_harmonics, normal),
-    );
-
-    let specular_output = glam_pbr::get_ibl_radiance_ggx(
-        normal,
-        view,
-        material_params.base,
-        lut_values,
-        9,
-        |ray, lod| {
-            let sample: Vec4 = ibl_cubemap.sample_by_lod(*clamp_sampler, ray, lod);
-            sample.truncate()
-        },
     );
 
     let combined_output = diffuse_output + specular_output + material_params.emissive;
@@ -285,8 +285,10 @@ pub fn fragment_alpha_blended(
     #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 3)] ibl_cubemap: &Image!(cube, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image!(3D, type=f32, sampled),
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -297,6 +299,16 @@ pub fn fragment_alpha_blended(
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
+    let spherical_harmonics = sample_spherical_harmonics(
+        uniforms,
+        position,
+        *clamp_sampler,
+        sh_l_0,
+        sh_l_1_x,
+        sh_l_1_y,
+        sh_l_1_z,
+    );
+
     let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
     let metallic_roughness_texture =
         TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv);
@@ -329,37 +341,15 @@ pub fn fragment_alpha_blended(
     );
     let view = glam_pbr::View(view_vector);
 
-    let lut_values = glam_pbr::ggx_lut_lookup(
+    let diffuse_output = material_params.base.diffuse_colour()
+        * eval_spherical_harmonics_nonlinear(spherical_harmonics, normal.0);
+
+    let specular_output = spherical_harmonics_specular_approximation(
+        spherical_harmonics,
         normal,
         view,
         material_params.base,
-        |normal_dot_view: f32, perceptual_roughness: glam_pbr::PerceptualRoughness| {
-            let uv = Vec2::new(normal_dot_view, perceptual_roughness.0);
-            let sample: Vec4 = ibl_lut.sample_by_lod(*clamp_sampler, uv, 0.0);
-            Vec2::new(sample.x, sample.y)
-        },
     );
-
-    let diffuse_output = Vec3::ZERO;/*glam_pbr::ibl_irradiance_lambertian(
-        normal,
-        view,
-        material_params.base,
-        lut_values,
-        |normal| sample_spherical_harmonics(*spherical_harmonics, normal),
-    );*/
-
-    let specular_output = glam_pbr::get_ibl_radiance_ggx(
-        normal,
-        view,
-        material_params.base,
-        lut_values,
-        9,
-        |ray, lod| {
-            let sample: Vec4 = ibl_cubemap.sample_by_lod(*clamp_sampler, ray, lod);
-            sample.truncate()
-        },
-    );
-
     let combined_output = diffuse_output + specular_output + material_params.emissive;
 
     *output = potentially_tonemap(combined_output, uniforms).extend(material_params.alpha);
@@ -373,8 +363,10 @@ pub fn fragment_alpha_clipped(
     #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 2)] ibl_lut: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 3)] ibl_cubemap: &Image!(cube, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image!(3D, type=f32, sampled),
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -385,6 +377,16 @@ pub fn fragment_alpha_clipped(
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
+    let spherical_harmonics = sample_spherical_harmonics(
+        uniforms,
+        position,
+        *clamp_sampler,
+        sh_l_0,
+        sh_l_1_x,
+        sh_l_1_y,
+        sh_l_1_z,
+    );
+
     let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
     let metallic_roughness_texture =
         TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv);
@@ -422,37 +424,15 @@ pub fn fragment_alpha_clipped(
         return;
     }
 
-    let lut_values = glam_pbr::ggx_lut_lookup(
+    let diffuse_output = material_params.base.diffuse_colour()
+        * eval_spherical_harmonics_nonlinear(spherical_harmonics, normal.0);
+
+    let specular_output = spherical_harmonics_specular_approximation(
+        spherical_harmonics,
         normal,
         view,
         material_params.base,
-        |normal_dot_view: f32, perceptual_roughness: glam_pbr::PerceptualRoughness| {
-            let uv = Vec2::new(normal_dot_view, perceptual_roughness.0);
-            let sample: Vec4 = ibl_lut.sample_by_lod(*clamp_sampler, uv, 0.0);
-            Vec2::new(sample.x, sample.y)
-        },
     );
-
-    let diffuse_output = Vec3::ZERO;/*glam_pbr::ibl_irradiance_lambertian(
-        normal,
-        view,
-        material_params.base,
-        lut_values,
-        |normal| sample_spherical_harmonics(*spherical_harmonics, normal),
-    );*/
-
-    let specular_output = glam_pbr::get_ibl_radiance_ggx(
-        normal,
-        view,
-        material_params.base,
-        lut_values,
-        9,
-        |ray, lod| {
-            let sample: Vec4 = ibl_cubemap.sample_by_lod(*clamp_sampler, ray, lod);
-            sample.truncate()
-        },
-    );
-
     let combined_output = diffuse_output + specular_output + material_params.emissive;
 
     *output = potentially_tonemap(combined_output, uniforms).extend(1.0);
@@ -624,7 +604,7 @@ pub fn fragment_skybox(
     ray: Vec3,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 3)] ibl_cubemap: &Image!(cube, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 2)] ibl_cubemap: &Image!(cube, type=f32, sampled),
     output: &mut Vec4,
 ) {
     let sample: Vec4 = ibl_cubemap.sample_by_lod(*sampler, ray, 0.0);
@@ -695,4 +675,44 @@ pub fn depth_prepass_vertex(
     if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
     }
+}
+
+fn spherical_harmonics_specular_approximation(
+    spherical_harmonics: [Vec3; 4],
+    normal: glam_pbr::Normal,
+    view: glam_pbr::View,
+    material_params: glam_pbr::MaterialParams,
+) -> Vec3 {
+    let (red, green, blue) =
+        shared_structs::spherical_harmonics_channel_vectors(spherical_harmonics);
+    let average_light_direction = (red + green + blue) / 3.0;
+    let directional_length = average_light_direction.length();
+
+    let smoothness = 1.0 - material_params.perceptual_roughness.0;
+    let adjusted_smoothness = smoothness * directional_length.sqrt();
+    let adjusted_roughness = glam_pbr::PerceptualRoughness(1.0 - adjusted_smoothness);
+
+    let actual_roughness = adjusted_roughness.as_actual_roughness();
+
+    let light = glam_pbr::Light(average_light_direction / directional_length);
+    let halfway = glam_pbr::Halfway::new(&view, &light);
+    let view_dot_halfway = glam_pbr::Dot::new(&view, &halfway);
+
+    let strength = spherical_harmonics[0] * directional_length;
+
+    let f0 = glam_pbr::calculate_combined_f0(material_params);
+    let f90 = glam_pbr::calculate_combined_f90(material_params);
+
+    let fresnel = glam_pbr::fresnel_schlick(view_dot_halfway, f0, f90);
+
+    let normal_dot_light = glam_pbr::Dot::new(&normal, &light);
+
+    glam_pbr::specular_brdf(
+        glam_pbr::Dot::new(&normal, &view),
+        normal_dot_light,
+        glam_pbr::Dot::new(&normal, &halfway),
+        actual_roughness,
+        fresnel,
+    ) * strength
+        * normal_dot_light.value
 }
