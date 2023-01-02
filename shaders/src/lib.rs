@@ -29,6 +29,7 @@ pub fn vertex(
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
+    lightmap_uv: Vec2,
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
     #[spirv(flat)] _joints_offset: u32,
@@ -40,6 +41,7 @@ pub fn vertex(
     out_position: &mut Vec3,
     out_normal: &mut Vec3,
     out_uv: &mut Vec2,
+    out_lightmap_uv: &mut Vec2,
     #[spirv(flat)] out_material_index: &mut u32,
 ) {
     let instance_scale = instance_translation_and_scale.w;
@@ -51,6 +53,8 @@ pub fn vertex(
     *out_normal = instance_rotation * normal;
     *out_uv = material_settings.transform_uv(uv);
     *out_material_index = material_index;
+    *out_lightmap_uv = lightmap_uv;
+    //out_lightmap_uv.y = 1.0 - out_lightmap_uv.y;
 
     if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
@@ -62,11 +66,11 @@ pub fn animated_vertex(
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
+    #[spirv(flat)] joint_indices: UVec4,
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
     #[spirv(flat)] joints_offset: u32,
     #[spirv(flat)] material_index: u32,
-    #[spirv(flat)] joint_indices: UVec4,
     joint_weights: Vec4,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
@@ -77,6 +81,7 @@ pub fn animated_vertex(
     out_position: &mut Vec3,
     out_normal: &mut Vec3,
     out_uv: &mut Vec2,
+    out_lightmap_uv: &mut Vec2,
     #[spirv(flat)] out_material_index: &mut u32,
 ) {
     let instance_scale = instance_translation_and_scale.w;
@@ -111,6 +116,7 @@ pub fn animated_vertex(
     *out_normal = instance_rotation * normal;
     *out_uv = material_settings.transform_uv(uv);
     *out_material_index = material_index;
+    *out_lightmap_uv = Vec2::ZERO;
 
     if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
@@ -203,6 +209,7 @@ pub fn fragment(
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
+    lightmap_uv: Vec2,
     #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
@@ -210,6 +217,12 @@ pub fn fragment(
     #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image!(3D, type=f32, sampled),
     #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image!(3D, type=f32, sampled),
     #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 7)] lightmap: &SampledImage,
+
+    #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 10)] lightmap_z: &SampledImage,
+
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -220,6 +233,21 @@ pub fn fragment(
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
+    /*
+    let s: Vec4 = lightmap.sample_by_lod(*clamp_sampler, lightmap_uv, 0.0);
+
+    let x: Vec4 = lightmap_x.sample_by_lod(*clamp_sampler, lightmap_uv, 0.0);
+    let y: Vec4 = lightmap_y.sample_by_lod(*clamp_sampler, lightmap_uv, 0.0);
+    let z: Vec4 = lightmap_z.sample_by_lod(*clamp_sampler, lightmap_uv, 0.0);
+
+
+    let spherical_harmonics = [
+        s.truncate(),
+        x.truncate(),
+        y.truncate(),
+        z.truncate(),
+    ];*/
+
     let spherical_harmonics = sample_spherical_harmonics(
         uniforms,
         position,
@@ -282,6 +310,7 @@ pub fn fragment_alpha_blended(
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
+    lightmap_uv: Vec2,
     #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
@@ -360,6 +389,7 @@ pub fn fragment_alpha_clipped(
     position: Vec3,
     normal: Vec3,
     uv: Vec2,
+    lightmap_uv: Vec2,
     #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
@@ -536,9 +566,7 @@ fn potentially_tonemap(mut output: Vec3, uniforms: &Uniforms) -> Vec3 {
     if uniforms.settings.contains(Settings::INLINE_TONEMAPPING) {
         output = aces_filmic(output);
     }
-    if uniforms.settings.contains(Settings::INLINE_SRGB) {
-        output = linear_to_srgb_approx(output);
-    }
+    output = potentially_convert_linear_to_srgb(output, uniforms);
 
     output
 }

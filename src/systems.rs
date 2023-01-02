@@ -380,6 +380,8 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     queue: Res<Queue>,
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<TextureSettings>,
+    http_client: Res<HttpClient<T>>,
+    pipelines: Res<Pipelines>,
     mut commands: Commands,
 ) {
     let device = &device.0;
@@ -408,6 +410,38 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         depth_or_array_layers: 25,
     };
 
+    let dummy_lightmap_texture = Arc::new(Texture::new(
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("dummy lightmap"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            sample_count: 1,
+            mip_level_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            format: wgpu::TextureFormat::Rgba32Float,
+        }),
+    ));
+
+    let dummy_lightvol_texture = Arc::new(Texture::new(
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("dummy lightvol"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            sample_count: 1,
+            mip_level_count: 1,
+            dimension: wgpu::TextureDimension::D3,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            format: wgpu::TextureFormat::Rgba32Float,
+        }),
+    ));
+
     let main_bind_group = Arc::new(MutableBindGroup::new(
         device,
         &bind_group_layouts.uniform,
@@ -429,68 +463,87 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
                     format: wgpu::TextureFormat::Rgba16Float,
                 }),
             ))),
-            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
-                device.create_texture_with_data(
-                    &queue,
-                    &wgpu::TextureDescriptor {
-                        label: Some("sphere harmonics coefficient 0"),
-                        size: dims,
-                        sample_count: 1,
-                        mip_level_count: 1,
-                        dimension: wgpu::TextureDimension::D3,
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                        format: wgpu::TextureFormat::Rgba32Float,
-                    },
-                    include_bytes!("coefs/0.bin"),
-                ),
-            ))),
-            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
-                device.create_texture_with_data(
-                    &queue,
-                    &wgpu::TextureDescriptor {
-                        label: Some("sphere harmonics coefficient 1"),
-                        size: dims,
-                        sample_count: 1,
-                        mip_level_count: 1,
-                        dimension: wgpu::TextureDimension::D3,
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                        format: wgpu::TextureFormat::Rgba32Float,
-                    },
-                    include_bytes!("coefs/1.bin"),
-                ),
-            ))),
-            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
-                device.create_texture_with_data(
-                    &queue,
-                    &wgpu::TextureDescriptor {
-                        label: Some("sphere harmonics coefficient 2"),
-                        size: dims,
-                        sample_count: 1,
-                        mip_level_count: 1,
-                        dimension: wgpu::TextureDimension::D3,
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                        format: wgpu::TextureFormat::Rgba32Float,
-                    },
-                    include_bytes!("coefs/2.bin"),
-                ),
-            ))),
-            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new(
-                device.create_texture_with_data(
-                    &queue,
-                    &wgpu::TextureDescriptor {
-                        label: Some("sphere harmonics coefficient 3"),
-                        size: dims,
-                        sample_count: 1,
-                        mip_level_count: 1,
-                        dimension: wgpu::TextureDimension::D3,
-                        usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                        format: wgpu::TextureFormat::Rgba32Float,
-                    },
-                    include_bytes!("coefs/3.bin"),
-                ),
-            ))),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
         ],
     ));
+
+    let mbg = main_bind_group.clone();
+
+    let textures_context = renderer_core::assets::textures::Context {
+        device: device.clone(),
+        queue: queue.clone(),
+        http_client: http_client.0.clone(),
+        bind_group_layouts: bind_group_layouts.clone(),
+        pipelines: pipelines.0.clone(),
+        settings: texture_settings.0.clone(),
+    };
+
+    spawn(async move {
+        /*let texture = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &url::Url::parse("http://localhost:8000/assets/lighting/lightmap.ktx2").unwrap(),
+            false,
+            |_| (),
+        )
+        .await
+        .unwrap();*/
+
+        let sh0 = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &url::Url::parse("http://localhost:8000/assets/lighting/lightvol.ktx2").unwrap(),
+            false,
+            |_| (),
+        )
+        .await
+        .unwrap();
+
+        let sh1_x = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &url::Url::parse("http://localhost:8000/assets/lighting/lightvol_x.ktx2").unwrap(),
+            false,
+            |_| (),
+        )
+        .await
+        .unwrap();
+
+        let sh1_y = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &url::Url::parse("http://localhost:8000/assets/lighting/lightvol_y.ktx2").unwrap(),
+            false,
+            |_| (),
+        )
+        .await
+        .unwrap();
+
+        let sh1_z = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &url::Url::parse("http://localhost:8000/assets/lighting/lightvol_z.ktx2").unwrap(),
+            false,
+            |_| (),
+        )
+        .await
+        .unwrap();
+
+        mbg.mutate(
+            &textures_context.device,
+            &textures_context.bind_group_layouts.uniform,
+            |entries| {
+                entries[3] = renderer_core::mutable_bind_group::Entry::Texture(sh0);
+                entries[4] = renderer_core::mutable_bind_group::Entry::Texture(sh1_x);
+                entries[5] = renderer_core::mutable_bind_group::Entry::Texture(sh1_y);
+                entries[6] = renderer_core::mutable_bind_group::Entry::Texture(sh1_z);
+            },
+        );
+
+        Ok(())
+    });
 
     commands.insert_resource(UniformBuffer(uniform_buffer));
     commands.insert_resource(MainBindGroup(main_bind_group.clone()));
@@ -498,9 +551,9 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     commands.insert_resource(IndexBuffer(Arc::new(renderer_core::IndexBuffer::new(
         1024, device,
     ))));
-    commands.insert_resource(VertexBuffers(Arc::new(renderer_core::VertexBuffers::new(
-        1024, device,
-    ))));
+    commands.insert_resource(VertexBuffers(Arc::new(
+        renderer_core::LightmappedVertexBuffers::new(1024, device),
+    )));
     commands.insert_resource(AnimatedVertexBuffers(Arc::new(
         renderer_core::AnimatedVertexBuffers::new(1024, device),
     )));

@@ -657,7 +657,7 @@ fn downscaling_for_max_size(texture_size: u32, max_size: u32) -> u32 {
     (texture_size_log as u32).saturating_sub(max_size_log as u32)
 }
 
-pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
+pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
     context: &Context<T>,
     url: &url::Url,
     srgb: bool,
@@ -702,6 +702,12 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         }
         Some(ktx2::Format::ASTC_6x6_SRGB_BLOCK | ktx2::Format::ASTC_6x6_UNORM_BLOCK) => {
             Ktx2Format::from_astc(wgpu::AstcBlock::B6x6, srgb, &context.device)?
+        }
+        Some(ktx2::Format::R32G32B32A32_SFLOAT) => {
+            Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Rgba32Float)
+        }
+        Some(ktx2::Format::R16G16B16A16_SFLOAT) => {
+            Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Rgba16Float)
         }
         Some(other) => {
             return Err(anyhow::anyhow!("Format {:?} is not supported", other));
@@ -754,10 +760,12 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         }
     }
 
+    dbg!(&header);
+
     let mut starting_extent = wgpu::Extent3d {
         width: header.pixel_width,
         height: header.pixel_height,
-        depth_or_array_layers: 1,
+        depth_or_array_layers: header.pixel_depth.max(1),
     }
     .mip_level_size(down_scaling_level, false);
 
@@ -776,7 +784,11 @@ pub(crate) async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         size: starting_extent,
         mip_level_count: header.level_count - down_scaling_level,
         sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
+        dimension: if header.pixel_depth > 1 {
+            wgpu::TextureDimension::D3
+        } else {
+            wgpu::TextureDimension::D2
+        },
         format: wgpu_format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
     };

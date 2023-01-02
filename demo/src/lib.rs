@@ -107,7 +107,7 @@ impl Plugin for SuperconductorPlugin {
             .spawn_empty()
             .insert(components::InstanceOf(model))
             .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::ZERO,
+                Vec3::new(0.0, 0.0, 0.0),
                 1.0,
                 Default::default(),
             )));
@@ -126,13 +126,13 @@ impl Plugin for SuperconductorPlugin {
             .id();
 
         app.world
-            .spawn_empty()
-            .insert(components::InstanceOf(probes))
-            .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::ZERO,
-                0.1,
-                Default::default(),
-            )));
+        .spawn_empty()
+        .insert(components::InstanceOf(probes))
+        .insert(components::Instance(renderer_core::Instance::new(
+            Vec3::new(0.0, 6.0, 0.0),
+            0.1,
+            Default::default(),
+        )));
 
         /*
         let helmet = app
@@ -184,8 +184,8 @@ impl Plugin for SuperconductorPlugin {
                 .unwrap(),
         )));
         app.insert_resource(ProbesArrayInfo::new(
-            Vec3::new(-0.5, 6.0, 0.3),
-            Vec3::new(21.8, 12.0, 9.8),
+            Vec3::new(0.0, 6.0, 0.0),
+            Vec3::new(24.0, 12.0, 12.0),
         ));
     }
 }
