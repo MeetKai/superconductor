@@ -6,5 +6,3 @@ zips
 perf.data*
 *.cap
 *.rdc
-demo/web/assets/models
-demo/web/assets/cubemaps/*.ktx2

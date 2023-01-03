@@ -58,7 +58,7 @@ impl Plugin for SuperconductorPlugin {
         let href = "http://localhost:8000";
         let href = url::Url::parse(&href).unwrap();
 
-        let mut model_url = std::borrow::Cow::Borrowed("/assets/models/Sponza/glTF/Sponza.gltf");
+        let mut model_url = std::borrow::Cow::Borrowed("assets/models/Sponza/glTF/Sponza.gltf");
 
         for (key, value) in href.query_pairs() {
             if key == "model" {
@@ -86,7 +86,7 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::AnimatedModelUrl(
                 url::Url::options()
                     .base_url(Some(&href))
-                    .parse("/assets/models/squid6.gltf")
+                    .parse("assets/models/squid6.gltf")
                     .unwrap(),
             ))
             .insert(components::Instances::default())
@@ -118,7 +118,7 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::ModelUrl(
                 url::Url::options()
                     .base_url(Some(&href))
-                    .parse("/assets/models/sponza_cubes.glb")
+                    .parse("assets/models/sponza_cubes.glb")
                     .unwrap(),
             ))
             .insert(components::Instances::default())
@@ -180,7 +180,7 @@ impl Plugin for SuperconductorPlugin {
         app.insert_resource(NewIblCubemap(Some(
             url::Url::options()
                 .base_url(Some(&href))
-                .parse("/assets/cubemaps/noon.ktx2")
+                .parse("assets/cubemaps/noon.ktx2")
                 .unwrap(),
         )));
         app.insert_resource(ProbesArrayInfo::new(
