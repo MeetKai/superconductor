@@ -188,7 +188,7 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
                     &textures_context.device,
                     &textures_context.queue,
                     wgpu::TextureFormat::Rgba8Unorm,
-                    &[0, 255, 0, 255],
+                    &[0, 255, 255, 255],
                 )),
                 crate::mutable_bind_group::Entry::Texture(load_single_pixel_image(
                     &textures_context.device,

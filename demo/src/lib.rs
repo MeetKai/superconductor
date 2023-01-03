@@ -118,7 +118,7 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::ModelUrl(
                 url::Url::options()
                     .base_url(Some(&href))
-                    .parse("/assets/models/probes.glb")
+                    .parse("/assets/models/knight.glb")
                     .unwrap(),
             ))
             .insert(components::Instances::default())
@@ -129,8 +129,8 @@ impl Plugin for SuperconductorPlugin {
         .spawn_empty()
         .insert(components::InstanceOf(probes))
         .insert(components::Instance(renderer_core::Instance::new(
-            Vec3::new(0.0, 6.0, 0.0),
-            0.1,
+            Vec3::new(0.0, 0.0, 0.0),
+            1.0,
             Default::default(),
         )));
 
@@ -180,7 +180,7 @@ impl Plugin for SuperconductorPlugin {
         app.insert_resource(NewIblCubemap(Some(
             url::Url::options()
                 .base_url(Some(&href))
-                .parse("/assets/cubemaps/san.ktx2")
+                .parse("/assets/cubemaps/noon.ktx2")
                 .unwrap(),
         )));
         app.insert_resource(ProbesArrayInfo::new(
