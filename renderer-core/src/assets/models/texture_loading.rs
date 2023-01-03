@@ -80,21 +80,7 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
     let mut pending_textures = Default::default();
     let mut materials = Vec::new();
 
-    let material_settings = gltf
-        .materials
-        .iter()
-        .map(load_material_settings)
-        .collect::<Vec<_>>();
-
-    let material_settings_buffer = Arc::new(textures_context.device.create_buffer_init(
-        &wgpu::util::BufferInitDescriptor {
-            label: Some("material settings"),
-            contents: bytemuck::cast_slice(&material_settings),
-            usage: wgpu::BufferUsages::UNIFORM,
-        },
-    ));
-
-    for (material_index, material) in gltf.materials.iter().enumerate() {
+    for material in &gltf.materials {
         let albedo_future =
             if let Some(tex_info) = material.pbr_metallic_roughness.base_color_texture.as_ref() {
                 Some(start_loading_texture(
@@ -168,6 +154,8 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
             },
         ));
 
+        let material_settings = load_material_settings(material);
+
         let bind_group = Arc::new(crate::MutableBindGroup::new(
             &textures_context.device,
             &textures_context.bind_group_layouts.model,
@@ -196,10 +184,19 @@ pub fn start_loading_all_material_textures<T: HttpClient>(
                     wgpu::TextureFormat::Rgba8UnormSrgb,
                     &[255, 255, 255, 255],
                 )),
+                // Note: previously I was creating a single material settings buffer per-model
+                // and using different offsets for each material. Most browser/hardware combos
+                // seem to accept this but I this seems to have caused an error on Chrome on a
+                // M1 Mac.
                 crate::mutable_bind_group::Entry::Buffer(
-                    material_settings_buffer.clone(),
-                    (material_index * std::mem::size_of::<shared_structs::MaterialSettings>())
-                        as u64,
+                    Arc::new(textures_context.device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("material settings"),
+                            contents: bytemuck::bytes_of(&material_settings),
+                            usage: wgpu::BufferUsages::UNIFORM,
+                        },
+                    )),
+                    0,
                 ),
                 crate::mutable_bind_group::Entry::Sampler(linear_sampler),
             ],

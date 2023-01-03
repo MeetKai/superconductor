@@ -4,7 +4,7 @@ use crate::resources::{
 };
 use renderer_core::{
     arc_swap, assets::models::Ranges, permutations, pipelines::DEPTH_FORMAT, LineVertex,
-    RawAnimatedVertexBuffers, RawLightmappedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
+    RawAnimatedVertexBuffers, RawLightmappedVertexBuffers, VecGpuBuffer,
 };
 use std::ops::Range;
 use std::sync::Arc;

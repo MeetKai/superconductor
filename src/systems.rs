@@ -20,7 +20,6 @@ use renderer_core::{
     spawn, GpuInstance, MutableBindGroup, Texture,
 };
 use std::sync::Arc;
-use wgpu::util::DeviceExt;
 
 pub(crate) mod debugging;
 pub(crate) mod rendering;
@@ -404,12 +403,6 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         ..Default::default()
     }));
 
-    let dims = wgpu::Extent3d {
-        width: 50,
-        height: 25,
-        depth_or_array_layers: 25,
-    };
-
     let dummy_lightmap_texture = Arc::new(Texture::new(device.create_texture(
         &wgpu::TextureDescriptor {
             label: Some("dummy lightmap"),
@@ -501,48 +494,56 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         let href = "http://localhost:8000";
         let href = url::Url::parse(&href).unwrap();
 
+        let sh0_url = url::Url::options()
+            .base_url(Some(&href))
+            .parse("assets/lighting/lightvol.ktx2")
+            .unwrap();
+
         let sh0 = renderer_core::assets::textures::load_ktx2_async(
             &textures_context,
-            &url::Url::options()
-                .base_url(Some(&href))
-                .parse("assets/lighting/lightvol.ktx2")
-                .unwrap(),
+            &sh0_url,
             false,
             |_| (),
         )
         .await
         .unwrap();
+
+        let sh1_x_url = url::Url::options()
+            .base_url(Some(&href))
+            .parse("assets/lighting/lightvol_x.ktx2")
+            .unwrap();
 
         let sh1_x = renderer_core::assets::textures::load_ktx2_async(
             &textures_context,
-            &url::Url::options()
-                .base_url(Some(&href))
-                .parse("assets/lighting/lightvol_x.ktx2")
-                .unwrap(),
+            &sh1_x_url,
             false,
             |_| (),
         )
         .await
         .unwrap();
+
+        let sh1_y_url = url::Url::options()
+            .base_url(Some(&href))
+            .parse("assets/lighting/lightvol_y.ktx2")
+            .unwrap();
 
         let sh1_y = renderer_core::assets::textures::load_ktx2_async(
             &textures_context,
-            &url::Url::options()
-                .base_url(Some(&href))
-                .parse("assets/lighting/lightvol_y.ktx2")
-                .unwrap(),
+            &sh1_y_url,
             false,
             |_| (),
         )
         .await
         .unwrap();
 
+        let sh1_z_url = url::Url::options()
+            .base_url(Some(&href))
+            .parse("assets/lighting/lightvol_z.ktx2")
+            .unwrap();
+
         let sh1_z = renderer_core::assets::textures::load_ktx2_async(
             &textures_context,
-            &url::Url::options()
-                .base_url(Some(&href))
-                .parse("assets/lighting/lightvol_z.ktx2")
-                .unwrap(),
+            &sh1_z_url,
             false,
             |_| (),
         )
