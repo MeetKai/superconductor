@@ -410,8 +410,8 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         depth_or_array_layers: 25,
     };
 
-    let dummy_lightmap_texture = Arc::new(Texture::new(
-        device.create_texture(&wgpu::TextureDescriptor {
+    let dummy_lightmap_texture = Arc::new(Texture::new(device.create_texture(
+        &wgpu::TextureDescriptor {
             label: Some("dummy lightmap"),
             size: wgpu::Extent3d {
                 width: 1,
@@ -423,11 +423,11 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             dimension: wgpu::TextureDimension::D2,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             format: wgpu::TextureFormat::Rgba32Float,
-        }),
-    ));
+        },
+    )));
 
-    let dummy_lightvol_texture = Arc::new(Texture::new(
-        device.create_texture(&wgpu::TextureDescriptor {
+    let dummy_lightvol_texture = Arc::new(Texture::new(device.create_texture(
+        &wgpu::TextureDescriptor {
             label: Some("dummy lightvol"),
             size: wgpu::Extent3d {
                 width: 1,
@@ -439,8 +439,8 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             dimension: wgpu::TextureDimension::D3,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             format: wgpu::TextureFormat::Rgba32Float,
-        }),
-    ));
+        },
+    )));
 
     let main_bind_group = Arc::new(MutableBindGroup::new(
         device,
@@ -495,9 +495,18 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         .await
         .unwrap();*/
 
+        #[cfg(feature = "wasm")]
+        let href = web_sys::window().unwrap().location().href().unwrap();
+        #[cfg(not(feature = "wasm"))]
+        let href = "http://localhost:8000";
+        let href = url::Url::parse(&href).unwrap();
+
         let sh0 = renderer_core::assets::textures::load_ktx2_async(
             &textures_context,
-            &url::Url::parse("http://localhost:8000/assets/lighting/lightvol.ktx2").unwrap(),
+            &url::Url::options()
+                .base_url(Some(&href))
+                .parse("assets/lighting/lightvol.ktx2")
+                .unwrap(),
             false,
             |_| (),
         )
@@ -506,7 +515,10 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
 
         let sh1_x = renderer_core::assets::textures::load_ktx2_async(
             &textures_context,
-            &url::Url::parse("http://localhost:8000/assets/lighting/lightvol_x.ktx2").unwrap(),
+            &url::Url::options()
+                .base_url(Some(&href))
+                .parse("assets/lighting/lightvol_x.ktx2")
+                .unwrap(),
             false,
             |_| (),
         )
@@ -515,7 +527,10 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
 
         let sh1_y = renderer_core::assets::textures::load_ktx2_async(
             &textures_context,
-            &url::Url::parse("http://localhost:8000/assets/lighting/lightvol_y.ktx2").unwrap(),
+            &url::Url::options()
+                .base_url(Some(&href))
+                .parse("assets/lighting/lightvol_y.ktx2")
+                .unwrap(),
             false,
             |_| (),
         )
@@ -524,7 +539,10 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
 
         let sh1_z = renderer_core::assets::textures::load_ktx2_async(
             &textures_context,
-            &url::Url::parse("http://localhost:8000/assets/lighting/lightvol_z.ktx2").unwrap(),
+            &url::Url::options()
+                .base_url(Some(&href))
+                .parse("assets/lighting/lightvol_z.ktx2")
+                .unwrap(),
             false,
             |_| (),
         )

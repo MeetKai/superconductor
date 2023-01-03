@@ -118,7 +118,7 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::ModelUrl(
                 url::Url::options()
                     .base_url(Some(&href))
-                    .parse("/assets/models/knight.glb")
+                    .parse("/assets/models/sponza_cubes.glb")
                     .unwrap(),
             ))
             .insert(components::Instances::default())
@@ -126,13 +126,13 @@ impl Plugin for SuperconductorPlugin {
             .id();
 
         app.world
-        .spawn_empty()
-        .insert(components::InstanceOf(probes))
-        .insert(components::Instance(renderer_core::Instance::new(
-            Vec3::new(0.0, 0.0, 0.0),
-            1.0,
-            Default::default(),
-        )));
+            .spawn_empty()
+            .insert(components::InstanceOf(probes))
+            .insert(components::Instance(renderer_core::Instance::new(
+                Vec3::new(0.0, 0.0, 0.0),
+                1.0,
+                Default::default(),
+            )));
 
         /*
         let helmet = app
