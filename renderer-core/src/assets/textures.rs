@@ -1028,7 +1028,7 @@ pub(crate) fn load_ktx2_from_bytes<F: Fn(u32) + Send + 'static, T: HttpClient>(
     // We round down the width and height below, but if they're less than 3 then they're rounded down to 0.
     // The smallest block size is 4x4 so we just round the sizes up to that here.
 
-    let texture_descriptor = move || wgpu::TextureDescriptor {
+    let texture_descriptor = wgpu::TextureDescriptor {
         label: None,
         size: starting_extent,
         mip_level_count: header.level_count - down_scaling_level,
@@ -1038,77 +1038,13 @@ pub(crate) fn load_ktx2_from_bytes<F: Fn(u32) + Send + 'static, T: HttpClient>(
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
     };
 
-    let texture = Arc::new(Texture::new(
-        context.device.create_texture(&texture_descriptor()),
-    ));
+    let mut texture_bytes = Vec::new();
 
-    let mut levels = level_indices.into_iter().enumerate().rev();
-
-    // Load the smallest (1x1 pixel) mip first before returning the texture
-    {
-        let (i, level_index) = match levels.next() {
-            Some((i, level_index)) => (i, level_index),
-            None => return Err(anyhow::anyhow!("No level indices in the file")),
-        };
-
-        let bytes = &bytes[level_index.byte_offset as usize
-            ..(level_index.byte_offset + level_index.byte_length) as usize];
-
-        let format_bytes = if uses_zstd_supercompression {
-            Cow::Owned(zstd::bulk::decompress(
-                bytes,
-                level_index.uncompressed_byte_length as usize,
-            )?)
-        } else {
-            Cow::Borrowed(bytes)
-        };
-
-        let bytes_to_upload = if let Ktx2Format::Uastc(transcode_target_format) = format {
-            let transcoder = basis_universal::LowLevelUastcTranscoder::new();
-
-            let slice_width = header.pixel_width >> i;
-            let slice_height = header.pixel_height >> i;
-
-            let (block_width_pixels, block_height_pixels) = (4, 4);
-
-            Cow::Owned(
-                transcoder
-                    .transcode_slice(
-                        &format_bytes,
-                        basis_universal::SliceParametersUastc {
-                            num_blocks_x: ((slice_width + block_width_pixels - 1)
-                                / block_width_pixels)
-                                .max(1),
-                            num_blocks_y: ((slice_height + block_height_pixels - 1)
-                                / block_height_pixels)
-                                .max(1),
-                            has_alpha: false,
-                            original_width: slice_width,
-                            original_height: slice_height,
-                        },
-                        basis_universal::DecodeFlags::HIGH_QUALITY,
-                        transcode_target_format.as_transcoder_block_format(),
-                    )
-                    .map_err(|err| anyhow::anyhow!("Transcoder error: {:?}", err))?,
-            )
-        } else {
-            format_bytes
-        };
-
-        write_bytes_to_texture(
-            &context.queue,
-            &texture.texture,
-            i as u32 - down_scaling_level,
-            &bytes_to_upload,
-            &texture_descriptor(),
-        );
-
-        on_level_load(i as u32 - down_scaling_level)
-    }
+    let levels = level_indices.into_iter().enumerate();
 
     for (i, level_index) in levels {
         if i < down_scaling_level as usize {
-            break;
+            continue;
         }
 
         let bytes = &bytes[level_index.byte_offset as usize
@@ -1155,18 +1091,18 @@ pub(crate) fn load_ktx2_from_bytes<F: Fn(u32) + Send + 'static, T: HttpClient>(
             format_bytes
         };
 
-        write_bytes_to_texture(
-            &context.queue,
-            &texture.texture,
-            i as u32 - down_scaling_level,
-            &bytes_to_upload,
-            &texture_descriptor(),
-        );
+        texture_bytes.extend_from_slice(&bytes_to_upload);
 
         on_level_load(i as u32 - down_scaling_level)
     }
 
-    Ok(texture)
+    Ok(Arc::new(Texture::new(
+        context.device.create_texture_with_data(
+            &context.queue,
+            &texture_descriptor,
+            &texture_bytes,
+        ),
+    )))
 }
 
 #[derive(Clone, Copy, Debug)]
