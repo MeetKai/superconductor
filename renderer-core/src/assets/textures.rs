@@ -760,8 +760,6 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         }
     }
 
-    dbg!(&header);
-
     let mut starting_extent = wgpu::Extent3d {
         width: header.pixel_width,
         height: header.pixel_height,

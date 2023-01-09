@@ -377,10 +377,10 @@ pub(crate) fn upload_lines(
 pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     device: Res<Device>,
     queue: Res<Queue>,
+    pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<TextureSettings>,
     http_client: Res<HttpClient<T>>,
-    pipelines: Res<Pipelines>,
     mut commands: Commands,
 ) {
     let device = &device.0;
@@ -402,22 +402,6 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         anisotropy_clamp: texture_settings.0.anisotropy_clamp,
         ..Default::default()
     }));
-
-    let dummy_lightmap_texture = Arc::new(Texture::new(device.create_texture(
-        &wgpu::TextureDescriptor {
-            label: Some("dummy lightmap"),
-            size: wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
-            },
-            sample_count: 1,
-            mip_level_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            format: wgpu::TextureFormat::Rgba32Float,
-        },
-    )));
 
     let dummy_lightvol_texture = Arc::new(Texture::new(device.create_texture(
         &wgpu::TextureDescriptor {
@@ -460,10 +444,6 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
             renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
             renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
         ],
     ));
 
@@ -570,9 +550,9 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     commands.insert_resource(IndexBuffer(Arc::new(renderer_core::IndexBuffer::new(
         1024, device,
     ))));
-    commands.insert_resource(VertexBuffers(Arc::new(
-        renderer_core::LightmappedVertexBuffers::new(1024, device),
-    )));
+    commands.insert_resource(VertexBuffers(Arc::new(renderer_core::VertexBuffers::new(
+        1024, device,
+    ))));
     commands.insert_resource(AnimatedVertexBuffers(Arc::new(
         renderer_core::AnimatedVertexBuffers::new(1024, device),
     )));
@@ -690,7 +670,7 @@ pub(crate) fn update_desktop_uniform_buffers(
     let mut settings = Settings::REVERSE_Z;
 
     // Rendering to a srgb surface should be possible at some point, but doesn't currently seem to be.
-    if cfg!(all(feature = "wasm", feature = "webgl")) {
+    if cfg!(all(feature = "wasm", feature = "webgl")) {//todo: check
         settings |= Settings::INLINE_SRGB;
     }
 

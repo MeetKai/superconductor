@@ -41,7 +41,7 @@ pub(crate) struct MainBindGroup(pub(crate) Arc<MutableBindGroup>);
 #[derive(Resource)]
 pub struct IndexBuffer(pub Arc<renderer_core::IndexBuffer>);
 #[derive(Resource)]
-pub struct VertexBuffers(pub Arc<renderer_core::LightmappedVertexBuffers>);
+pub struct VertexBuffers(pub Arc<renderer_core::VertexBuffers>);
 #[derive(Resource)]
 pub struct AnimatedVertexBuffers(pub Arc<renderer_core::AnimatedVertexBuffers>);
 #[derive(Resource)]

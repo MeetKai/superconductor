@@ -93,10 +93,6 @@ impl BindGroupLayouts {
                     d3_texture_entry(4),
                     d3_texture_entry(5),
                     d3_texture_entry(6),
-                    texture_entry(7),
-                    texture_entry(8),
-                    texture_entry(9),
-                    texture_entry(10),
                 ],
             }),
             model: device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

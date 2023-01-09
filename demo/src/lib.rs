@@ -79,30 +79,6 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::InstanceRanges::default())
             .id();
 
-        /*
-        let squid = app
-            .world
-            .spawn_empty()
-            .insert(components::AnimatedModelUrl(
-                url::Url::options()
-                    .base_url(Some(&href))
-                    .parse("assets/models/squid6.gltf")
-                    .unwrap(),
-            ))
-            .insert(components::Instances::default())
-            .insert(components::InstanceRanges::default())
-            .id();
-
-        app.world
-            .spawn_empty()
-            .insert(components::InstanceOf(squid))
-            .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::new(-9.81, 3.324, 0.285),
-                1.0,
-                Default::default(),
-            )));
-            */
-
         app.world
             .spawn_empty()
             .insert(components::InstanceOf(model))
@@ -133,31 +109,6 @@ impl Plugin for SuperconductorPlugin {
                 1.0,
                 Default::default(),
             )));
-
-        /*
-        let helmet = app
-            .world
-            .spawn_empty()
-            .insert(components::ModelUrl(
-                url::Url::options()
-                    .base_url(Some(&href))
-                    .parse("/assets/models/DamagedHelmet.glb")
-                    .unwrap(),
-            ))
-            .insert(components::Instances::default())
-            .insert(components::InstanceRanges::default())
-            .id();
-
-
-        app.world
-            .spawn_empty()
-            .insert(components::InstanceOf(helmet))
-            .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::ZERO,
-                1.0,
-                Default::default(),
-            )));
-            */
 
         let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()
             .with(dolly::drivers::Position::new(Vec3::new(0.0, 1.75, 0.0)))
@@ -297,10 +248,7 @@ struct KeyboardState {
 
 fn rotate_entities(mut query: Query<&mut components::Instance, With<Spinning>>) {
     query.for_each_mut(|mut instance| {
-        instance.0.translation.z = (instance.0.translation.z - 0.025);
-        if instance.0.translation.z < -5.0 {
-            instance.0.translation.z += 10.0;
-        }
+        instance.0.rotation *= renderer_core::glam::Quat::from_rotation_y(0.01)
     });
 }
 
