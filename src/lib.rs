@@ -27,8 +27,8 @@ pub use renderer_core::{
 };
 
 use resources::{
-    Camera, CullingParams, Device, EventQueue, HttpClient, NewIblCubemap, PipelineOptions,
-    ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings, WindowChanges,
+    Camera, CullingParams, Device, EventQueue, HttpClient, NewIblCubemap, NewLightvolTextures,
+    PipelineOptions, ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings, WindowChanges,
 };
 
 #[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
@@ -72,6 +72,7 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
         app.insert_resource(HttpClient(self.http_client.clone()));
         app.insert_resource(CullingParams::default());
         app.insert_resource(ProbesArrayInfo::new(Vec3::ZERO, Vec3::ONE));
+        app.insert_resource(NewLightvolTextures(None));
 
         app.add_startup_stage(
             StartupStage::PipelineCreation,
@@ -89,6 +90,7 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
                 .with_system(systems::start_loading_models::<T>)
                 .with_system(systems::finish_loading_models)
                 .with_system(systems::update_ibl_resources::<T>)
+                .with_system(systems::update_lightvol_textures::<T>)
                 .with_system(systems::add_joints_to_instances),
         );
 

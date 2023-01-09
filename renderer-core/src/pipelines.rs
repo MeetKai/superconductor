@@ -142,11 +142,13 @@ impl Pipelines {
                 attributes: &wgpu::vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Uint32, 6 => Uint32],
                 step_mode: wgpu::VertexStepMode::Instance,
             },
+            // joint indices
             wgpu::VertexBufferLayout {
                 array_stride: 4 * 4,
                 attributes: &wgpu::vertex_attr_array![7 => Uint32x4],
                 step_mode: wgpu::VertexStepMode::Vertex,
             },
+            // joint weights
             wgpu::VertexBufferLayout {
                 array_stride: 4 * 4,
                 attributes: &wgpu::vertex_attr_array![8 => Float32x4],

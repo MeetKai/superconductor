@@ -4,7 +4,10 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use bevy_ecs::system::Resource;
 use superconductor::{
     bevy_app, bevy_ecs, components, renderer_core,
-    resources::{Camera, EventQueue, NewIblCubemap, ProbesArrayInfo, WindowChanges},
+    resources::{
+        Camera, EventQueue, LightvolTextures, NewIblCubemap, NewLightvolTextures, ProbesArrayInfo,
+        WindowChanges,
+    },
     url, winit,
     winit::event::{ElementState, VirtualKeyCode},
     Mode, Vec3,
@@ -138,6 +141,24 @@ impl Plugin for SuperconductorPlugin {
             Vec3::new(0.0, 6.0, 0.0),
             Vec3::new(24.0, 12.0, 12.0),
         ));
+        app.insert_resource(NewLightvolTextures(Some(LightvolTextures {
+            sh0: url::Url::options()
+                .base_url(Some(&href))
+                .parse("assets/lighting/lightvol.ktx2")
+                .unwrap(),
+            sh1_x: url::Url::options()
+                .base_url(Some(&href))
+                .parse("assets/lighting/lightvol_x.ktx2")
+                .unwrap(),
+            sh1_y: url::Url::options()
+                .base_url(Some(&href))
+                .parse("assets/lighting/lightvol_y.ktx2")
+                .unwrap(),
+            sh1_z: url::Url::options()
+                .base_url(Some(&href))
+                .parse("assets/lighting/lightvol_z.ktx2")
+                .unwrap(),
+        })));
     }
 }
 

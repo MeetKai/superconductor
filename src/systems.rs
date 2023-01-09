@@ -6,9 +6,9 @@ use crate::components::{
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, BoundingSphereParams, Camera, CompositeBindGroup,
     CullingParams, Device, HttpClient, IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer,
-    IntermediateDepthFramebuffer, LineBuffer, MainBindGroup, NewIblCubemap, PipelineOptions,
-    Pipelines, ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings, UniformBuffer,
-    VertexBuffers,
+    IntermediateDepthFramebuffer, LineBuffer, MainBindGroup, NewIblCubemap, NewLightvolTextures,
+    PipelineOptions, Pipelines, ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings,
+    UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
@@ -376,15 +376,11 @@ pub(crate) fn upload_lines(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     device: Res<Device>,
-    queue: Res<Queue>,
-    pipelines: Res<Pipelines>,
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<TextureSettings>,
-    http_client: Res<HttpClient<T>>,
     mut commands: Commands,
 ) {
     let device = &device.0;
-    let queue = &queue.0;
     let bind_group_layouts = &bind_group_layouts.0;
 
     let uniform_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
@@ -443,109 +439,12 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
             renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
             renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture),
         ],
     ));
 
-    let mbg = main_bind_group.clone();
-
-    let textures_context = renderer_core::assets::textures::Context {
-        device: device.clone(),
-        queue: queue.clone(),
-        http_client: http_client.0.clone(),
-        bind_group_layouts: bind_group_layouts.clone(),
-        pipelines: pipelines.0.clone(),
-        settings: texture_settings.0.clone(),
-    };
-
-    spawn(async move {
-        /*let texture = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &url::Url::parse("http://localhost:8000/assets/lighting/lightmap.ktx2").unwrap(),
-            false,
-            |_| (),
-        )
-        .await
-        .unwrap();*/
-
-        #[cfg(feature = "wasm")]
-        let href = web_sys::window().unwrap().location().href().unwrap();
-        #[cfg(not(feature = "wasm"))]
-        let href = "http://localhost:8000";
-        let href = url::Url::parse(&href).unwrap();
-
-        let sh0_url = url::Url::options()
-            .base_url(Some(&href))
-            .parse("assets/lighting/lightvol.ktx2")
-            .unwrap();
-
-        let sh0 = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &sh0_url,
-            false,
-            |_| (),
-        )
-        .await
-        .unwrap();
-
-        let sh1_x_url = url::Url::options()
-            .base_url(Some(&href))
-            .parse("assets/lighting/lightvol_x.ktx2")
-            .unwrap();
-
-        let sh1_x = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &sh1_x_url,
-            false,
-            |_| (),
-        )
-        .await
-        .unwrap();
-
-        let sh1_y_url = url::Url::options()
-            .base_url(Some(&href))
-            .parse("assets/lighting/lightvol_y.ktx2")
-            .unwrap();
-
-        let sh1_y = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &sh1_y_url,
-            false,
-            |_| (),
-        )
-        .await
-        .unwrap();
-
-        let sh1_z_url = url::Url::options()
-            .base_url(Some(&href))
-            .parse("assets/lighting/lightvol_z.ktx2")
-            .unwrap();
-
-        let sh1_z = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &sh1_z_url,
-            false,
-            |_| (),
-        )
-        .await
-        .unwrap();
-
-        mbg.mutate(
-            &textures_context.device,
-            &textures_context.bind_group_layouts.uniform,
-            |entries| {
-                entries[3] = renderer_core::mutable_bind_group::Entry::Texture(sh0);
-                entries[4] = renderer_core::mutable_bind_group::Entry::Texture(sh1_x);
-                entries[5] = renderer_core::mutable_bind_group::Entry::Texture(sh1_y);
-                entries[6] = renderer_core::mutable_bind_group::Entry::Texture(sh1_z);
-            },
-        );
-
-        Ok(())
-    });
-
     commands.insert_resource(UniformBuffer(uniform_buffer));
-    commands.insert_resource(MainBindGroup(main_bind_group.clone()));
+    commands.insert_resource(MainBindGroup(main_bind_group));
 
     commands.insert_resource(IndexBuffer(Arc::new(renderer_core::IndexBuffer::new(
         1024, device,
@@ -572,6 +471,87 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             "line buffer",
         ),
         staging: Vec::new(),
+    });
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
+    device: Res<Device>,
+    queue: Res<Queue>,
+    pipelines: Res<Pipelines>,
+    bind_group_layouts: Res<BindGroupLayouts>,
+    texture_settings: Res<TextureSettings>,
+    mut new_lightvol_textures: ResMut<NewLightvolTextures>,
+    main_bind_group: Res<MainBindGroup>,
+    http_client: Res<HttpClient<T>>,
+) {
+    let new_lightvol_textures = match new_lightvol_textures.0.take() {
+        Some(new_lightvol_textures) => new_lightvol_textures,
+        None => return,
+    };
+
+    let main_bind_group = main_bind_group.0.clone();
+
+    let device = &device.0;
+    let queue = &queue.0;
+    let pipelines = &pipelines.0;
+    let bind_group_layouts = &bind_group_layouts.0;
+
+    let textures_context = renderer_core::assets::textures::Context {
+        device: device.clone(),
+        queue: queue.clone(),
+        http_client: http_client.0.clone(),
+        bind_group_layouts: bind_group_layouts.clone(),
+        pipelines: pipelines.clone(),
+        settings: texture_settings.0.clone(),
+    };
+
+    spawn(async move {
+        let sh0_fut = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &new_lightvol_textures.sh0,
+            false,
+            |_| (),
+        );
+
+        let sh1_x_fut = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &new_lightvol_textures.sh1_x,
+            false,
+            |_| (),
+        );
+
+        let sh1_y_fut = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &new_lightvol_textures.sh1_y,
+            false,
+            |_| (),
+        );
+
+        let sh1_z_fut = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &new_lightvol_textures.sh1_z,
+            false,
+            |_| (),
+        );
+
+        let (sh0, sh1_x, sh1_y, sh1_z) =
+            futures::future::join4(sh0_fut, sh1_x_fut, sh1_y_fut, sh1_z_fut).await;
+
+        let (sh0, sh1_x, sh1_y, sh1_z) = (sh0?, sh1_x?, sh1_y?, sh1_z?);
+
+        main_bind_group.mutate(
+            &textures_context.device,
+            &textures_context.bind_group_layouts.uniform,
+            |entries| {
+                entries[3] = renderer_core::mutable_bind_group::Entry::Texture(sh0);
+                entries[4] = renderer_core::mutable_bind_group::Entry::Texture(sh1_x);
+                entries[5] = renderer_core::mutable_bind_group::Entry::Texture(sh1_y);
+                entries[6] = renderer_core::mutable_bind_group::Entry::Texture(sh1_z);
+            },
+        );
+
+        Ok(())
     });
 }
 
@@ -614,13 +594,12 @@ pub(crate) fn update_ibl_resources<T: assets::HttpClient>(
         )
         .await
         {
-            Ok(ibl_data) => {
+            Ok(texture) => {
                 main_bind_group.mutate(
                     &textures_context.device,
                     &textures_context.bind_group_layouts.uniform,
                     |entries| {
-                        entries[2] =
-                            renderer_core::mutable_bind_group::Entry::Texture(ibl_data.texture);
+                        entries[2] = renderer_core::mutable_bind_group::Entry::Texture(texture);
                     },
                 );
 
@@ -670,7 +649,8 @@ pub(crate) fn update_desktop_uniform_buffers(
     let mut settings = Settings::REVERSE_Z;
 
     // Rendering to a srgb surface should be possible at some point, but doesn't currently seem to be.
-    if cfg!(all(feature = "wasm", feature = "webgl")) {//todo: check
+    // todo: check if this is correct.
+    if cfg!(feature = "wasm") {
         settings |= Settings::INLINE_SRGB;
     }
 

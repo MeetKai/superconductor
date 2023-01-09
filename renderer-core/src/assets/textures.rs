@@ -21,16 +21,10 @@ pub struct Context<T> {
     pub settings: Settings,
 }
 
-pub struct IblData {
-    pub texture: Arc<Texture>,
-    pub padded_sphere_harmonics_bytes: [u8; 144],
-    pub num_levels: u32,
-}
-
 pub async fn load_ibl_cubemap<T: HttpClient>(
     context: Context<T>,
     url: &url::Url,
-) -> anyhow::Result<IblData> {
+) -> anyhow::Result<Arc<Texture>> {
     let mut header_bytes = [0; ktx2::Header::LENGTH];
 
     let fetched_header = context
@@ -71,61 +65,24 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
         ));
     }
 
-    let key_value_data = context
-        .http_client
-        .fetch_bytes(
-            url,
-            Some(
-                header.index.kvd_byte_offset as usize
-                    ..header.index.kvd_byte_offset as usize + header.index.kvd_byte_length as usize,
-            ),
-        )
-        .await?;
-
-    let sphere_harmonics_bytes = match ktx2::KeyValueDataIterator::new(&key_value_data)
-        .find(|&(key, _)| key == "sphere_harmonics")
-    {
-        Some((_, value)) => value,
-        None => {
-            return Err(anyhow::anyhow!(
-                "Missing `sphere_harmonics` in the key-value section"
-            ))
-        }
-    };
-
-    // Pad the 9 float32x3 colours to float32x4 by writing to a zeroed buffer.
-    // 144 = 4 * 4 * 9.
-    let mut padded_sphere_harmonics_bytes = [0; 144];
-
-    for (i, chunk) in sphere_harmonics_bytes.chunks(12).take(9).enumerate() {
-        padded_sphere_harmonics_bytes[i * 16..(i * 16) + 12].copy_from_slice(chunk);
-    }
-
-    let mut level_indices = Vec::with_capacity(header.level_count as usize);
-
-    {
+    // We're only using this cubemap as a skybox now, so we only care about the first mip.
+    let first_level_index = {
         let mut reader = std::io::Cursor::new(
             context
                 .http_client
                 .fetch_bytes(
                     url,
-                    Some(
-                        ktx2::Header::LENGTH
-                            ..ktx2::Header::LENGTH
-                                + ktx2::LevelIndex::LENGTH * header.level_count as usize,
-                    ),
+                    Some(ktx2::Header::LENGTH..ktx2::Header::LENGTH + ktx2::LevelIndex::LENGTH),
                 )
                 .await?,
         );
 
-        for _ in 0..header.level_count {
-            let mut level_index_bytes = [0; ktx2::LevelIndex::LENGTH];
+        let mut level_index_bytes = [0; ktx2::LevelIndex::LENGTH];
 
-            reader.read_exact(&mut level_index_bytes)?;
+        reader.read_exact(&mut level_index_bytes)?;
 
-            level_indices.push(ktx2::LevelIndex::from_bytes(&level_index_bytes));
-        }
-    }
+        ktx2::LevelIndex::from_bytes(&level_index_bytes)
+    };
 
     // Compressed textures made made of 4x4 blocks, so there are some issues
     // with textures that don't have a side length divisible by 4.
@@ -146,7 +103,7 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
             height: base_height,
             depth_or_array_layers: 6,
         },
-        mip_level_count: header.level_count,
+        mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: if bc6h_supported {
@@ -178,142 +135,139 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
         let url = url.clone();
 
         async move {
-            for (i, level_index) in level_indices.into_iter().enumerate().rev() {
-                let bytes = http_client
-                    .fetch_bytes(
-                        &url,
-                        Some(
-                            level_index.byte_offset as usize
-                                ..(level_index.byte_offset + level_index.byte_length) as usize,
-                        ),
-                    )
-                    .await?;
+            let bytes = http_client
+                .fetch_bytes(
+                    &url,
+                    Some(
+                        first_level_index.byte_offset as usize
+                            ..(first_level_index.byte_offset + first_level_index.byte_length)
+                                as usize,
+                    ),
+                )
+                .await?;
 
-                let decompressed =
-                    zstd::bulk::decompress(&bytes, level_index.uncompressed_byte_length as usize)?;
+            let decompressed = zstd::bulk::decompress(
+                &bytes,
+                first_level_index.uncompressed_byte_length as usize,
+            )?;
 
-                if !bc6h_supported {
-                    let mut command_encoder = device.create_command_encoder(&Default::default());
+            if !bc6h_supported {
+                let mut command_encoder = device.create_command_encoder(&Default::default());
 
-                    let stride = decompressed.len() / 6;
+                let stride = decompressed.len() / 6;
 
-                    for face in 0..6 {
-                        let bytes = &decompressed[face * stride..(face + 1) * stride];
+                for face in 0..6 {
+                    let bytes = &decompressed[face * stride..(face + 1) * stride];
 
-                        let input_texture = device.create_texture_with_data(
-                            &queue,
-                            &wgpu::TextureDescriptor {
-                                label: None,
-                                size: wgpu::Extent3d {
-                                    width: base_width >> (i + 2),
-                                    height: base_height >> (i + 2),
-                                    depth_or_array_layers: 1,
-                                },
-                                mip_level_count: 1,
-                                sample_count: 1,
-                                dimension: wgpu::TextureDimension::D2,
-                                format: wgpu::TextureFormat::Rgba32Uint,
-                                usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                            },
-                            bytes,
-                        );
-
-                        let output_texture = device.create_texture(&wgpu::TextureDescriptor {
+                    let input_texture = device.create_texture_with_data(
+                        &queue,
+                        &wgpu::TextureDescriptor {
                             label: None,
                             size: wgpu::Extent3d {
-                                width: base_width >> i,
-                                height: base_height >> i,
+                                width: base_width >> 2,
+                                height: base_height >> 2,
                                 depth_or_array_layers: 1,
                             },
                             mip_level_count: 1,
                             sample_count: 1,
                             dimension: wgpu::TextureDimension::D2,
-                            format: BC6H_DECOMPRESSION_TARGET_FORMAT,
-                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                                | wgpu::TextureUsages::COPY_SRC,
-                        });
+                            format: wgpu::TextureFormat::Rgba32Uint,
+                            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                        },
+                        bytes,
+                    );
 
-                        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    let output_texture = device.create_texture(&wgpu::TextureDescriptor {
+                        label: None,
+                        size: wgpu::Extent3d {
+                            width: base_width,
+                            height: base_height,
+                            depth_or_array_layers: 1,
+                        },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: BC6H_DECOMPRESSION_TARGET_FORMAT,
+                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                            | wgpu::TextureUsages::COPY_SRC,
+                    });
+
+                    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: None,
+                        layout: &bind_group_layouts.uint_texture,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(
+                                &input_texture.create_view(&Default::default()),
+                            ),
+                        }],
+                    });
+
+                    let output_view = output_texture.create_view(&Default::default());
+
+                    let mut render_pass =
+                        command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                             label: None,
-                            layout: &bind_group_layouts.uint_texture,
-                            entries: &[wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: wgpu::BindingResource::TextureView(
-                                    &input_texture.create_view(&Default::default()),
-                                ),
-                            }],
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &output_view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Load,
+                                    store: true,
+                                },
+                            })],
+                            depth_stencil_attachment: None,
                         });
 
-                        let output_view = output_texture.create_view(&Default::default());
+                    render_pass.set_pipeline(&pipelines.bc6h_decompression);
 
-                        let mut render_pass =
-                            command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: None,
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view: &output_view,
-                                    resolve_target: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Load,
-                                        store: true,
-                                    },
-                                })],
-                                depth_stencil_attachment: None,
-                            });
+                    render_pass.set_bind_group(0, &bind_group, &[]);
 
-                        render_pass.set_pipeline(&pipelines.bc6h_decompression);
+                    render_pass.draw(0..3, 0..1);
 
-                        render_pass.set_bind_group(0, &bind_group, &[]);
+                    drop(render_pass);
 
-                        render_pass.draw(0..3, 0..1);
-
-                        drop(render_pass);
-
-                        command_encoder.copy_texture_to_texture(
-                            wgpu::ImageCopyTexture {
-                                texture: &output_texture,
-                                mip_level: 0,
-                                origin: wgpu::Origin3d::ZERO,
-                                aspect: wgpu::TextureAspect::All,
+                    command_encoder.copy_texture_to_texture(
+                        wgpu::ImageCopyTexture {
+                            texture: &output_texture,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        wgpu::ImageCopyTexture {
+                            texture: &texture.texture,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d {
+                                x: 0,
+                                y: 0,
+                                z: face as u32,
                             },
-                            wgpu::ImageCopyTexture {
-                                texture: &texture.texture,
-                                mip_level: i as u32,
-                                origin: wgpu::Origin3d {
-                                    x: 0,
-                                    y: 0,
-                                    z: face as u32,
-                                },
-                                aspect: wgpu::TextureAspect::All,
-                            },
-                            wgpu::Extent3d {
-                                width: base_width >> i,
-                                height: base_width >> i,
-                                depth_or_array_layers: 1,
-                            },
-                        );
-                    }
-
-                    queue.submit(std::iter::once(command_encoder.finish()));
-                } else {
-                    write_bytes_to_texture(
-                        &queue,
-                        &texture.texture,
-                        i as u32,
-                        &decompressed,
-                        &texture_descriptor(),
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        wgpu::Extent3d {
+                            width: base_width,
+                            height: base_width,
+                            depth_or_array_layers: 1,
+                        },
                     );
                 }
+
+                queue.submit(std::iter::once(command_encoder.finish()));
+            } else {
+                write_bytes_to_texture(
+                    &queue,
+                    &texture.texture,
+                    0,
+                    &decompressed,
+                    &texture_descriptor(),
+                );
             }
 
             Ok(())
         }
     });
 
-    Ok(IblData {
-        texture,
-        num_levels: header.level_count,
-        padded_sphere_harmonics_bytes,
-    })
+    Ok(texture)
 }
 
 fn write_bytes_to_texture(
@@ -1038,9 +992,7 @@ pub(crate) fn load_ktx2_from_bytes<F: Fn(u32) + Send + 'static, T: HttpClient>(
 
     let mut texture_bytes = Vec::new();
 
-    let levels = level_indices.into_iter().enumerate();
-
-    for (i, level_index) in levels {
+    for (i, level_index) in level_indices.into_iter().enumerate() {
         if i < down_scaling_level as usize {
             continue;
         }

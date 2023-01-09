@@ -16,6 +16,7 @@ use spirv_std::{
 };
 
 type SampledImage = Image!(2D, type=f32, sampled);
+type Image3D = Image!(3D, type=f32, sampled);
 
 mod single_view;
 
@@ -172,7 +173,6 @@ impl ExtendedMaterialParams {
     }
 }
 
-type Image3D = Image!(3D, type=f32, sampled);
 
 fn sample_spherical_harmonics(
     uniforms: &Uniforms,
@@ -206,10 +206,10 @@ pub fn fragment(
     #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -285,10 +285,10 @@ pub fn fragment_alpha_blended(
     #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -363,10 +363,10 @@ pub fn fragment_alpha_clipped(
     #[spirv(flat)] _material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image!(3D, type=f32, sampled),
-    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image!(3D, type=f32, sampled),
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,

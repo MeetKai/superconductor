@@ -185,3 +185,13 @@ impl ProbesArrayInfo {
         }
     }
 }
+
+#[derive(Resource)]
+pub struct NewLightvolTextures(pub Option<LightvolTextures>);
+
+pub struct LightvolTextures {
+    pub sh0: url::Url,
+    pub sh1_x: url::Url,
+    pub sh1_y: url::Url,
+    pub sh1_z: url::Url,
+}

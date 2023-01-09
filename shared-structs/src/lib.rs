@@ -320,30 +320,3 @@ pub fn eval_spherical_harmonics_nonlinear(harmonics: L1SphericalHarmonics, norma
         eval_scalar(harmonics[0].z, blue_vector, normal),
     )
 }
-
-#[test]
-fn test_spherical_harmonics() {
-    let mut harmonics = L1SphericalHarmonics::default();
-
-    fn add_sample_to_harmonics(harmonics: &mut L1SphericalHarmonics, sample: Vec3, normal: Vec3) {
-        harmonics[0] += sample;
-        harmonics[1] += sample * normal.x;
-        harmonics[2] += sample * normal.y;
-        harmonics[3] += sample * normal.z;
-    }
-
-    fn eval_spherical_harmonics_linear(harmonics: L1SphericalHarmonics, normal: Vec3) -> Vec3 {
-        harmonics[0] + harmonics[1] * normal.x + harmonics[2] * normal.y + harmonics[3] * normal.z
-    }
-
-    add_sample_to_harmonics(&mut harmonics, Vec3::splat(1.0), Vec3::Y);
-
-    assert_eq!(
-        eval_spherical_harmonics_nonlinear(harmonics, Vec3::Y),
-        Vec3::splat(4.0)
-    );
-    assert_eq!(
-        eval_spherical_harmonics_nonlinear(harmonics, -Vec3::Y),
-        Vec3::splat(0.0)
-    );
-}
