@@ -649,7 +649,7 @@ pub(crate) fn update_desktop_uniform_buffers(
     let mut settings = Settings::REVERSE_Z;
 
     // Rendering to a srgb surface should be possible at some point, but doesn't currently seem to be.
-    // todo: check if this is correct.
+    // todo: check if this is correct. Hard to test on WebGPU as the build is broken due to missing features.
     if cfg!(feature = "wasm") {
         settings |= Settings::INLINE_SRGB;
     }
