@@ -1,18 +1,13 @@
-#![cfg_attr(
-    target_arch = "spirv",
-    feature(register_attr, asm_const, asm_experimental_arch),
-    register_attr(spirv),
-    no_std
-)]
+#![cfg_attr(target_arch = "spirv", no_std)]
 
 use shared_structs::{
     eval_spherical_harmonics_nonlinear, JointTransform, MaterialSettings, Settings, Uniforms,
 };
 use spirv_std::{
     arch::IndexUnchecked,
-    glam::{self, const_vec3, Mat3, UVec4, Vec2, Vec3, Vec4},
+    glam::{self, Mat3, UVec4, Vec2, Vec3, Vec4},
     num_traits::Float,
-    Image, Sampler,
+    spirv, Image, Sampler,
 };
 
 type SampledImage = Image!(2D, type=f32, sampled);
@@ -32,8 +27,8 @@ pub fn vertex(
     uv: Vec2,
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
-    #[spirv(flat)] _joints_offset: u32,
-    #[spirv(flat)] material_index: u32,
+    _joints_offset: u32,
+    material_index: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
     #[spirv(position)] builtin_pos: &mut Vec4,
@@ -65,9 +60,9 @@ pub fn animated_vertex(
     uv: Vec2,
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
-    #[spirv(flat)] joints_offset: u32,
-    #[spirv(flat)] material_index: u32,
-    #[spirv(flat)] joint_indices: UVec4,
+    joints_offset: u32,
+    material_index: u32,
+    joint_indices: UVec4,
     joint_weights: Vec4,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
@@ -173,7 +168,6 @@ impl ExtendedMaterialParams {
     }
 }
 
-
 fn sample_spherical_harmonics(
     uniforms: &Uniforms,
     position: Vec3,
@@ -216,7 +210,7 @@ pub fn fragment(
     #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
     #[spirv(descriptor_set = 1, binding = 5)] texture_sampler: &Sampler,
-    #[spirv(view_index)] view_index: i32,
+    #[spirv(view_index, flat)] view_index: i32,
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
@@ -295,7 +289,7 @@ pub fn fragment_alpha_blended(
     #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
     #[spirv(descriptor_set = 1, binding = 5)] texture_sampler: &Sampler,
-    #[spirv(view_index)] view_index: i32,
+    #[spirv(view_index, flat)] view_index: i32,
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
@@ -373,7 +367,7 @@ pub fn fragment_alpha_clipped(
     #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
     #[spirv(descriptor_set = 1, binding = 5)] texture_sampler: &Sampler,
-    #[spirv(view_index)] view_index: i32,
+    #[spirv(view_index, flat)] view_index: i32,
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
@@ -613,7 +607,7 @@ pub fn fragment_skybox(
 #[spirv(vertex)]
 pub fn line_vertex(
     position: Vec3,
-    #[spirv(flat)] colour_id: u32,
+    colour_id: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(position)] builtin_pos: &mut Vec4,
     #[spirv(view_index)] view_index: i32,
@@ -633,22 +627,22 @@ pub fn flat_colour(colour: Vec3, output: &mut Vec4) {
 }
 
 const DEBUG_COLOURS: [Vec3; 16] = [
-    const_vec3!([0.0, 0.0, 0.0]),         // black
-    const_vec3!([0.0, 0.0, 0.1647]),      // darkest blue
-    const_vec3!([0.0, 0.0, 0.3647]),      // darker blue
-    const_vec3!([0.0, 0.0, 0.6647]),      // dark blue
-    const_vec3!([0.0, 0.0, 0.9647]),      // blue
-    const_vec3!([0.0, 0.9255, 0.9255]),   // cyan
-    const_vec3!([0.0, 0.5647, 0.0]),      // dark green
-    const_vec3!([0.0, 0.7843, 0.0]),      // green
-    const_vec3!([1.0, 1.0, 0.0]),         // yellow
-    const_vec3!([0.90588, 0.75294, 0.0]), // yellow-orange
-    const_vec3!([1.0, 0.5647, 0.0]),      // orange
-    const_vec3!([1.0, 0.0, 0.0]),         // bright red
-    const_vec3!([0.8392, 0.0, 0.0]),      // red
-    const_vec3!([1.0, 0.0, 1.0]),         // magenta
-    const_vec3!([0.6, 0.3333, 0.7882]),   // purple
-    const_vec3!([1.0, 1.0, 1.0]),         // white
+    Vec3::new(0.0, 0.0, 0.0),         // black
+    Vec3::new(0.0, 0.0, 0.1647),      // darkest blue
+    Vec3::new(0.0, 0.0, 0.3647),      // darker blue
+    Vec3::new(0.0, 0.0, 0.6647),      // dark blue
+    Vec3::new(0.0, 0.0, 0.9647),      // blue
+    Vec3::new(0.0, 0.9255, 0.9255),   // cyan
+    Vec3::new(0.0, 0.5647, 0.0),      // dark green
+    Vec3::new(0.0, 0.7843, 0.0),      // green
+    Vec3::new(1.0, 1.0, 0.0),         // yellow
+    Vec3::new(0.90588, 0.75294, 0.0), // yellow-orange
+    Vec3::new(1.0, 0.5647, 0.0),      // orange
+    Vec3::new(1.0, 0.0, 0.0),         // bright red
+    Vec3::new(0.8392, 0.0, 0.0),      // red
+    Vec3::new(1.0, 0.0, 1.0),         // magenta
+    Vec3::new(0.6, 0.3333, 0.7882),   // purple
+    Vec3::new(1.0, 1.0, 1.0),         // white
 ];
 
 fn debug_colour_for_id(id: u32) -> Vec3 {
