@@ -214,7 +214,7 @@ pub struct MaterialSettings {
     pub metallic_factor: f32,
     pub roughness_factor: f32,
     pub normal_map_scale: f32,
-    pub is_unlit: u32,
+    pub binary_settings: BinaryMaterialSettings,
 }
 
 impl MaterialSettings {
@@ -242,11 +242,45 @@ impl MaterialSettings {
             metallic_factor: 0.0,
             roughness_factor: 1.0,
             normal_map_scale: 1.0,
-            is_unlit: true as u32,
+            binary_settings: BinaryMaterialSettings::UNLIT,
             texture_transform_offset: Vec2::ZERO,
             texture_transform_scale: Vec2::ONE,
             texture_transform_rotation: 0.0,
         }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+#[cfg_attr(
+    not(target_arch = "spirv"),
+    derive(Debug, bytemuck::Zeroable, bytemuck::Pod)
+)]
+#[repr(transparent)]
+pub struct BinaryMaterialSettings {
+    bits: u32,
+}
+
+impl BinaryMaterialSettings {
+    pub const UNLIT: Self = Self { bits: 1 << 0 };
+
+    pub fn contains(self, other: Self) -> bool {
+        (self.bits & other.bits) == other.bits
+    }
+}
+
+impl BitOr for BinaryMaterialSettings {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self {
+            bits: self.bits | rhs.bits,
+        }
+    }
+}
+
+impl BitOrAssign for BinaryMaterialSettings {
+    fn bitor_assign(&mut self, rhs: Self) {
+        *self = *self | rhs;
     }
 }
 

@@ -4,7 +4,7 @@ use crate::resources::{
 };
 use renderer_core::{
     arc_swap, assets::models::Ranges, permutations, pipelines::DEPTH_FORMAT, LineVertex,
-    RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
+    RawAnimatedVertexBuffers, RawLightmappedVertexBuffers, VecGpuBuffer,
 };
 use std::ops::Range;
 use std::sync::Arc;
@@ -17,11 +17,12 @@ use renderer_core::create_view_from_device_framebuffer;
 
 fn bind_static_vertex_buffers<'a>(
     render_pass: &mut wgpu::RenderPass<'a>,
-    vertex_buffers: &'a RawVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
+    vertex_buffers: &'a RawLightmappedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
 ) {
     render_pass.set_vertex_buffer(0, vertex_buffers.position.slice(..));
     render_pass.set_vertex_buffer(1, vertex_buffers.normal.slice(..));
     render_pass.set_vertex_buffer(2, vertex_buffers.uv.slice(..));
+    render_pass.set_vertex_buffer(4, vertex_buffers.lightmap_uv.slice(..));
 }
 
 fn bind_animated_vertex_buffers<'a>(
@@ -471,7 +472,7 @@ fn render_mode<'a, R: Fn(&PrimitiveRanges) -> permutations::FaceSides<Ranges>>(
 }
 
 struct Context<'a> {
-    vertex_buffers: &'a RawVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
+    vertex_buffers: &'a RawLightmappedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
     animated_vertex_buffers: &'a RawAnimatedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>>,
     index_buffer: &'a wgpu::Buffer,
     instance_buffer: &'a wgpu::Buffer,

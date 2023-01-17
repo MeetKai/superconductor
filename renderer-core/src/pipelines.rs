@@ -93,6 +93,12 @@ impl Pipelines {
                 attributes: &wgpu::vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Uint32, 6 => Uint32],
                 step_mode: wgpu::VertexStepMode::Instance,
             },
+            // lightmap uv
+            wgpu::VertexBufferLayout {
+                array_stride: 2 * 4,
+                attributes: &wgpu::vertex_attr_array![7 => Float32x2],
+                step_mode: wgpu::VertexStepMode::Vertex,
+            },
         ];
 
         let stationary_depth_prepass_vertex_buffers = &[

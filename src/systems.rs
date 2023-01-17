@@ -411,7 +411,23 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             mip_level_count: 1,
             dimension: wgpu::TextureDimension::D3,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            format: wgpu::TextureFormat::Rgba32Float,
+            format: wgpu::TextureFormat::Rgba16Float,
+        },
+    )));
+
+    let dummy_lightmap_texture = Arc::new(Texture::new(device.create_texture(
+        &wgpu::TextureDescriptor {
+            label: Some("dummy lightmap"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            sample_count: 1,
+            mip_level_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            format: wgpu::TextureFormat::Rgba16Float,
         },
     )));
 
@@ -440,6 +456,10 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
             renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
             renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
+            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture),
         ],
     ));
 
@@ -449,9 +469,9 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     commands.insert_resource(IndexBuffer(Arc::new(renderer_core::IndexBuffer::new(
         1024, device,
     ))));
-    commands.insert_resource(VertexBuffers(Arc::new(renderer_core::VertexBuffers::new(
-        1024, device,
-    ))));
+    commands.insert_resource(VertexBuffers(Arc::new(
+        renderer_core::LightmappedVertexBuffers::new(1024, device),
+    )));
     commands.insert_resource(AnimatedVertexBuffers(Arc::new(
         renderer_core::AnimatedVertexBuffers::new(1024, device),
     )));

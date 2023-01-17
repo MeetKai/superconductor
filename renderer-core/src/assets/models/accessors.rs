@@ -370,6 +370,22 @@ impl<'a> PrimitiveReader<'a> {
         Ok(Some(read_f32x2(slice, byte_stride, accessor)?))
     }
 
+    pub fn read_second_uvs(&self) -> anyhow::Result<Option<Cow<'a, [Vec2]>>> {
+        let accessor_index = match self.primitive.attributes.texcoord_1 {
+            Some(index) => index,
+            None => return Ok(None),
+        };
+
+        let accessor =
+            self.gltf.accessors.get(accessor_index).ok_or_else(|| {
+                anyhow::anyhow!("Accessor index {} out of bounds", accessor_index)
+            })?;
+        let (slice, byte_stride) =
+            read_buffer_with_accessor(self.buffer_view_map, self.gltf, accessor)?;
+
+        Ok(Some(read_f32x2(slice, byte_stride, accessor)?))
+    }
+
     pub fn read_joints(&self) -> anyhow::Result<Option<Cow<'a, [UVec4]>>> {
         let accessor_index = match self.primitive.attributes.joints_0 {
             Some(index) => index,

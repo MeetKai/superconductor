@@ -27,7 +27,7 @@ pub struct Context<T> {
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
     pub bind_group_layouts: Arc<BindGroupLayouts>,
-    pub vertex_buffers: Arc<crate::buffers::VertexBuffers>,
+    pub vertex_buffers: Arc<crate::buffers::LightmappedVertexBuffers>,
     pub animated_vertex_buffers: Arc<crate::buffers::AnimatedVertexBuffers>,
     pub index_buffer: Arc<crate::buffers::IndexBuffer>,
     pub pipelines: Arc<crate::Pipelines>,
@@ -390,6 +390,7 @@ impl Model {
             &staging_buffers.positions,
             &staging_buffers.normals,
             &staging_buffers.uvs,
+            &staging_buffers.lightmap_uvs,
             &context.device,
             &context.queue,
             &mut command_encoder,
@@ -708,6 +709,7 @@ struct StagingBuffers {
     positions: Vec<Vec3>,
     normals: Vec<Vec3>,
     uvs: Vec<Vec2>,
+    lightmap_uvs: Vec<Vec2>,
 }
 
 impl StagingBuffers {
@@ -738,6 +740,12 @@ impl StagingBuffers {
                     .take(positions.len())
                     .collect(),
             },
+            lightmap_uvs: match reader.read_second_uvs()? {
+                Some(uvs) => uvs.to_vec(),
+                None => std::iter::repeat(Vec2::ZERO)
+                    .take(positions.len())
+                    .collect(),
+            },
             positions,
         })
     }
@@ -754,6 +762,7 @@ impl CollectableBuffer for StagingBuffers {
         self.positions.extend_from_slice(&new.positions);
         self.normals.extend_from_slice(&new.normals);
         self.uvs.extend_from_slice(&new.uvs);
+        self.lightmap_uvs.extend_from_slice(&new.lightmap_uvs);
 
         let indices_end = self.indices.len() as u32;
 

@@ -18,8 +18,9 @@ pub use shared_structs;
 
 pub use bind_group_layouts::BindGroupLayouts;
 pub use buffers::{
-    AllocatedBuffer, AnimatedVertexBuffers, IndexBuffer, RawAnimatedVertexBuffers,
-    RawVertexBuffers, VecGpuBuffer, VertexBuffers,
+    AllocatedBuffer, AnimatedVertexBuffers, IndexBuffer, LightmappedVertexBuffers,
+    RawAnimatedVertexBuffers, RawLightmappedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
+    VertexBuffers,
 };
 pub use instance::{GpuInstance, Instance, LineVertex};
 pub use pipelines::{PipelineOptions, Pipelines};

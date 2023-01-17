@@ -365,6 +365,12 @@ fn load_material_settings(
 
     let emissive_factor = Vec3::from(material.emissive_factor) * emissive_strength;
 
+    let mut binary_settings = shared_structs::BinaryMaterialSettings::default();
+
+    if unlit {
+        binary_settings |= shared_structs::BinaryMaterialSettings::UNLIT;
+    }
+
     shared_structs::MaterialSettings {
         base_color_factor: pbr.base_color_factor.into(),
         emissive_factor_x: emissive_factor.x,
@@ -372,7 +378,7 @@ fn load_material_settings(
         emissive_factor_z: emissive_factor.z,
         metallic_factor: pbr.metallic_factor,
         roughness_factor: pbr.roughness_factor,
-        is_unlit: unlit as u32,
+        binary_settings,
         normal_map_scale: material
             .normal_texture
             .as_ref()
