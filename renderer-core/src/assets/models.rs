@@ -27,7 +27,7 @@ pub struct Context<T> {
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
     pub bind_group_layouts: Arc<BindGroupLayouts>,
-    pub vertex_buffers: Arc<crate::buffers::LightmappedVertexBuffers>,
+    pub vertex_buffers: Arc<crate::buffers::VertexBuffers>,
     pub animated_vertex_buffers: Arc<crate::buffers::AnimatedVertexBuffers>,
     pub index_buffer: Arc<crate::buffers::IndexBuffer>,
     pub pipelines: Arc<crate::Pipelines>,

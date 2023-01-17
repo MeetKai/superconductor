@@ -71,32 +71,31 @@ impl Pipelines {
             });
 
         let vertex_buffers = &[
-            // position, normal, uv
-            wgpu::VertexBufferLayout {
-                array_stride: 3 * 4,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &wgpu::vertex_attr_array![0 => Float32x3],
-            },
-            wgpu::VertexBufferLayout {
-                array_stride: 3 * 4,
-                attributes: &wgpu::vertex_attr_array![1 => Float32x3],
-                step_mode: wgpu::VertexStepMode::Vertex,
-            },
-            wgpu::VertexBufferLayout {
-                array_stride: 2 * 4,
-                attributes: &wgpu::vertex_attr_array![2 => Float32x2],
-                step_mode: wgpu::VertexStepMode::Vertex,
-            },
             // instance
             wgpu::VertexBufferLayout {
                 array_stride: std::mem::size_of::<super::GpuInstance>() as u64,
-                attributes: &wgpu::vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Uint32, 6 => Uint32],
+                attributes: &wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4, 2 => Uint32, 3 => Uint32, 4 => Uint32],
                 step_mode: wgpu::VertexStepMode::Instance,
             },
-            // lightmap uv
+            // position, normal, uv, lightmap uv
+            wgpu::VertexBufferLayout {
+                array_stride: 3 * 4,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![5 => Float32x3],
+            },
+            wgpu::VertexBufferLayout {
+                array_stride: 3 * 4,
+                attributes: &wgpu::vertex_attr_array![6 => Float32x3],
+                step_mode: wgpu::VertexStepMode::Vertex,
+            },
             wgpu::VertexBufferLayout {
                 array_stride: 2 * 4,
                 attributes: &wgpu::vertex_attr_array![7 => Float32x2],
+                step_mode: wgpu::VertexStepMode::Vertex,
+            },
+            wgpu::VertexBufferLayout {
+                array_stride: 2 * 4,
+                attributes: &wgpu::vertex_attr_array![8 => Float32x2],
                 step_mode: wgpu::VertexStepMode::Vertex,
             },
         ];
@@ -126,38 +125,38 @@ impl Pipelines {
             });
 
         let animated_vertex_buffers = &[
-            // position, normal, uv
+            // instance
+            wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<super::GpuInstance>() as u64,
+                attributes: &wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4, 2 => Uint32, 3 => Uint32, 4 => Uint32],
+                step_mode: wgpu::VertexStepMode::Instance,
+            },
+            // position, normal, uv, joint indices, joint weights
             wgpu::VertexBufferLayout {
                 array_stride: 3 * 4,
                 step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &wgpu::vertex_attr_array![0 => Float32x3],
+                attributes: &wgpu::vertex_attr_array![5 => Float32x3],
             },
             wgpu::VertexBufferLayout {
                 array_stride: 3 * 4,
-                attributes: &wgpu::vertex_attr_array![1 => Float32x3],
+                attributes: &wgpu::vertex_attr_array![6 => Float32x3],
                 step_mode: wgpu::VertexStepMode::Vertex,
             },
             wgpu::VertexBufferLayout {
                 array_stride: 2 * 4,
-                attributes: &wgpu::vertex_attr_array![2 => Float32x2],
+                attributes: &wgpu::vertex_attr_array![7 => Float32x2],
                 step_mode: wgpu::VertexStepMode::Vertex,
-            },
-            // instance
-            wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<super::GpuInstance>() as u64,
-                attributes: &wgpu::vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Uint32, 6 => Uint32],
-                step_mode: wgpu::VertexStepMode::Instance,
             },
             // joint indices
             wgpu::VertexBufferLayout {
                 array_stride: 4 * 4,
-                attributes: &wgpu::vertex_attr_array![7 => Uint32x4],
+                attributes: &wgpu::vertex_attr_array![8 => Uint32x4],
                 step_mode: wgpu::VertexStepMode::Vertex,
             },
             // joint weights
             wgpu::VertexBufferLayout {
                 array_stride: 4 * 4,
-                attributes: &wgpu::vertex_attr_array![8 => Float32x4],
+                attributes: &wgpu::vertex_attr_array![9 => Float32x4],
                 step_mode: wgpu::VertexStepMode::Vertex,
             },
         ];

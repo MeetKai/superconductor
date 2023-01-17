@@ -267,6 +267,7 @@ pub struct RawVertexBuffers<T> {
     pub position: T,
     pub normal: T,
     pub uv: T,
+    pub lightmap_uv: T,
 }
 
 impl RawVertexBuffers<ArcSwap<wgpu::Buffer>> {
@@ -275,6 +276,7 @@ impl RawVertexBuffers<ArcSwap<wgpu::Buffer>> {
             position: self.position.load(),
             normal: self.normal.load(),
             uv: self.uv.load(),
+            lightmap_uv: self.lightmap_uv.load(),
         }
     }
 }
@@ -307,6 +309,12 @@ impl VertexBuffers {
                     capacity,
                     size_of::<Vec2>(),
                 )),
+                lightmap_uv: ArcSwap::from(create_buffer(
+                    device,
+                    "uv buffer",
+                    capacity,
+                    size_of::<Vec2>(),
+                )),
             },
         }
     }
@@ -316,6 +324,7 @@ impl VertexBuffers {
         positions: &[Vec3],
         normals: &[Vec3],
         uvs: &[Vec2],
+        lightmap_uvs: &[Vec2],
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -334,6 +343,7 @@ impl VertexBuffers {
                         position: self.buffers.position.load_full(),
                         normal: self.buffers.normal.load_full(),
                         uv: self.buffers.uv.load_full(),
+                        lightmap_uv: self.buffers.lightmap_uv.load_full(),
                     };
 
                     (buffers, range)
@@ -370,6 +380,12 @@ impl VertexBuffers {
             bytemuck::cast_slice(uvs),
         );
 
+        queue.write_buffer(
+            &buffers.lightmap_uv,
+            size_in_bytes(range.start, size_of::<Vec2>()),
+            bytemuck::cast_slice(lightmap_uvs),
+        );
+
         range
     }
 
@@ -402,6 +418,12 @@ impl VertexBuffers {
             position: create_buffer(device, "position buffer", new_capacity, size_of::<Vec3>()),
             normal: create_buffer(device, "normal buffer", new_capacity, size_of::<Vec3>()),
             uv: create_buffer(device, "uv buffer", new_capacity, size_of::<Vec2>()),
+            lightmap_uv: create_buffer(
+                device,
+                "lightmap uv buffer",
+                new_capacity,
+                size_of::<Vec2>(),
+            ),
         };
 
         let current_buffers = buffers.load();
@@ -427,10 +449,18 @@ impl VertexBuffers {
             0,
             size_in_bytes(copy_range, size_of::<Vec2>()),
         );
+        command_encoder.copy_buffer_to_buffer(
+            &current_buffers.lightmap_uv,
+            0,
+            &new_buffers.lightmap_uv,
+            0,
+            size_in_bytes(copy_range, size_of::<Vec2>()),
+        );
 
         buffers.position.store(new_buffers.position.clone());
         buffers.normal.store(new_buffers.normal.clone());
         buffers.uv.store(new_buffers.uv.clone());
+        buffers.lightmap_uv.store(new_buffers.lightmap_uv.clone());
 
         new_buffers
     }
@@ -691,210 +721,6 @@ impl AnimatedVertexBuffers {
         buffers
             .joint_weights
             .store(new_buffers.joint_weights.clone());
-
-        new_buffers
-    }
-}
-
-pub struct RawLightmappedVertexBuffers<T> {
-    pub position: T,
-    pub normal: T,
-    pub uv: T,
-    pub lightmap_uv: T,
-}
-
-impl RawLightmappedVertexBuffers<ArcSwap<wgpu::Buffer>> {
-    pub fn load(&self) -> RawLightmappedVertexBuffers<arc_swap::Guard<Arc<wgpu::Buffer>>> {
-        RawLightmappedVertexBuffers {
-            position: self.position.load(),
-            normal: self.normal.load(),
-            uv: self.uv.load(),
-            lightmap_uv: self.lightmap_uv.load(),
-        }
-    }
-}
-
-pub struct LightmappedVertexBuffers {
-    allocator: parking_lot::Mutex<range_alloc::RangeAllocator<u32>>,
-    pub buffers: RawLightmappedVertexBuffers<ArcSwap<wgpu::Buffer>>,
-}
-
-impl LightmappedVertexBuffers {
-    pub fn new(capacity: u32, device: &wgpu::Device) -> Self {
-        Self {
-            allocator: parking_lot::Mutex::new(range_alloc::RangeAllocator::new(0..capacity)),
-            buffers: RawLightmappedVertexBuffers {
-                position: ArcSwap::from(create_buffer(
-                    device,
-                    "position buffer",
-                    capacity,
-                    size_of::<Vec3>(),
-                )),
-                normal: ArcSwap::from(create_buffer(
-                    device,
-                    "normal buffer",
-                    capacity,
-                    size_of::<Vec3>(),
-                )),
-                uv: ArcSwap::from(create_buffer(
-                    device,
-                    "uv buffer",
-                    capacity,
-                    size_of::<Vec2>(),
-                )),
-                lightmap_uv: ArcSwap::from(create_buffer(
-                    device,
-                    "uv buffer",
-                    capacity,
-                    size_of::<Vec2>(),
-                )),
-            },
-        }
-    }
-
-    pub fn insert(
-        &self,
-        positions: &[Vec3],
-        normals: &[Vec3],
-        uvs: &[Vec2],
-        lightmap_uvs: &[Vec2],
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Range<u32> {
-        let length = positions.len() as u32;
-
-        debug_assert_eq!(positions.len(), normals.len());
-        debug_assert_eq!(positions.len(), uvs.len());
-        debug_assert_eq!(positions.len(), lightmap_uvs.len());
-
-        let (buffers, range) = {
-            let mut allocator = self.allocator.lock();
-
-            match allocator.allocate_range(length) {
-                Ok(range) => {
-                    let buffers = RawLightmappedVertexBuffers {
-                        position: self.buffers.position.load_full(),
-                        normal: self.buffers.normal.load_full(),
-                        uv: self.buffers.uv.load_full(),
-                        lightmap_uv: self.buffers.lightmap_uv.load_full(),
-                    };
-
-                    (buffers, range)
-                }
-                Err(_) => {
-                    let new_buffers = Self::resize(
-                        &mut allocator,
-                        &self.buffers,
-                        length,
-                        device,
-                        command_encoder,
-                    );
-                    let range = allocator.allocate_range(length).expect("just resized");
-                    (new_buffers, range)
-                }
-            }
-        };
-
-        queue.write_buffer(
-            &buffers.position,
-            size_in_bytes(range.start, size_of::<Vec3>()),
-            bytemuck::cast_slice(positions),
-        );
-
-        queue.write_buffer(
-            &buffers.normal,
-            size_in_bytes(range.start, size_of::<Vec3>()),
-            bytemuck::cast_slice(normals),
-        );
-
-        queue.write_buffer(
-            &buffers.uv,
-            size_in_bytes(range.start, size_of::<Vec2>()),
-            bytemuck::cast_slice(uvs),
-        );
-
-        queue.write_buffer(
-            &buffers.lightmap_uv,
-            size_in_bytes(range.start, size_of::<Vec2>()),
-            bytemuck::cast_slice(lightmap_uvs),
-        );
-
-        range
-    }
-
-    fn resize(
-        allocator: &mut range_alloc::RangeAllocator<u32>,
-        buffers: &RawLightmappedVertexBuffers<ArcSwap<wgpu::Buffer>>,
-        required_capacity: u32,
-        device: &wgpu::Device,
-        command_encoder: &mut wgpu::CommandEncoder,
-    ) -> RawLightmappedVertexBuffers<Arc<wgpu::Buffer>> {
-        let copy_range = allocator
-            .allocated_ranges()
-            .last()
-            .map(|range| range.end)
-            .unwrap_or(0);
-
-        let old_capacity = allocator.initial_range().end;
-
-        let new_capacity = (old_capacity + required_capacity).max(old_capacity * 2);
-
-        log::info!(
-            "Growing vertex buffers from {} to {}",
-            old_capacity,
-            new_capacity
-        );
-
-        allocator.grow_to(new_capacity);
-
-        let new_buffers = RawLightmappedVertexBuffers {
-            position: create_buffer(device, "position buffer", new_capacity, size_of::<Vec3>()),
-            normal: create_buffer(device, "normal buffer", new_capacity, size_of::<Vec3>()),
-            uv: create_buffer(device, "uv buffer", new_capacity, size_of::<Vec2>()),
-            lightmap_uv: create_buffer(
-                device,
-                "lightmap uv buffer",
-                new_capacity,
-                size_of::<Vec2>(),
-            ),
-        };
-
-        let current_buffers = buffers.load();
-
-        command_encoder.copy_buffer_to_buffer(
-            &current_buffers.position,
-            0,
-            &new_buffers.position,
-            0,
-            size_in_bytes(copy_range, size_of::<Vec3>()),
-        );
-        command_encoder.copy_buffer_to_buffer(
-            &current_buffers.normal,
-            0,
-            &new_buffers.normal,
-            0,
-            size_in_bytes(copy_range, size_of::<Vec3>()),
-        );
-        command_encoder.copy_buffer_to_buffer(
-            &current_buffers.uv,
-            0,
-            &new_buffers.uv,
-            0,
-            size_in_bytes(copy_range, size_of::<Vec2>()),
-        );
-        command_encoder.copy_buffer_to_buffer(
-            &current_buffers.lightmap_uv,
-            0,
-            &new_buffers.lightmap_uv,
-            0,
-            size_in_bytes(copy_range, size_of::<Vec2>()),
-        );
-
-        buffers.position.store(new_buffers.position.clone());
-        buffers.normal.store(new_buffers.normal.clone());
-        buffers.uv.store(new_buffers.uv.clone());
-        buffers.lightmap_uv.store(new_buffers.lightmap_uv.clone());
 
         new_buffers
     }

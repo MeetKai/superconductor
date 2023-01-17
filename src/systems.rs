@@ -291,6 +291,7 @@ pub(crate) fn push_entity_instances(
                                 similarity: primitive_transform,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
                                 material_index: primitive.lods[lod].material_index as u32,
+                                is_lightmapped: false as u32,
                                 _padding: Default::default(),
                             },
                         );
@@ -310,6 +311,7 @@ pub(crate) fn push_entity_instances(
                                 similarity: primitive_transform,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
                                 material_index: primitive.lods[0].material_index as u32,
+                                is_lightmapped: false as u32,
                                 _padding: Default::default(),
                             },
                         );
@@ -469,9 +471,9 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     commands.insert_resource(IndexBuffer(Arc::new(renderer_core::IndexBuffer::new(
         1024, device,
     ))));
-    commands.insert_resource(VertexBuffers(Arc::new(
-        renderer_core::LightmappedVertexBuffers::new(1024, device),
-    )));
+    commands.insert_resource(VertexBuffers(Arc::new(renderer_core::VertexBuffers::new(
+        1024, device,
+    ))));
     commands.insert_resource(AnimatedVertexBuffers(Arc::new(
         renderer_core::AnimatedVertexBuffers::new(1024, device),
     )));

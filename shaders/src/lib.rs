@@ -23,13 +23,14 @@ pub use single_view::{
 
 #[spirv(vertex)]
 pub fn vertex(
-    position: Vec3,
-    normal: Vec3,
-    uv: Vec2,
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
     _joints_offset: u32,
     material_index: u32,
+    is_lightmapped: u32,
+    position: Vec3,
+    normal: Vec3,
+    uv: Vec2,
     lightmap_uv: Vec2,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
@@ -40,6 +41,7 @@ pub fn vertex(
     out_uv: &mut Vec2,
     out_lightmap_uv: &mut Vec2,
     #[spirv(flat)] out_material_index: &mut u32,
+    #[spirv(flat)] out_is_lightmapped: &mut u32,
 ) {
     let instance_scale = instance_translation_and_scale.w;
     let instance_translation = instance_translation_and_scale.truncate();
@@ -51,6 +53,7 @@ pub fn vertex(
     *out_uv = material_settings.transform_uv(uv);
     *out_material_index = material_index;
     *out_lightmap_uv = lightmap_uv;
+    *out_is_lightmapped = is_lightmapped;
 
     if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
@@ -59,13 +62,14 @@ pub fn vertex(
 
 #[spirv(vertex)]
 pub fn animated_vertex(
-    position: Vec3,
-    normal: Vec3,
-    uv: Vec2,
     instance_translation_and_scale: Vec4,
     instance_rotation: glam::Quat,
     joints_offset: u32,
     material_index: u32,
+    is_lightmapped: u32,
+    position: Vec3,
+    normal: Vec3,
+    uv: Vec2,
     joint_indices: UVec4,
     joint_weights: Vec4,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
@@ -79,6 +83,7 @@ pub fn animated_vertex(
     out_uv: &mut Vec2,
     out_lightmap_uv: &mut Vec2,
     #[spirv(flat)] out_material_index: &mut u32,
+    #[spirv(flat)] out_is_lightmapped: &mut u32,
 ) {
     let instance_scale = instance_translation_and_scale.w;
     let instance_translation = instance_translation_and_scale.truncate();
@@ -113,6 +118,7 @@ pub fn animated_vertex(
     *out_uv = material_settings.transform_uv(uv);
     *out_material_index = material_index;
     *out_lightmap_uv = Vec2::ZERO;
+    *out_is_lightmapped = is_lightmapped;
 
     if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
@@ -139,6 +145,7 @@ impl<'a> TextureSampler<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
 struct ExtendedMaterialParams {
     base: glam_pbr::MaterialParams,
     alpha: f32,
@@ -147,9 +154,9 @@ struct ExtendedMaterialParams {
 
 impl ExtendedMaterialParams {
     pub fn new(
-        albedo_texture: &TextureSampler,
-        metallic_roughness_texture: &TextureSampler,
-        emissive_texture: &TextureSampler,
+        albedo_texture: TextureSampler,
+        metallic_roughness_texture: TextureSampler,
+        emissive_texture: TextureSampler,
         material_settings: &MaterialSettings,
     ) -> Self {
         let albedo = albedo_texture.sample() * material_settings.base_color_factor;
@@ -198,6 +205,27 @@ fn sample_spherical_harmonics(
     ]
 }
 
+fn sample_lightmap_sphereical_harmonics(
+    lightmap_uv: Vec2,
+    sampler: Sampler,
+    l_0: &SampledImage,
+    l_1_x: &SampledImage,
+    l_1_y: &SampledImage,
+    l_1_z: &SampledImage,
+) -> [Vec3; 4] {
+    let sample_texture = |texture: &SampledImage| {
+        let sample: Vec4 = texture.sample_by_lod(sampler, lightmap_uv, 0.0);
+        sample.truncate()
+    };
+
+    [
+        sample_texture(l_0),
+        sample_texture(l_1_x),
+        sample_texture(l_1_y),
+        sample_texture(l_1_z),
+    ]
+}
+
 #[spirv(fragment)]
 pub fn fragment(
     position: Vec3,
@@ -205,6 +233,7 @@ pub fn fragment(
     uv: Vec2,
     lightmap_uv: Vec2,
     #[spirv(flat)] _material_index: u32,
+    #[spirv(flat)] is_lightmapped: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
@@ -225,14 +254,15 @@ pub fn fragment(
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
-    let spherical_harmonics = if false {
-        let s: Vec4 = lightmap.sample_by_lod(*clamp_sampler, lightmap_uv, 0.0);
-
-        let x: Vec4 = lightmap_x.sample_by_lod(*clamp_sampler, lightmap_uv, 0.0);
-        let y: Vec4 = lightmap_y.sample_by_lod(*clamp_sampler, lightmap_uv, 0.0);
-        let z: Vec4 = lightmap_z.sample_by_lod(*clamp_sampler, lightmap_uv, 0.0);
-
-        [s.truncate(), x.truncate(), y.truncate(), z.truncate()]
+    let spherical_harmonics = if is_lightmapped != 0 {
+        sample_lightmap_sphereical_harmonics(
+            lightmap_uv,
+            *clamp_sampler,
+            lightmap,
+            lightmap_x,
+            lightmap_y,
+            lightmap_z,
+        )
     } else {
         sample_spherical_harmonics(
             uniforms,
@@ -245,16 +275,10 @@ pub fn fragment(
         )
     };
 
-    let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
-    let metallic_roughness_texture =
-        TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv);
-    let normal_texture = TextureSampler::new(normal_texture, *texture_sampler, uv);
-    let emissive_texture = TextureSampler::new(emissive_texture, *texture_sampler, uv);
-
     let material_params = ExtendedMaterialParams::new(
-        &albedo_texture,
-        &metallic_roughness_texture,
-        &emissive_texture,
+        TextureSampler::new(albedo_texture, *texture_sampler, uv),
+        TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv),
+        TextureSampler::new(emissive_texture, *texture_sampler, uv),
         &material_settings,
     );
 
@@ -268,113 +292,23 @@ pub fn fragment(
         return;
     }
 
-    let view_vector = (uniforms.eye_position(view_index) - position).normalize();
+    let view = glam_pbr::View((uniforms.eye_position(view_index) - position).normalize());
 
-    let normal = calculate_normal(
-        normal,
-        uv,
-        view_vector,
-        &normal_texture,
-        front_facing,
-        material_settings.normal_map_scale,
-    );
-    let view = glam_pbr::View(view_vector);
-
-    let diffuse_output = material_params.base.diffuse_colour()
-        * eval_spherical_harmonics_nonlinear(spherical_harmonics, normal.0);
-
-    let specular_output = spherical_harmonics_specular_approximation(
-        spherical_harmonics,
-        normal,
-        view,
-        material_params.base,
-    );
-
-    let combined_output = diffuse_output + specular_output + material_params.emissive;
-
-    *output = potentially_tonemap(combined_output, uniforms).extend(1.0);
-}
-
-#[spirv(fragment)]
-pub fn fragment_alpha_blended(
-    position: Vec3,
-    normal: Vec3,
-    uv: Vec2,
-    lightmap_uv: Vec2,
-    #[spirv(flat)] _material_index: u32,
-    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
-    #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
-    #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
-    #[spirv(descriptor_set = 1, binding = 5)] texture_sampler: &Sampler,
-    #[spirv(view_index, flat)] view_index: i32,
-    #[spirv(front_facing)] front_facing: bool,
-    output: &mut Vec4,
-) {
-    let spherical_harmonics = sample_spherical_harmonics(
+    *output = calculate_lighting_and_tonemap(
         uniforms,
-        position,
-        *clamp_sampler,
-        sh_l_0,
-        sh_l_1_x,
-        sh_l_1_y,
-        sh_l_1_z,
-    );
-
-    let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
-    let metallic_roughness_texture =
-        TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv);
-    let normal_texture = TextureSampler::new(normal_texture, *texture_sampler, uv);
-    let emissive_texture = TextureSampler::new(emissive_texture, *texture_sampler, uv);
-
-    let material_params = ExtendedMaterialParams::new(
-        &albedo_texture,
-        &metallic_roughness_texture,
-        &emissive_texture,
-        &material_settings,
-    );
-
-    if material_settings
-        .binary_settings
-        .contains(BinaryMaterialSettings::UNLIT)
-    {
-        // we don't want to use tonemapping for unlit materials.
-        *output = potentially_convert_linear_to_srgb(material_params.base.albedo_colour, uniforms)
-            .extend(material_params.alpha);
-        return;
-    }
-
-    let view_vector = (uniforms.eye_position(view_index) - position).normalize();
-
-    let normal = calculate_normal(
-        normal,
-        uv,
-        view_vector,
-        &normal_texture,
-        front_facing,
-        material_settings.normal_map_scale,
-    );
-    let view = glam_pbr::View(view_vector);
-
-    let diffuse_output = material_params.base.diffuse_colour()
-        * eval_spherical_harmonics_nonlinear(spherical_harmonics, normal.0);
-
-    let specular_output = spherical_harmonics_specular_approximation(
+        material_params,
         spherical_harmonics,
-        normal,
+        calculate_normal(
+            normal,
+            uv,
+            view,
+            TextureSampler::new(normal_texture, *texture_sampler, uv),
+            front_facing,
+            material_settings.normal_map_scale,
+        ),
         view,
-        material_params.base,
-    );
-    let combined_output = diffuse_output + specular_output + material_params.emissive;
-
-    *output = potentially_tonemap(combined_output, uniforms).extend(material_params.alpha);
+    )
+    .extend(1.0);
 }
 
 #[spirv(fragment)]
@@ -384,12 +318,17 @@ pub fn fragment_alpha_clipped(
     uv: Vec2,
     lightmap_uv: Vec2,
     #[spirv(flat)] _material_index: u32,
+    #[spirv(flat)] is_lightmapped: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
     #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
     #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
     #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 7)] lightmap: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 10)] lightmap_z: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -400,40 +339,44 @@ pub fn fragment_alpha_clipped(
     #[spirv(front_facing)] front_facing: bool,
     output: &mut Vec4,
 ) {
-    let spherical_harmonics = sample_spherical_harmonics(
-        uniforms,
-        position,
-        *clamp_sampler,
-        sh_l_0,
-        sh_l_1_x,
-        sh_l_1_y,
-        sh_l_1_z,
-    );
-
-    let albedo_texture = TextureSampler::new(albedo_texture, *texture_sampler, uv);
-    let metallic_roughness_texture =
-        TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv);
-    let normal_texture = TextureSampler::new(normal_texture, *texture_sampler, uv);
-    let emissive_texture = TextureSampler::new(emissive_texture, *texture_sampler, uv);
+    let spherical_harmonics = if is_lightmapped != 0 {
+        sample_lightmap_sphereical_harmonics(
+            lightmap_uv,
+            *clamp_sampler,
+            lightmap,
+            lightmap_x,
+            lightmap_y,
+            lightmap_z,
+        )
+    } else {
+        sample_spherical_harmonics(
+            uniforms,
+            position,
+            *clamp_sampler,
+            sh_l_0,
+            sh_l_1_x,
+            sh_l_1_y,
+            sh_l_1_z,
+        )
+    };
 
     let material_params = ExtendedMaterialParams::new(
-        &albedo_texture,
-        &metallic_roughness_texture,
-        &emissive_texture,
+        TextureSampler::new(albedo_texture, *texture_sampler, uv),
+        TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv),
+        TextureSampler::new(emissive_texture, *texture_sampler, uv),
         &material_settings,
     );
 
-    let view_vector = (uniforms.eye_position(view_index) - position).normalize();
+    let view = glam_pbr::View((uniforms.eye_position(view_index) - position).normalize());
 
     let normal = calculate_normal(
         normal,
         uv,
-        view_vector,
-        &normal_texture,
+        view,
+        TextureSampler::new(normal_texture, *texture_sampler, uv),
         front_facing,
         material_settings.normal_map_scale,
     );
-    let view = glam_pbr::View(view_vector);
 
     // We can only do this after we've sampled all textures for naga control flow reasons.
     if material_params.alpha < 0.5 {
@@ -450,6 +393,108 @@ pub fn fragment_alpha_clipped(
         return;
     }
 
+    *output = calculate_lighting_and_tonemap(
+        uniforms,
+        material_params,
+        spherical_harmonics,
+        normal,
+        view,
+    )
+    .extend(1.0);
+}
+
+#[spirv(fragment)]
+pub fn fragment_alpha_blended(
+    position: Vec3,
+    normal: Vec3,
+    uv: Vec2,
+    lightmap_uv: Vec2,
+    #[spirv(flat)] _material_index: u32,
+    #[spirv(flat)] is_lightmapped: u32,
+    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 7)] lightmap: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 10)] lightmap_z: &SampledImage,
+    #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
+    #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
+    #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
+    #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &SampledImage,
+    #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
+    #[spirv(descriptor_set = 1, binding = 5)] texture_sampler: &Sampler,
+    #[spirv(view_index, flat)] view_index: i32,
+    #[spirv(front_facing)] front_facing: bool,
+    output: &mut Vec4,
+) {
+    let spherical_harmonics = if is_lightmapped != 0 {
+        sample_lightmap_sphereical_harmonics(
+            lightmap_uv,
+            *clamp_sampler,
+            lightmap,
+            lightmap_x,
+            lightmap_y,
+            lightmap_z,
+        )
+    } else {
+        sample_spherical_harmonics(
+            uniforms,
+            position,
+            *clamp_sampler,
+            sh_l_0,
+            sh_l_1_x,
+            sh_l_1_y,
+            sh_l_1_z,
+        )
+    };
+
+    let material_params = ExtendedMaterialParams::new(
+        TextureSampler::new(albedo_texture, *texture_sampler, uv),
+        TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv),
+        TextureSampler::new(emissive_texture, *texture_sampler, uv),
+        &material_settings,
+    );
+
+    if material_settings
+        .binary_settings
+        .contains(BinaryMaterialSettings::UNLIT)
+    {
+        // we don't want to use tonemapping for unlit materials.
+        *output = potentially_convert_linear_to_srgb(material_params.base.albedo_colour, uniforms)
+            .extend(material_params.alpha);
+        return;
+    }
+
+    let view = glam_pbr::View((uniforms.eye_position(view_index) - position).normalize());
+
+    *output = calculate_lighting_and_tonemap(
+        uniforms,
+        material_params,
+        spherical_harmonics,
+        calculate_normal(
+            normal,
+            uv,
+            view,
+            TextureSampler::new(normal_texture, *texture_sampler, uv),
+            front_facing,
+            material_settings.normal_map_scale,
+        ),
+        view,
+    )
+    .extend(material_params.alpha);
+}
+
+fn calculate_lighting_and_tonemap(
+    uniforms: &Uniforms,
+    material_params: ExtendedMaterialParams,
+    spherical_harmonics: [Vec3; 4],
+    normal: glam_pbr::Normal,
+    view: glam_pbr::View,
+) -> Vec3 {
     let diffuse_output = material_params.base.diffuse_colour()
         * eval_spherical_harmonics_nonlinear(spherical_harmonics, normal.0);
 
@@ -461,7 +506,7 @@ pub fn fragment_alpha_clipped(
     );
     let combined_output = diffuse_output + specular_output + material_params.emissive;
 
-    *output = potentially_tonemap(combined_output, uniforms).extend(1.0);
+    potentially_tonemap(combined_output, uniforms)
 }
 
 fn linear_to_srgb_approx(color_linear: Vec3) -> Vec3 {
@@ -472,8 +517,8 @@ fn linear_to_srgb_approx(color_linear: Vec3) -> Vec3 {
 fn calculate_normal(
     interpolated_normal: Vec3,
     uv: Vec2,
-    view_vector: Vec3,
-    normal_map: &TextureSampler,
+    view_vector: glam_pbr::View,
+    normal_map: TextureSampler,
     front_facing: bool,
     normal_map_scale: f32,
 ) -> glam_pbr::Normal {
@@ -489,7 +534,7 @@ fn calculate_normal(
     // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_normaltextureinfo_scale
     let map_normal = (map_normal * Vec3::new(normal_map_scale, normal_map_scale, 1.0)).normalize();
 
-    let normal = (compute_cotangent_frame(normal, -view_vector, uv) * map_normal).normalize();
+    let normal = (compute_cotangent_frame(normal, -view_vector.0, uv) * map_normal).normalize();
 
     glam_pbr::Normal(normal)
 }
