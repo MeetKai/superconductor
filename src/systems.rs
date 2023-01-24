@@ -291,7 +291,7 @@ pub(crate) fn push_entity_instances(
                                 similarity: primitive_transform,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
                                 material_index: primitive.lods[lod].material_index as u32,
-                                is_lightmapped: false as u32,
+                                is_lightmapped: primitive.lods[lod].is_lightmapped as u32,
                                 _padding: Default::default(),
                             },
                         );
@@ -557,10 +557,55 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
             |_| (),
         );
 
-        let (sh0, sh1_x, sh1_y, sh1_z) =
-            futures::future::join4(sh0_fut, sh1_x_fut, sh1_y_fut, sh1_z_fut).await;
+        let lightmap_sh0_fut = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &new_lightvol_textures.lightmap_sh0,
+            false,
+            |_| (),
+        );
+
+        let lightmap_sh1_x_fut = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &new_lightvol_textures.lightmap_sh1_x,
+            false,
+            |_| (),
+        );
+
+        let lightmap_sh1_y_fut = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &new_lightvol_textures.lightmap_sh1_y,
+            false,
+            |_| (),
+        );
+
+        let lightmap_sh1_z_fut = renderer_core::assets::textures::load_ktx2_async(
+            &textures_context,
+            &new_lightvol_textures.lightmap_sh1_z,
+            false,
+            |_| (),
+        );
+
+        let (
+            (sh0, sh1_x, sh1_y, sh1_z),
+            (lightmap_sh0, lightmap_sh1_x, lightmap_sh1_y, lightmap_sh1_z),
+        ) = futures::future::join(
+            futures::future::join4(sh0_fut, sh1_x_fut, sh1_y_fut, sh1_z_fut),
+            futures::future::join4(
+                lightmap_sh0_fut,
+                lightmap_sh1_x_fut,
+                lightmap_sh1_y_fut,
+                lightmap_sh1_z_fut,
+            ),
+        )
+        .await;
 
         let (sh0, sh1_x, sh1_y, sh1_z) = (sh0?, sh1_x?, sh1_y?, sh1_z?);
+        let (lightmap_sh0, lightmap_sh1_x, lightmap_sh1_y, lightmap_sh1_z) = (
+            lightmap_sh0?,
+            lightmap_sh1_x?,
+            lightmap_sh1_y?,
+            lightmap_sh1_z?,
+        );
 
         main_bind_group.mutate(
             &textures_context.device,
@@ -570,6 +615,10 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
                 entries[4] = renderer_core::mutable_bind_group::Entry::Texture(sh1_x);
                 entries[5] = renderer_core::mutable_bind_group::Entry::Texture(sh1_y);
                 entries[6] = renderer_core::mutable_bind_group::Entry::Texture(sh1_z);
+                entries[7] = renderer_core::mutable_bind_group::Entry::Texture(lightmap_sh0);
+                entries[8] = renderer_core::mutable_bind_group::Entry::Texture(lightmap_sh1_x);
+                entries[9] = renderer_core::mutable_bind_group::Entry::Texture(lightmap_sh1_y);
+                entries[10] = renderer_core::mutable_bind_group::Entry::Texture(lightmap_sh1_z);
             },
         );
 

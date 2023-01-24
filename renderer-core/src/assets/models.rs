@@ -131,6 +131,7 @@ fn collect_primitives<
                 .map(|lod| PrimitiveLod {
                     index_buffer_range: staging_buffers.collect(&lod.buffers),
                     material_index: lod.material_index,
+                    is_lightmapped: lod.buffers.is_lightmapped(),
                 })
                 .collect(),
         });
@@ -696,11 +697,13 @@ pub struct Primitive {
 pub struct PrimitiveLod {
     pub index_buffer_range: Range<u32>,
     pub material_index: usize,
+    pub is_lightmapped: bool,
 }
 
 trait CollectableBuffer {
     fn collect(&mut self, new: &Self) -> Range<u32>;
     fn num_indices(&self) -> u32;
+    fn is_lightmapped(&self) -> bool;
 }
 
 #[derive(Default)]
@@ -710,6 +713,7 @@ struct StagingBuffers {
     normals: Vec<Vec3>,
     uvs: Vec<Vec2>,
     lightmap_uvs: Vec<Vec2>,
+    is_lightmapped: bool,
 }
 
 impl StagingBuffers {
@@ -718,6 +722,8 @@ impl StagingBuffers {
             .read_positions()?
             .ok_or_else(|| anyhow::anyhow!("Primitive doesn't specifiy vertex positions."))?
             .to_vec();
+
+        let lightmap_uvs = reader.read_second_uvs()?;
 
         Ok(Self {
             indices: match reader.read_indices()? {
@@ -740,7 +746,8 @@ impl StagingBuffers {
                     .take(positions.len())
                     .collect(),
             },
-            lightmap_uvs: match reader.read_second_uvs()? {
+            is_lightmapped: lightmap_uvs.is_some(),
+            lightmap_uvs: match lightmap_uvs {
                 Some(uvs) => uvs.to_vec(),
                 None => std::iter::repeat(Vec2::ZERO)
                     .take(positions.len())
@@ -772,6 +779,10 @@ impl CollectableBuffer for StagingBuffers {
     fn num_indices(&self) -> u32 {
         self.indices.len() as u32
     }
+
+    fn is_lightmapped(&self) -> bool {
+        self.is_lightmapped
+    }
 }
 
 #[derive(Default)]
@@ -791,5 +802,9 @@ impl CollectableBuffer for AnimatedStagingBuffers {
 
     fn num_indices(&self) -> u32 {
         self.base.indices.len() as u32
+    }
+
+    fn is_lightmapped(&self) -> bool {
+        self.base.is_lightmapped()
     }
 }
