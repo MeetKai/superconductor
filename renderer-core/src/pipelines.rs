@@ -47,7 +47,7 @@ impl Pipelines {
         let target_format = if options.inline_tonemapping {
             options.framebuffer_format
         } else {
-            wgpu::TextureFormat::Rgba16Float
+            wgpu::TextureFormat::Rgba32Float
         };
 
         let front_face = if options.flip_viewport {

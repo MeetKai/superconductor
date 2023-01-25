@@ -6,9 +6,9 @@ use crate::components::{
 use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, BoundingSphereParams, Camera, CompositeBindGroup,
     CullingParams, Device, HttpClient, IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer,
-    IntermediateDepthFramebuffer, LineBuffer, MainBindGroup, NewIblCubemap, NewLightvolTextures,
-    PipelineOptions, Pipelines, ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings,
-    UniformBuffer, VertexBuffers,
+    IntermediateDepthFramebuffer, LightmapToggle, LineBuffer, MainBindGroup, NewIblCubemap,
+    NewLightvolTextures, PipelineOptions, Pipelines, ProbesArrayInfo, Queue, SurfaceFrameView,
+    TextureSettings, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
@@ -200,6 +200,7 @@ pub(crate) fn push_entity_instances(
     culling_params: Res<CullingParams>,
     surface_frame_view: Option<Res<SurfaceFrameView>>,
     mut instance_query: Query<(&InstanceOf, &Instance, Option<&JointsOffset>)>,
+    lightmap_toggle: Res<LightmapToggle>,
     mut model_query: Query<(&mut Instances, Option<&Model>, Option<&AnimatedModel>)>,
 ) {
     let view_matrix = camera.view_matrix();
@@ -291,7 +292,9 @@ pub(crate) fn push_entity_instances(
                                 similarity: primitive_transform,
                                 joints_offset: joints_offset.map(|offset| offset.0).unwrap_or(0),
                                 material_index: primitive.lods[lod].material_index as u32,
-                                is_lightmapped: primitive.lods[lod].is_lightmapped as u32,
+                                is_lightmapped: (primitive.lods[lod].is_lightmapped
+                                    && lightmap_toggle.0)
+                                    as u32,
                                 _padding: Default::default(),
                             },
                         );

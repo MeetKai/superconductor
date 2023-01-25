@@ -145,10 +145,43 @@ pub(crate) fn render_desktop(
     }
     */
 
+    {
+        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("main render pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &surface_frame_view.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: None,
+        });
+    }
+
+    let output_dim = wgpu::Extent3d {
+        width: surface_frame_view.width,
+        height: surface_frame_view.height,
+        depth_or_array_layers: 1,
+    };
+
+    let color_attachment = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("intermediate col framebuffer"),
+        size: output_dim,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba32Float,
+        usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
+    });
+
+    let color_attachment_view = color_attachment.create_view(&Default::default());
+
     let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("main render pass"),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: &surface_frame_view.view,
+            view: &color_attachment_view,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -188,7 +221,97 @@ pub(crate) fn render_desktop(
 
     drop(render_pass);
 
+    let pixel_size_in_bytes = 4 * 4;
+    let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u32 / pixel_size_in_bytes;
+    let padded_width_padding = (align - surface_frame_view.width % align) % align;
+    let padded_width = surface_frame_view.width + padded_width_padding;
+    dbg!(padded_width);
+
+    let color_attachment_output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (padded_width * surface_frame_view.height * pixel_size_in_bytes) as u64,
+        label: None,
+        mapped_at_creation: false,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+    });
+
+    let image_layout = wgpu::ImageDataLayout {
+        offset: 0,
+        bytes_per_row: Some(std::num::NonZeroU32::new(padded_width * pixel_size_in_bytes).unwrap()),
+        rows_per_image: None,
+    };
+
+    command_encoder.copy_texture_to_buffer(
+        wgpu::ImageCopyTexture {
+            texture: &color_attachment,
+            mip_level: 0,
+            origin: Default::default(),
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::ImageCopyBuffer {
+            buffer: &color_attachment_output_buffer,
+            layout: image_layout,
+        },
+        output_dim,
+    );
+
     queue.submit(std::iter::once(command_encoder.finish()));
+
+    let bytes = pollster::block_on(slice_to_bytes(
+        &color_attachment_output_buffer.slice(..),
+        &device,
+        output_dim,
+        padded_width,
+    ));
+
+    let bytes: &[f32] = bytemuck::cast_slice(&bytes);
+
+    dbg!(bytes.len());
+
+    let bytes_vec = bytes.to_vec();
+
+    dbg!(output_dim.width, output_dim.height);
+
+    image::Rgba32FImage::from_raw(output_dim.width, output_dim.height, bytes_vec)
+        .unwrap()
+        .save("img.exr")
+        .unwrap();
+}
+
+async fn slice_to_bytes(
+    buffer_slice: &wgpu::BufferSlice<'_>,
+    device: &wgpu::Device,
+    extent: wgpu::Extent3d,
+    padded_width: u32,
+) -> Vec<u8> {
+    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+    buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+
+    device.poll(wgpu::Maintain::Wait);
+
+    if let Some(Ok(())) = receiver.receive().await {
+        let data = buffer_slice.get_mapped_range();
+        let pixels = data;
+
+        let mut output = Vec::new();
+
+        //dbg!(pixels.len());
+
+        let pixel_size_in_bytes = 4 * 4;
+
+        for row in 0..extent.height {
+            let offset = (row * padded_width * pixel_size_in_bytes) as usize;
+
+            output.extend_from_slice(
+                &pixels[offset..offset + (extent.width * pixel_size_in_bytes) as usize],
+            );
+
+            //dbg!(row, offset, output.len());
+        }
+
+        output
+    } else {
+        panic!()
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

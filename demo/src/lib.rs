@@ -5,8 +5,8 @@ use bevy_ecs::system::Resource;
 use superconductor::{
     bevy_app, bevy_ecs, components, renderer_core,
     resources::{
-        Camera, EventQueue, LightvolTextures, NewIblCubemap, NewLightvolTextures, ProbesArrayInfo,
-        WindowChanges,
+        Camera, EventQueue, LightmapToggle, LightvolTextures, NewIblCubemap, NewLightvolTextures,
+        ProbesArrayInfo, WindowChanges,
     },
     url, winit,
     winit::event::{ElementState, VirtualKeyCode},
@@ -61,7 +61,7 @@ impl Plugin for SuperconductorPlugin {
         let href = "http://localhost:8000";
         let href = url::Url::parse(&href).unwrap();
 
-        let mut model_url = std::borrow::Cow::Borrowed("assets/models/Sponza.glb");
+        let mut model_url = std::borrow::Cow::Borrowed("assets/models/sponza_packed.glb");
 
         for (key, value) in href.query_pairs() {
             if key == "model" {
@@ -104,23 +104,28 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::InstanceRanges::default())
             .id();
 
-        app.world
-            .spawn_empty()
-            .insert(components::InstanceOf(probes))
-            .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::new(0.0, 0.0, 0.0),
-                1.0,
-                Default::default(),
-            )));
+        /*app.world
+        .spawn_empty()
+        .insert(components::InstanceOf(probes))
+        .insert(components::Instance(renderer_core::Instance::new(
+            Vec3::new(0.0, 0.0, 0.0),
+            1.0,
+            Default::default(),
+        )));*/
 
         let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()
-            .with(dolly::drivers::Position::new(Vec3::new(0.0, 1.75, 0.0)))
-            .with(dolly::drivers::YawPitch::new().pitch_degrees(0.0))
+            .with(dolly::drivers::Position::new(Vec3::new(7.0, 5.0, 0.0)))
+            .with(
+                dolly::drivers::YawPitch::new()
+                    .pitch_degrees(-45.0)
+                    .yaw_degrees(90.0),
+            )
             .with(dolly::drivers::Smooth::new_position_rotation(0.5, 0.5))
             .build();
 
         app.insert_resource(KeyboardState::default());
         app.insert_resource(CameraRig(camera_rig));
+        app.insert_resource(LightmapToggle(false));
 
         app.add_system(rotate_entities);
         app.add_system(handle_keyboard_input);
@@ -295,6 +300,7 @@ fn handle_keyboard_input(
     mut camera_rig: ResMut<CameraRig>,
     mut window_changes: ResMut<WindowChanges>,
     mut fullscreen: Local<bool>,
+    mut toggle: ResMut<LightmapToggle>,
 ) {
     for event in events.0.drain(..) {
         match event {
@@ -314,6 +320,11 @@ fn handle_keyboard_input(
                         }
                         Some(VirtualKeyCode::D | VirtualKeyCode::Right) => {
                             keyboard_state.right = pressed;
+                        }
+                        Some(VirtualKeyCode::T) => {
+                            if pressed {
+                                toggle.0 = !toggle.0;
+                            }
                         }
                         Some(VirtualKeyCode::G) => {
                             if pressed {

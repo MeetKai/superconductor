@@ -315,7 +315,12 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
 
 pub async fn initialise_desktop() -> InitialisedState {
     let event_loop = EventLoop::new();
-    let builder = winit::window::WindowBuilder::new();
+    let builder = winit::window::WindowBuilder::new()
+        .with_inner_size(winit::dpi::PhysicalSize {
+            width: 1920,
+            height: 1080,
+        })
+        .with_resizable(false);
 
     let window = builder.build(&event_loop).unwrap();
 
@@ -375,7 +380,7 @@ pub async fn initialise_desktop() -> InitialisedState {
         queue,
         pipeline_options: renderer_core::PipelineOptions {
             multiview: None,
-            inline_tonemapping: true,
+            inline_tonemapping: false,
             framebuffer_format: surface_capabilites.formats[0],
             // wgpu handles this for us.
             flip_viewport: false,
