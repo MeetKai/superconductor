@@ -125,7 +125,7 @@ impl Plugin for SuperconductorPlugin {
 
         app.insert_resource(KeyboardState::default());
         app.insert_resource(CameraRig(camera_rig));
-        app.insert_resource(LightmapToggle(false));
+        app.insert_resource(LightmapToggle(true));
 
         app.add_system(rotate_entities);
         app.add_system(handle_keyboard_input);
