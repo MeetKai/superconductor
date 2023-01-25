@@ -491,12 +491,16 @@ pub fn fragment_alpha_blended(
 fn calculate_lighting_and_tonemap(
     uniforms: &Uniforms,
     material_params: ExtendedMaterialParams,
-    spherical_harmonics: [Vec3; 4],
+    mut spherical_harmonics: [Vec3; 4],
     normal: glam_pbr::Normal,
     view: glam_pbr::View,
 ) -> Vec3 {
     let diffuse_output = material_params.base.diffuse_colour()
         * eval_spherical_harmonics_nonlinear(spherical_harmonics, normal.0);
+
+    // Bit of a hack. We reduce the direct lighting by this amount during baking, so we need to scale it back up
+    // for better specular. If we just divided the diffuse output by this then the indirect lighting would be lowered as well.
+    spherical_harmonics[0] *= core::f32::consts::PI * core::f32::consts::PI;
 
     let specular_output = spherical_harmonics_specular_approximation(
         spherical_harmonics,
