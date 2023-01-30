@@ -522,7 +522,7 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
     let pipelines = &pipelines.0;
     let bind_group_layouts = &bind_group_layouts.0;
 
-    let textures_context = renderer_core::assets::textures::Context {
+    let context = renderer_core::assets::textures::Context {
         device: device.clone(),
         queue: queue.clone(),
         http_client: http_client.0.clone(),
@@ -532,75 +532,41 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
     };
 
     spawn(async move {
-        let sh0_fut = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &new_lightvol_textures.sh0,
-            false,
-            |_| (),
+        use renderer_core::assets::textures::load_ktx2_async;
+
+        let lightvol_future = futures::future::join4(
+            load_ktx2_async(&context, &new_lightvol_textures.sh0, false, |_| ()),
+            load_ktx2_async(&context, &new_lightvol_textures.sh1_x, false, |_| ()),
+            load_ktx2_async(&context, &new_lightvol_textures.sh1_y, false, |_| ()),
+            load_ktx2_async(&context, &new_lightvol_textures.sh1_z, false, |_| ()),
         );
 
-        let sh1_x_fut = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &new_lightvol_textures.sh1_x,
-            false,
-            |_| (),
-        );
-
-        let sh1_y_fut = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &new_lightvol_textures.sh1_y,
-            false,
-            |_| (),
-        );
-
-        let sh1_z_fut = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &new_lightvol_textures.sh1_z,
-            false,
-            |_| (),
-        );
-
-        let lightmap_sh0_fut = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &new_lightvol_textures.lightmap_sh0,
-            false,
-            |_| (),
-        );
-
-        let lightmap_sh1_x_fut = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &new_lightvol_textures.lightmap_sh1_x,
-            false,
-            |_| (),
-        );
-
-        let lightmap_sh1_y_fut = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &new_lightvol_textures.lightmap_sh1_y,
-            false,
-            |_| (),
-        );
-
-        let lightmap_sh1_z_fut = renderer_core::assets::textures::load_ktx2_async(
-            &textures_context,
-            &new_lightvol_textures.lightmap_sh1_z,
-            false,
-            |_| (),
+        let lightmap_future = futures::future::join4(
+            load_ktx2_async(&context, &new_lightvol_textures.lightmap_sh0, false, |_| ()),
+            load_ktx2_async(
+                &context,
+                &new_lightvol_textures.lightmap_sh1_x,
+                false,
+                |_| (),
+            ),
+            load_ktx2_async(
+                &context,
+                &new_lightvol_textures.lightmap_sh1_y,
+                false,
+                |_| (),
+            ),
+            load_ktx2_async(
+                &context,
+                &new_lightvol_textures.lightmap_sh1_z,
+                false,
+                |_| (),
+            ),
         );
 
         let (
             (sh0, sh1_x, sh1_y, sh1_z),
             (lightmap_sh0, lightmap_sh1_x, lightmap_sh1_y, lightmap_sh1_z),
-        ) = futures::future::join(
-            futures::future::join4(sh0_fut, sh1_x_fut, sh1_y_fut, sh1_z_fut),
-            futures::future::join4(
-                lightmap_sh0_fut,
-                lightmap_sh1_x_fut,
-                lightmap_sh1_y_fut,
-                lightmap_sh1_z_fut,
-            ),
-        )
-        .await;
+        ) = futures::future::join(lightvol_future, lightmap_future).await;
 
         let (sh0, sh1_x, sh1_y, sh1_z) = (sh0?, sh1_x?, sh1_y?, sh1_z?);
         let (lightmap_sh0, lightmap_sh1_x, lightmap_sh1_y, lightmap_sh1_z) = (
@@ -611,8 +577,8 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
         );
 
         main_bind_group.mutate(
-            &textures_context.device,
-            &textures_context.bind_group_layouts.uniform,
+            &context.device,
+            &context.bind_group_layouts.uniform,
             |entries| {
                 entries[3] = renderer_core::mutable_bind_group::Entry::Texture(sh0);
                 entries[4] = renderer_core::mutable_bind_group::Entry::Texture(sh1_x);
