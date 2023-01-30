@@ -90,6 +90,7 @@ pub(crate) fn render_desktop(
             dimension: wgpu::TextureDimension::D2,
             format: DEPTH_FORMAT,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
         },
     );
 
@@ -275,6 +276,7 @@ pub(crate) fn render_webxr(
                     },
                     usage: wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
                 },
             );
 
@@ -339,6 +341,7 @@ pub(crate) fn render_webxr(
                 format: DEPTH_FORMAT,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
             },
         ))
     };

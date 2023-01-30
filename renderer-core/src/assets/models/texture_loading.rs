@@ -66,6 +66,7 @@ fn load_single_pixel_image(
             dimension: wgpu::TextureDimension::D2,
             format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
         },
         bytes,
     )))

@@ -13,7 +13,7 @@ renderer-core = { path = "renderer-core" }
 wasm-bindgen-futures = "0.4.33"
 js-sys = "0.3.60"
 futures = "0.3.25"
-wgpu = "=0.14.0"
+wgpu = "0.15.0"
 anyhow = "1.0.68"
 url = "2.3.1"
 winit = "0.27.5"
@@ -56,10 +56,6 @@ members = [
   ".",
   "demo",
 ]
-
-[patch.crates-io]
-wgpu = { git = "https://github.com/expenses/wgpu", rev = "c6eebf3529d691828746c244e9e9e1124d078220" }
-wgpu-hal = { git = "https://github.com/expenses/wgpu", rev = "c6eebf3529d691828746c244e9e9e1124d078220" }
 
 [profile.dev]
 debug = true

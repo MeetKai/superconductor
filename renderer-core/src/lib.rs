@@ -201,6 +201,7 @@ pub fn create_view_from_device_framebuffer(
                 dimension: wgpu::TextureDimension::D2,
                 format,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
             },
         )
     })

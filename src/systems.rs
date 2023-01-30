@@ -414,6 +414,7 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             dimension: wgpu::TextureDimension::D3,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             format: wgpu::TextureFormat::Rgba16Float,
+            view_formats: &[],
         },
     )));
 
@@ -430,6 +431,7 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             dimension: wgpu::TextureDimension::D2,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             format: wgpu::TextureFormat::Rgba16Float,
+            view_formats: &[],
         },
     )));
 
@@ -452,6 +454,7 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
                     dimension: wgpu::TextureDimension::D2,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     format: wgpu::TextureFormat::Rgba16Float,
+                    view_formats: &[],
                 }),
             ))),
             renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),

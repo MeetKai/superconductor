@@ -112,6 +112,7 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
             BC6H_DECOMPRESSION_TARGET_FORMAT
         },
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
     };
 
     let texture = context.device.create_texture(&texture_descriptor());
@@ -173,6 +174,7 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
                             dimension: wgpu::TextureDimension::D2,
                             format: wgpu::TextureFormat::Rgba32Uint,
                             usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                            view_formats: &[],
                         },
                         bytes,
                     );
@@ -190,6 +192,7 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
                         format: BC6H_DECOMPRESSION_TARGET_FORMAT,
                         usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                             | wgpu::TextureUsages::COPY_SRC,
+                        view_formats: &[],
                     });
 
                     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -390,6 +393,7 @@ pub fn load_image_crate_image<T>(
             dimension: wgpu::TextureDimension::D2,
             format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
         },
         &image,
     ));
@@ -416,6 +420,7 @@ pub fn load_image_crate_image<T>(
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::COPY_SRC
                     | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
             }))
         })
         .collect();
@@ -719,7 +724,7 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         height: header.pixel_height,
         depth_or_array_layers: header.pixel_depth.max(1),
     }
-    .mip_level_size(down_scaling_level, false);
+    .mip_level_size(down_scaling_level, wgpu::TextureDimension::D2);
 
     let wgpu_format = match format {
         Ktx2Format::Uastc(transcode_target_format) => transcode_target_format.as_wgpu(srgb),
@@ -743,6 +748,7 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         },
         format: wgpu_format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
     };
 
     let texture = Arc::new(Texture::new(
@@ -968,7 +974,7 @@ pub(crate) fn load_ktx2_from_bytes<F: Fn(u32) + Send + 'static, T: HttpClient>(
         height: header.pixel_height,
         depth_or_array_layers: 1,
     }
-    .mip_level_size(down_scaling_level, false);
+    .mip_level_size(down_scaling_level, wgpu::TextureDimension::D2);
 
     let wgpu_format = match format {
         Ktx2Format::Uastc(transcode_target_format) => transcode_target_format.as_wgpu(srgb),
@@ -988,6 +994,7 @@ pub(crate) fn load_ktx2_from_bytes<F: Fn(u32) + Send + 'static, T: HttpClient>(
         dimension: wgpu::TextureDimension::D2,
         format: wgpu_format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
     };
 
     let mut texture_bytes = Vec::new();

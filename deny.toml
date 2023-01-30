@@ -207,7 +207,6 @@ allow-git = [
     "https://github.com/gfx-rs/naga",
     "https://github.com/not-fl3/nanoserde",
     "https://github.com/grovesNL/glow/",
-    "https://github.com/expenses/wgpu",
     "https://github.com/expenses/gfx",
     "https://github.com/expenses/meshopt-decoder",
     "https://github.com/expenses/goth-gltf",

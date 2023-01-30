@@ -235,8 +235,11 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         .depth(pipeline_options.render_direct_to_framebuffer())
         .stencil(pipeline_options.render_direct_to_framebuffer());
 
-    let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
-    let instance = wgpu::Instance::new(backend);
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        ..Default::default()
+    });
     let surface = unsafe { instance.create_surface(&canvas) }.unwrap();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -333,8 +336,11 @@ pub async fn initialise_desktop() -> InitialisedState {
             .expect("couldn't append canvas to document body");
     }
 
-    let backend = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
-    let instance = wgpu::Instance::new(backend);
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        ..Default::default()
+    });
     let surface = unsafe { instance.create_surface(&window) }.unwrap();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -425,6 +431,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                 height: size.height,
                 present_mode: wgpu::PresentMode::AutoVsync,
                 alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                view_formats: vec![],
             };
             initialised_state.surface.configure(&device, &config);
 
