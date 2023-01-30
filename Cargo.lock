@@ -1321,17 +1321,6 @@ dependencies = [
 
 [[package]]
 name = "glow"
-version = "0.11.2"
-source = "git+https://github.com/grovesNL/glow/?rev=c8a011fcd57a5c68cc917ed394baa484bdefc909#c8a011fcd57a5c68cc917ed394baa484bdefc909"
-dependencies = [
- "js-sys",
- "slotmap",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "glow"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8edf6019dff2d92ad27c1e3ff82ad50a0aea5b01370353cc928bfdc33e95925c"
@@ -2445,7 +2434,7 @@ dependencies = [
  "bytemuck",
  "futures",
  "glam",
- "glow 0.11.2",
+ "glow",
  "gltf-helpers",
  "goth-gltf",
  "image",
@@ -3442,7 +3431,7 @@ dependencies = [
  "d3d12",
  "foreign-types 0.3.2",
  "fxhash",
- "glow 0.12.0",
+ "glow",
  "gpu-alloc",
  "gpu-allocator",
  "gpu-descriptor",
