@@ -220,9 +220,9 @@ fn sample_lightmap_sphereical_harmonics(
 
     [
         sample_texture(l_0),
-        sample_texture(l_1_x),
-        sample_texture(l_1_y),
-        sample_texture(l_1_z),
+        sample_texture(l_1_x) * 255.0 / 127.0 - 128.0 / 127.0,
+        sample_texture(l_1_y) * 255.0 / 127.0 - 128.0 / 127.0,
+        sample_texture(l_1_z) * 255.0 / 127.0 - 128.0 / 127.0,
     ]
 }
 

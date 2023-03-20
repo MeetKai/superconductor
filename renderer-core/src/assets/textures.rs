@@ -668,6 +668,9 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         Some(ktx2::Format::R16G16B16A16_SFLOAT) => {
             Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Rgba16Float)
         }
+        Some(ktx2::Format::R8G8B8A8_UNORM) => {
+            Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Rgba8Unorm)
+        }
         Some(other) => {
             return Err(anyhow::anyhow!("Format {:?} is not supported", other));
         }
