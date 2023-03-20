@@ -61,7 +61,7 @@ impl Plugin for SuperconductorPlugin {
         let href = "http://localhost:8000";
         let href = url::Url::parse(&href).unwrap();
 
-        let mut model_url = std::borrow::Cow::Borrowed("assets/models/Sponza.glb");
+        let mut model_url = std::borrow::Cow::Borrowed("assets/models/sponza_packed.glb");
 
         for (key, value) in href.query_pairs() {
             if key == "model" {

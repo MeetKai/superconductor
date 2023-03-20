@@ -8,7 +8,7 @@ license = "MIT"
 crate-type = ["dylib", "lib"]
 
 [dependencies]
-spirv-std = { version = "0.4.0", features = ["glam"] }
+spirv-std = { version = "0.5.0", features = ["glam"] }
 glam-pbr = { git = "https://github.com/expenses/glam-pbr" }
 shared-structs = { path = "../shared-structs" }
 

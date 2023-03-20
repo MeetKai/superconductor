@@ -5,20 +5,20 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-raw-window-handle = "0.5.0"
-wasm-bindgen = { version = "0.2.83", features = ["serde-serialize"] }
-glow = "0.12.0"
-wgpu = { version = "0.15.0", features = ["spirv"] }
-wgpu-hal = { version = "0.15.1" }
+raw-window-handle = "0.5.1"
+wasm-bindgen = { version = "0.2.84", features = ["serde-serialize"] }
+glow = "0.12.1"
+wgpu = { version = "0.15.1", features = ["spirv"] }
+wgpu-hal = { version = "0.15.3" }
 log = "0.4.17"
 glam = { version = "0.22", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }
-bytemuck = { version = "1.13.0", features = ["derive"] }
+bytemuck = { version = "1.13.1", features = ["derive"] }
 ktx2 = { git = "https://github.com/BVE-Reborn/ktx2", rev = "0e5b0febb09546c91bc845a5e7b5d04610d70044" }
-zstd = { version = "0.12.2", default-features = false, features = ["wasm"] }
-anyhow = "1.0.68"
+zstd = { version = "0.12.3", default-features = false, features = ["wasm"] }
+anyhow = "1.0.69"
 url = "2.3.1"
-wasm-bindgen-futures = "0.4.33"
+wasm-bindgen-futures = "0.4.34"
 gltf-helpers = { path = "../gltf-helpers" }
 base64 = "0.21.0"
 range-alloc = { git = "https://github.com/expenses/gfx", rev = "6afbeb6d9733e295404f4fe0ac936591e277a26e" }
@@ -27,13 +27,13 @@ image = { version = "0.24.5", default-features = false, features = ["jpeg", "png
 arc-swap = "1.6.0"
 basis-universal = { git = "https://github.com/expenses/basis-universal-rs", rev = "d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610" }
 async-std = "1.12.0"
-futures = "0.3.25"
+futures = "0.3.27"
 goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "4411edc0aa9157f68bc9f80fdb499e861f225354" }
 meshopt-decoder = { git = "https://github.com/expenses/meshopt-decoder", rev = "1d7eb93c61d9acc2583a50cb3ec7032bbffec61e" }
-js-sys = "0.3.60"
+js-sys = "0.3.61"
 
 [dependencies.web-sys]
-version = "=0.3.60"
+version = "=0.3.61"
 features = [
     "XrSession",
     "XrFrame",

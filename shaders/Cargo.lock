@@ -16,9 +16,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bytemuck"
-version = "1.13.0"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c041d3eab048880cb0b86b256447da3f18859a163c3b8d8893f4e6368abe6393"
+checksum = "17febce684fd15d89027105661fec94afb475cb995fbc59d2865198446ba2eea"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -46,7 +46,7 @@ dependencies = [
 [[package]]
 name = "glam-pbr"
 version = "0.1.0"
-source = "git+https://github.com/expenses/glam-pbr#5190bbc0697589dd99568f60c63b57ff7065a8eb"
+source = "git+https://github.com/expenses/glam-pbr#7b80ca8a1434ec2808a62a96036e026c54bea673"
 dependencies = [
  "glam",
  "num-traits",
@@ -106,9 +106,9 @@ dependencies = [
 
 [[package]]
 name = "spirv-std"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80c875274a6a721524d3f737c02657f6fff45ab31c51eee1328ef6d09176a608"
+checksum = "210182f2a5ac041abed607fe1e8f9b09d10fa8761c14c81d499fca62698a19dc"
 dependencies = [
  "bitflags",
  "glam",
@@ -119,9 +119,9 @@ dependencies = [
 
 [[package]]
 name = "spirv-std-macros"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3058b5fdfd040e8e3c3e457574f2667fd7148086cd59a45ef7fb3de58108c580"
+checksum = "b96c4f0d292ef14fd88e645abc207a1252c91632e219af3f2e2e885ae1052054"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -131,9 +131,9 @@ dependencies = [
 
 [[package]]
 name = "spirv-std-types"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a1c6e1dba9130f21b46aedece3a023a19d9622fb1e9fe5c23df4b72be73daaf"
+checksum = "929da244d6ac6735f79dcf02e91ba8de9404699c9b9eb247677a4af90dd71857"
 
 [[package]]
 name = "syn"
