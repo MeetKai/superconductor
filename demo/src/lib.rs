@@ -160,19 +160,19 @@ impl Plugin for SuperconductorPlugin {
                 .unwrap(),
             lightmap_sh0: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/lightmap.ktx2")
+                .parse("assets/lighting/lightmap_comp.ktx2")
                 .unwrap(),
             lightmap_sh1_x: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/lightmap_x.ktx2")
+                .parse("assets/lighting/lightmap_comp_x.ktx2")
                 .unwrap(),
             lightmap_sh1_y: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/lightmap_y.ktx2")
+                .parse("assets/lighting/lightmap_comp_y.ktx2")
                 .unwrap(),
             lightmap_sh1_z: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/lightmap_z.ktx2")
+                .parse("assets/lighting/lightmap_comp_z.ktx2")
                 .unwrap(),
         })));
     }

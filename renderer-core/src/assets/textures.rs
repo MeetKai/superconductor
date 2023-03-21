@@ -280,7 +280,8 @@ fn write_bytes_to_texture(
     bytes: &[u8],
     desc: &wgpu::TextureDescriptor,
 ) {
-    let format_info = desc.format.describe();
+    let block_size = desc.format.block_size(None).unwrap_or(4);
+    let block_dimensions = desc.format.block_dimensions();
 
     let mip_size = desc
         .mip_level_size(mip)
@@ -288,10 +289,10 @@ fn write_bytes_to_texture(
 
     let mip_physical = mip_size.physical_size(desc.format);
 
-    let width_blocks = mip_physical.width / format_info.block_dimensions.0 as u32;
-    let height_blocks = mip_physical.height / format_info.block_dimensions.1 as u32;
+    let width_blocks = mip_physical.width / block_dimensions.0 as u32;
+    let height_blocks = mip_physical.height / block_dimensions.1 as u32;
 
-    let bytes_per_row = width_blocks * format_info.block_size as u32;
+    let bytes_per_row = width_blocks * block_size as u32;
 
     queue.write_texture(
         wgpu::ImageCopyTexture {
@@ -303,8 +304,16 @@ fn write_bytes_to_texture(
         bytes,
         wgpu::ImageDataLayout {
             offset: 0,
-            bytes_per_row: Some(NonZeroU32::new(bytes_per_row).expect("invalid bytes per row")),
-            rows_per_image: Some(NonZeroU32::new(height_blocks).expect("invalid height")),
+            bytes_per_row: Some(
+                NonZeroU32::new(bytes_per_row)
+                    .expect("invalid bytes per row")
+                    .into(),
+            ),
+            rows_per_image: Some(
+                NonZeroU32::new(height_blocks)
+                    .expect("invalid height")
+                    .into(),
+            ),
         },
         mip_physical,
     );
@@ -426,7 +435,7 @@ pub fn load_image_crate_image<T>(
         .collect();
 
     let source_view = texture.texture.create_view(&wgpu::TextureViewDescriptor {
-        mip_level_count: Some(std::num::NonZeroU32::new(1).expect("cannot be None")),
+        mip_level_count: Some(std::num::NonZeroU32::new(1).expect("cannot be None").into()),
         ..Default::default()
     });
 
@@ -534,15 +543,16 @@ pub(super) fn create_texture_with_first_mip_data(
     desc.usage |= wgpu::TextureUsages::COPY_DST;
     let texture = device.create_texture(&desc);
 
-    let format_info = desc.format.describe();
+    let block_size = desc.format.block_size(None).unwrap_or(4);
+    let block_dimensions = desc.format.block_dimensions();
     let layer_iterations = desc.array_layer_count();
 
     let mut binary_offset = 0;
     for layer in 0..layer_iterations {
-        let width_blocks = desc.size.width / format_info.block_dimensions.0 as u32;
-        let height_blocks = desc.size.height / format_info.block_dimensions.1 as u32;
+        let width_blocks = desc.size.width / block_dimensions.0 as u32;
+        let height_blocks = desc.size.height / block_dimensions.1 as u32;
 
-        let bytes_per_row = width_blocks * format_info.block_size as u32;
+        let bytes_per_row = width_blocks * block_size as u32;
         let data_size = bytes_per_row * height_blocks * desc.size.depth_or_array_layers;
 
         let end_offset = binary_offset + data_size as usize;
@@ -561,8 +571,16 @@ pub(super) fn create_texture_with_first_mip_data(
             &data[binary_offset..end_offset],
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(NonZeroU32::new(bytes_per_row).expect("invalid bytes per row")),
-                rows_per_image: Some(NonZeroU32::new(height_blocks).expect("invalid height")),
+                bytes_per_row: Some(
+                    NonZeroU32::new(bytes_per_row)
+                        .expect("invalid bytes per row")
+                        .into(),
+                ),
+                rows_per_image: Some(
+                    NonZeroU32::new(height_blocks)
+                        .expect("invalid height")
+                        .into(),
+                ),
             },
             desc.size,
         );
@@ -591,7 +609,7 @@ impl Ktx2Format {
     ) -> anyhow::Result<Self> {
         if !device
             .features()
-            .contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR)
+            .contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC)
         {
             return Err(anyhow::anyhow!(
                 "ASTC Compressed textures are not supported on this device"
@@ -670,6 +688,9 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
         }
         Some(ktx2::Format::R8G8B8A8_UNORM) => {
             Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Rgba8Unorm)
+        }
+        Some(ktx2::Format::BC6H_UFLOAT_BLOCK) => {
+            Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Bc6hRgbUfloat)
         }
         Some(other) => {
             return Err(anyhow::anyhow!("Format {:?} is not supported", other));
@@ -1076,7 +1097,7 @@ impl UastcTranscodeTargetFormat {
     // https://github.com/KhronosGroup/3D-Formats-Guidelines/blob/main/KTXDeveloperGuide.md#primary-transcode-targets
     // suggests we have Astc as 1st priority, Bc7 as second and then fallback to uncompressed rgba.
     fn new_from_features(features: wgpu::Features) -> Self {
-        if features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR) {
+        if features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC) {
             Self::Astc
         } else if features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
             Self::Bc7

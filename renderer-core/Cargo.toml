@@ -8,8 +8,9 @@ license = "MIT"
 raw-window-handle = "0.5.1"
 wasm-bindgen = { version = "0.2.84", features = ["serde-serialize"] }
 glow = "0.12.1"
-wgpu = { version = "0.15.1", features = ["spirv"] }
-wgpu-hal = { version = "0.15.3" }
+wgpu = {path = "../../../wgpu/wgpu", features = ["spirv"]}
+wgpu-hal = {path = "../../../wgpu/wgpu-hal"}
+wgpu-core = {path = "../../../wgpu/wgpu-core"}
 log = "0.4.17"
 glam = { version = "0.22", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }
