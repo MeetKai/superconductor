@@ -2,13 +2,12 @@ use super::HttpClient;
 use crate::{pipelines::BC6H_DECOMPRESSION_TARGET_FORMAT, spawn, Texture};
 use std::borrow::Cow;
 use std::io::Read;
-use std::num::NonZeroU32;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
 #[derive(Clone)]
 pub struct Settings {
-    pub anisotropy_clamp: Option<std::num::NonZeroU8>,
+    pub anisotropy_clamp: u16,
 }
 
 #[derive(Clone)]
@@ -304,16 +303,8 @@ fn write_bytes_to_texture(
         bytes,
         wgpu::ImageDataLayout {
             offset: 0,
-            bytes_per_row: Some(
-                NonZeroU32::new(bytes_per_row)
-                    .expect("invalid bytes per row")
-                    .into(),
-            ),
-            rows_per_image: Some(
-                NonZeroU32::new(height_blocks)
-                    .expect("invalid height")
-                    .into(),
-            ),
+            bytes_per_row: Some(bytes_per_row),
+            rows_per_image: Some(height_blocks),
         },
         mip_physical,
     );
@@ -435,7 +426,7 @@ pub fn load_image_crate_image<T>(
         .collect();
 
     let source_view = texture.texture.create_view(&wgpu::TextureViewDescriptor {
-        mip_level_count: Some(std::num::NonZeroU32::new(1).expect("cannot be None").into()),
+        mip_level_count: Some(1),
         ..Default::default()
     });
 
@@ -445,7 +436,7 @@ pub fn load_image_crate_image<T>(
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
         mipmap_filter: wgpu::FilterMode::Linear,
-        anisotropy_clamp: None,
+        anisotropy_clamp: 1,
         ..Default::default()
     });
 
@@ -571,16 +562,8 @@ pub(super) fn create_texture_with_first_mip_data(
             &data[binary_offset..end_offset],
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(
-                    NonZeroU32::new(bytes_per_row)
-                        .expect("invalid bytes per row")
-                        .into(),
-                ),
-                rows_per_image: Some(
-                    NonZeroU32::new(height_blocks)
-                        .expect("invalid height")
-                        .into(),
-                ),
+                bytes_per_row: Some(bytes_per_row),
+                rows_per_image: Some(height_blocks),
             },
             desc.size,
         );

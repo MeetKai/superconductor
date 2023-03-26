@@ -65,7 +65,7 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
         app.insert_resource(Camera::default());
         app.insert_resource(EventQueue(Default::default()));
         app.insert_resource(TextureSettings(textures::Settings {
-            anisotropy_clamp: Some(std::num::NonZeroU8::new(16).unwrap()),
+            anisotropy_clamp: 16,
         }));
         app.insert_resource(NewIblCubemap(None));
         app.insert_resource(WindowChanges::default());

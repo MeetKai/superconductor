@@ -397,6 +397,7 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         address_mode_v: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::FilterMode::Linear,
         anisotropy_clamp: texture_settings.0.anisotropy_clamp,
         ..Default::default()
     }));
@@ -688,9 +689,8 @@ pub(crate) fn update_desktop_uniform_buffers(
 
     let mut settings = Settings::REVERSE_Z;
 
-    // Rendering to a srgb surface should be possible at some point, but doesn't currently seem to be.
-    // todo: check if this is correct. Hard to test on WebGPU as the build is broken due to missing features.
-    if cfg!(feature = "wasm") {
+    // Do srgb conversion in the shader if we're rendering to a non-srgb format.
+    if !pipeline_options.0.framebuffer_format.is_srgb() {
         settings |= Settings::INLINE_SRGB;
     }
 

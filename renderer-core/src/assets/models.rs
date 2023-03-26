@@ -3,6 +3,7 @@ use super::HttpClient;
 use crate::culling::{BoundingBox, BoundingSphere};
 use crate::permutations;
 use crate::BindGroupLayouts;
+use base64::Engine;
 use glam::{Mat4, UVec4, Vec2, Vec3, Vec4};
 use gltf_helpers::{
     animation::{read_animations, Animation, AnimationJoints},
@@ -192,7 +193,10 @@ async fn collect_buffer_view_map<T: HttpClient>(
                 .split_once(',')
                 .ok_or_else(|| anyhow::anyhow!("Failed to get data uri split"))?;
             log::warn!("Loading buffers from embedded base64 is inefficient. Consider moving the buffers into a seperate file.");
-            buffer_map.insert(index, Cow::Owned(base64::decode(data)?));
+            buffer_map.insert(
+                index,
+                Cow::Owned(base64::engine::general_purpose::STANDARD.decode(data)?),
+            );
         } else {
             buffer_map.insert(
                 index,

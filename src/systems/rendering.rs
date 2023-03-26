@@ -289,7 +289,7 @@ pub(crate) fn render_webxr(
                     address_mode_v: wgpu::AddressMode::ClampToEdge,
                     mag_filter: wgpu::FilterMode::Linear,
                     min_filter: wgpu::FilterMode::Linear,
-                    anisotropy_clamp: None,
+                    anisotropy_clamp: 1,
                     ..Default::default()
                 }));
 

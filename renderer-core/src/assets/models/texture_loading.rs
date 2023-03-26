@@ -9,6 +9,7 @@ pub type PendingTexture =
 use crate::assets::textures::{self, load_image_with_mime_type, ImageSource};
 use crate::assets::HttpClient;
 use crate::{spawn, Texture};
+use base64::Engine;
 use futures::future::{self, FutureExt, OptionFuture};
 use glam::{Vec2, Vec3};
 use gltf_helpers::Extensions;
@@ -280,7 +281,7 @@ fn start_loading_texture<T: HttpClient>(
                     .split_once(',')
                     .ok_or_else(|| anyhow::anyhow!("Failed to get data uri seperator"))?;
 
-                let bytes = base64::decode(data)?;
+                let bytes = base64::engine::general_purpose::STANDARD.decode(data)?;
 
                 load_image_with_mime_type(
                     ImageSource::Bytes(&bytes),
