@@ -319,6 +319,7 @@ impl VertexBuffers {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn insert(
         &self,
         positions: &[Vec3],

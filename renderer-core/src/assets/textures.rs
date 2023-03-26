@@ -288,10 +288,10 @@ fn write_bytes_to_texture(
 
     let mip_physical = mip_size.physical_size(desc.format);
 
-    let width_blocks = mip_physical.width / block_dimensions.0 as u32;
-    let height_blocks = mip_physical.height / block_dimensions.1 as u32;
+    let width_blocks = mip_physical.width / block_dimensions.0;
+    let height_blocks = mip_physical.height / block_dimensions.1;
 
-    let bytes_per_row = width_blocks * block_size as u32;
+    let bytes_per_row = width_blocks * block_size;
 
     queue.write_texture(
         wgpu::ImageCopyTexture {
@@ -540,10 +540,10 @@ pub(super) fn create_texture_with_first_mip_data(
 
     let mut binary_offset = 0;
     for layer in 0..layer_iterations {
-        let width_blocks = desc.size.width / block_dimensions.0 as u32;
-        let height_blocks = desc.size.height / block_dimensions.1 as u32;
+        let width_blocks = desc.size.width / block_dimensions.0;
+        let height_blocks = desc.size.height / block_dimensions.1;
 
-        let bytes_per_row = width_blocks * block_size as u32;
+        let bytes_per_row = width_blocks * block_size;
         let data_size = bytes_per_row * height_blocks * desc.size.depth_or_array_layers;
 
         let end_offset = binary_offset + data_size as usize;

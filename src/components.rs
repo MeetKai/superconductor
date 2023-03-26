@@ -49,6 +49,8 @@ impl Instances {
         }
     }
 
+    // range loops make things simpler here.
+    #[allow(clippy::needless_range_loop)]
     pub fn reserve_space(&mut self, model_primitives: &[models::Primitive]) {
         for primitive_index in self.primitives.len()..model_primitives.len() {
             self.primitives.push(instances::Primitive {

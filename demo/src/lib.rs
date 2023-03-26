@@ -59,6 +59,7 @@ impl Plugin for SuperconductorPlugin {
         let href = web_sys::window().unwrap().location().href().unwrap();
         #[cfg(not(feature = "wasm"))]
         let href = "http://localhost:8000";
+        #[allow(clippy::needless_borrow)]
         let href = url::Url::parse(&href).unwrap();
 
         let mut model_url = std::borrow::Cow::Borrowed("assets/models/sponza_packed.glb");
@@ -289,6 +290,7 @@ fn rotate_entities(mut query: Query<&mut components::Instance, With<Spinning>>) 
     });
 }
 
+#[allow(clippy::collapsible_match, clippy::single_match)]
 fn handle_keyboard_input(
     mut events: ResMut<EventQueue>,
     mut keyboard_state: ResMut<KeyboardState>,
