@@ -98,7 +98,7 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::ModelUrl(
                 url::Url::options()
                     .base_url(Some(&href))
-                    .parse("assets/models/sponza_planes.glb")
+                    .parse("assets/models/sponza_cubes.glb")
                     .unwrap(),
             ))
             .insert(components::Instances::default())
@@ -158,15 +158,15 @@ impl Plugin for SuperconductorPlugin {
                 .unwrap(),
             sh1_x: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/astc/lightvol_x.ktx2")
+                .parse("assets/lighting/uncompressed/lightvol_x.ktx2")
                 .unwrap(),
             sh1_y: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/astc/lightvol_y.ktx2")
+                .parse("assets/lighting/uncompressed/lightvol_y.ktx2")
                 .unwrap(),
             sh1_z: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/astc/lightvol_z.ktx2")
+                .parse("assets/lighting/uncompressed/lightvol_z.ktx2")
                 .unwrap(),
             lightmap_sh0: HdrTexture {
                 bc6h: url::Url::options()
