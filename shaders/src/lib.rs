@@ -543,6 +543,7 @@ fn calculate_normal(
     glam_pbr::Normal(normal)
 }
 
+// 'Followup: Normal Mapping Without Precomputed Tangents'
 // http://www.thetenthplanet.de/archives/1180
 fn compute_cotangent_frame(normal: Vec3, position: Vec3, uv: Vec2) -> Mat3 {
     // get edge vectors of the pixel triangle

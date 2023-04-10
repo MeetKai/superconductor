@@ -194,8 +194,48 @@ pub struct LightvolTextures {
     pub sh1_x: url::Url,
     pub sh1_y: url::Url,
     pub sh1_z: url::Url,
-    pub lightmap_sh0: url::Url,
-    pub lightmap_sh1_x: url::Url,
-    pub lightmap_sh1_y: url::Url,
-    pub lightmap_sh1_z: url::Url,
+    pub lightmap_sh0: HdrTexture<url::Url>,
+    pub lightmap_sh1_x: LdrTexture<url::Url>,
+    pub lightmap_sh1_y: LdrTexture<url::Url>,
+    pub lightmap_sh1_z: LdrTexture<url::Url>,
 }
+
+pub struct HdrTexture<T> {
+    pub bc6h: T,
+    pub astc_hdr: T,
+}
+
+impl<T> HdrTexture<T> {
+    pub fn choose(&self, features: wgpu::Features) -> &T {
+        if features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC_HDR) {
+            &self.astc_hdr
+        } else {
+            if !features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
+                log::error!("Neither ASTC HDR not BC texture compression supported.")
+            }
+
+            &self.bc6h
+        }
+    }
+}
+
+pub struct LdrTexture<T> {
+    pub bc7: T,
+    pub astc: T,
+}
+
+impl<T> LdrTexture<T> {
+    pub fn choose(&self, features: wgpu::Features) -> &T {
+        if features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC) {
+            &self.astc
+        } else {
+            if !features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
+                log::error!("Neither ASTC HDR not BC texture compression supported.")
+            }
+
+            &self.bc7
+        }
+    }
+}
+
+

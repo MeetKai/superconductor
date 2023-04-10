@@ -5,8 +5,8 @@ use bevy_ecs::system::Resource;
 use superconductor::{
     bevy_app, bevy_ecs, components, renderer_core,
     resources::{
-        Camera, EventQueue, LightvolTextures, NewIblCubemap, NewLightvolTextures, ProbesArrayInfo,
-        WindowChanges,
+        Camera, EventQueue, HdrTexture, LdrTexture, LightvolTextures, NewIblCubemap, NewLightvolTextures,
+        ProbesArrayInfo, WindowChanges,
     },
     url, winit,
     winit::event::{ElementState, VirtualKeyCode},
@@ -98,7 +98,7 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::ModelUrl(
                 url::Url::options()
                     .base_url(Some(&href))
-                    .parse("assets/models/sponza_cubes.glb")
+                    .parse("assets/models/sponza_planes.glb")
                     .unwrap(),
             ))
             .insert(components::Instances::default())
@@ -142,39 +142,69 @@ impl Plugin for SuperconductorPlugin {
             Vec3::new(0.0, 6.0, 0.0),
             Vec3::new(24.0, 12.0, 12.0),
         ));
+
+        let astc_base_url = url::Url::options()
+            .base_url(Some(&href))
+            .parse("assets/lighting/astc/").unwrap();
+
+        let bcn_base_url = url::Url::options()
+            .base_url(Some(&href))
+            .parse("assets/lighting/bcn/").unwrap();
+
         app.insert_resource(NewLightvolTextures(Some(LightvolTextures {
             sh0: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/lightvol.ktx2")
+                .parse("assets/lighting/uncompressed/lightvol.ktx2")
                 .unwrap(),
             sh1_x: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/lightvol_x.ktx2")
+                .parse("assets/lighting/astc/lightvol_x.ktx2")
                 .unwrap(),
             sh1_y: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/lightvol_y.ktx2")
+                .parse("assets/lighting/astc/lightvol_y.ktx2")
                 .unwrap(),
             sh1_z: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/lightvol_z.ktx2")
+                .parse("assets/lighting/astc/lightvol_z.ktx2")
                 .unwrap(),
-            lightmap_sh0: url::Url::options()
-                .base_url(Some(&href))
-                .parse("assets/lighting/lightmap_comp.ktx2")
-                .unwrap(),
-            lightmap_sh1_x: url::Url::options()
-                .base_url(Some(&href))
-                .parse("assets/lighting/lightmap_comp_x.ktx2")
-                .unwrap(),
-            lightmap_sh1_y: url::Url::options()
-                .base_url(Some(&href))
-                .parse("assets/lighting/lightmap_comp_y.ktx2")
-                .unwrap(),
-            lightmap_sh1_z: url::Url::options()
-                .base_url(Some(&href))
-                .parse("assets/lighting/lightmap_comp_z.ktx2")
-                .unwrap(),
+            lightmap_sh0: HdrTexture {
+                bc6h: url::Url::options()
+                    .base_url(Some(&bcn_base_url))
+                    .parse("lightmap.ktx2")
+                    .unwrap(),
+                astc_hdr: url::Url::options()
+                    .base_url(Some(&astc_base_url))
+                    .parse("lightmap.ktx2")
+                    .unwrap(),
+            },
+            lightmap_sh1_x: LdrTexture {
+                astc: url::Url::options()
+                    .base_url(Some(&astc_base_url))
+                    .parse("lightmap_x.ktx2")
+                    .unwrap(),
+                bc7: url::Url::options()
+                    .base_url(Some(&bcn_base_url))
+                    .parse("lightmap_x.ktx2").unwrap(),
+            },
+            lightmap_sh1_y: LdrTexture {
+                astc: url::Url::options()
+                    .base_url(Some(&astc_base_url))
+                    .parse("lightmap_y.ktx2")
+                    .unwrap(),
+                bc7: url::Url::options()
+                    .base_url(Some(&bcn_base_url))
+                    .parse("lightmap_y.ktx2").unwrap(),
+            },
+            lightmap_sh1_z: LdrTexture {
+                astc: url::Url::options()
+                    .base_url(Some(&astc_base_url))
+                    .parse("lightmap_z.ktx2")
+                    .unwrap(),
+                bc7: url::Url::options()
+                    .base_url(Some(&bcn_base_url))
+                    .parse("lightmap_z.ktx2").unwrap(),
+            },
         })));
     }
 }

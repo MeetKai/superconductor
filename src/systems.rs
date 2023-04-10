@@ -523,6 +523,8 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
     let pipelines = &pipelines.0;
     let bind_group_layouts = &bind_group_layouts.0;
 
+    let features = device.features();
+
     let context = renderer_core::assets::textures::Context {
         device: device.clone(),
         queue: queue.clone(),
@@ -543,22 +545,22 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
         );
 
         let lightmap_future = futures::future::join4(
-            load_ktx2_async(&context, &new_lightvol_textures.lightmap_sh0, false, |_| ()),
+            load_ktx2_async(&context, new_lightvol_textures.lightmap_sh0.choose(features), false, |_| ()),
             load_ktx2_async(
                 &context,
-                &new_lightvol_textures.lightmap_sh1_x,
+                &new_lightvol_textures.lightmap_sh1_x.choose(features),
                 false,
                 |_| (),
             ),
             load_ktx2_async(
                 &context,
-                &new_lightvol_textures.lightmap_sh1_y,
+                &new_lightvol_textures.lightmap_sh1_y.choose(features),
                 false,
                 |_| (),
             ),
             load_ktx2_async(
                 &context,
-                &new_lightvol_textures.lightmap_sh1_z,
+                &new_lightvol_textures.lightmap_sh1_z.choose(features),
                 false,
                 |_| (),
             ),

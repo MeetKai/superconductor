@@ -433,6 +433,7 @@ pub fn load_image_crate_image<T>(
     let sampler = context.device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::Repeat,
         address_mode_v: wgpu::AddressMode::Repeat,
+        address_mode_w: wgpu::AddressMode::Repeat,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
         mipmap_filter: wgpu::FilterMode::Linear,
@@ -587,7 +588,7 @@ enum Ktx2Format {
 impl Ktx2Format {
     fn from_astc(
         block_format: wgpu::AstcBlock,
-        srgb: bool,
+        channel: wgpu::AstcChannel,
         device: &wgpu::Device,
     ) -> anyhow::Result<Self> {
         if !device
@@ -601,11 +602,7 @@ impl Ktx2Format {
 
         Ok(Self::WgpuCompatible(wgpu::TextureFormat::Astc {
             block: block_format,
-            channel: if srgb {
-                wgpu::AstcChannel::UnormSrgb
-            } else {
-                wgpu::AstcChannel::Unorm
-            },
+            channel
         }))
     }
 }
@@ -650,7 +647,7 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
                 .contains(wgpu::Features::TEXTURE_COMPRESSION_BC)
             {
                 return Err(anyhow::anyhow!(
-                    "BC7 Compressed textures are not supported on this device"
+                    "BC7 Compressed textures are not supported on this device (url: {:?})", url,
                 ));
             }
 
@@ -660,24 +657,25 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
                 wgpu::TextureFormat::Bc7RgbaUnorm
             })
         }
-        Some(ktx2::Format::ASTC_6x6_SRGB_BLOCK | ktx2::Format::ASTC_6x6_UNORM_BLOCK) => {
-            Ktx2Format::from_astc(wgpu::AstcBlock::B6x6, srgb, &context.device)?
-        }
-        Some(ktx2::Format::R32G32B32A32_SFLOAT) => {
-            Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Rgba32Float)
-        }
-        Some(ktx2::Format::R16G16B16A16_SFLOAT) => {
-            Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Rgba16Float)
-        }
-        Some(ktx2::Format::R8G8B8A8_UNORM) => {
-            Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Rgba8Unorm)
-        }
         Some(ktx2::Format::BC6H_UFLOAT_BLOCK) => {
             Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Bc6hRgbUfloat)
         }
-        Some(other) => {
-            return Err(anyhow::anyhow!("Format {:?} is not supported", other));
+        Some(ktx2::Format::ASTC_6x6_SRGB_BLOCK | ktx2::Format::ASTC_6x6_UNORM_BLOCK) => {
+            Ktx2Format::from_astc(wgpu::AstcBlock::B6x6, if srgb { wgpu::AstcChannel::UnormSrgb} else { wgpu::AstcChannel::Unorm}, &context.device)?
         }
+        Some(ktx2::Format::ASTC_4x4_SRGB_BLOCK | ktx2::Format::ASTC_4x4_UNORM_BLOCK) => {
+            Ktx2Format::from_astc(wgpu::AstcBlock::B4x4, if srgb { wgpu::AstcChannel::UnormSrgb} else { wgpu::AstcChannel::Unorm}, &context.device)?
+        }
+        Some(ktx2::Format::ASTC_4x4_SFLOAT_BLOCK) => {
+            Ktx2Format::from_astc(wgpu::AstcBlock::B4x4, wgpu::AstcChannel::Hdr, &context.device)?
+        }
+        Some(format) => Ktx2Format::WgpuCompatible(match format {
+            ktx2::Format::R32G32B32A32_SFLOAT => wgpu::TextureFormat::Rgba32Float,
+            ktx2::Format::R16G16B16A16_SFLOAT => wgpu::TextureFormat::Rgba16Float,
+            ktx2::Format::R8G8B8A8_UNORM => wgpu::TextureFormat::Rgba8Unorm,
+            ktx2::Format::R8_UNORM => wgpu::TextureFormat::R8Unorm,
+            _ => return Err(anyhow::anyhow!("Format {:?} is not supported", format)),
+        }),
         None => Ktx2Format::Uastc(UastcTranscodeTargetFormat::new_from_features(
             context.device.features(),
         )),
@@ -938,7 +936,7 @@ pub(crate) fn load_ktx2_from_bytes<F: Fn(u32) + Send + 'static, T: HttpClient>(
             })
         }
         Some(ktx2::Format::ASTC_6x6_SRGB_BLOCK | ktx2::Format::ASTC_6x6_UNORM_BLOCK) => {
-            Ktx2Format::from_astc(wgpu::AstcBlock::B6x6, srgb, &context.device)?
+            Ktx2Format::from_astc(wgpu::AstcBlock::B6x6, if srgb { wgpu::AstcChannel::UnormSrgb} else { wgpu::AstcChannel::Unorm}, &context.device)?
         }
         Some(other) => {
             return Err(anyhow::anyhow!("Format {:?} is not supported", other));
