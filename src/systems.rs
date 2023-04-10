@@ -19,6 +19,7 @@ use renderer_core::{
     shared_structs::{self, Settings},
     spawn, GpuInstance, MutableBindGroup, Texture,
 };
+use wgpu::util::DeviceExt;
 use std::sync::Arc;
 
 pub(crate) mod debugging;
@@ -378,10 +379,13 @@ pub(crate) fn upload_lines(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     device: Res<Device>,
+    queue: Res<Queue>,
     bind_group_layouts: Res<BindGroupLayouts>,
     texture_settings: Res<TextureSettings>,
     mut commands: Commands,
 ) {
+    use renderer_core::mutable_bind_group::Entry;
+
     let device = &device.0;
     let bind_group_layouts = &bind_group_layouts.0;
 
@@ -402,9 +406,9 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         ..Default::default()
     }));
 
-    let dummy_lightvol_texture = Arc::new(Texture::new(device.create_texture(
-        &wgpu::TextureDescriptor {
-            label: Some("dummy lightvol"),
+    let create_texture_with_brightness = |label, brightness, dimension| {
+        let desc = &wgpu::TextureDescriptor {
+            label: Some(label),
             size: wgpu::Extent3d {
                 width: 1,
                 height: 1,
@@ -412,37 +416,28 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             },
             sample_count: 1,
             mip_level_count: 1,
-            dimension: wgpu::TextureDimension::D3,
+            dimension,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            format: wgpu::TextureFormat::Rgba16Float,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             view_formats: &[],
-        },
-    )));
+        };
 
-    let dummy_lightmap_texture = Arc::new(Texture::new(device.create_texture(
-        &wgpu::TextureDescriptor {
-            label: Some("dummy lightmap"),
-            size: wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
-            },
-            sample_count: 1,
-            mip_level_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            format: wgpu::TextureFormat::Rgba16Float,
-            view_formats: &[],
-        },
-    )));
+        Entry::Texture(Arc::new(Texture::new(
+            device.create_texture_with_data(
+                &queue.0,
+                desc,
+                &[brightness; 4]
+            )
+        )))
+    };
 
     let main_bind_group = Arc::new(MutableBindGroup::new(
         device,
         &bind_group_layouts.uniform,
         vec![
-            renderer_core::mutable_bind_group::Entry::Buffer(uniform_buffer.clone(), 0),
-            renderer_core::mutable_bind_group::Entry::Sampler(clamp_sampler),
-            renderer_core::mutable_bind_group::Entry::Texture(Arc::new(Texture::new_cubemap(
+            Entry::Buffer(uniform_buffer.clone(), 0),
+            Entry::Sampler(clamp_sampler),
+            Entry::Texture(Arc::new(Texture::new_cubemap(
                 device.create_texture(&wgpu::TextureDescriptor {
                     label: Some("dummy ibl cubemap"),
                     size: wgpu::Extent3d {
@@ -458,14 +453,16 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
                     view_formats: &[],
                 }),
             ))),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture.clone()),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightvol_texture),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture.clone()),
-            renderer_core::mutable_bind_group::Entry::Texture(dummy_lightmap_texture),
+            create_texture_with_brightness("lightvol l0", 255, wgpu::TextureDimension::D3),
+            create_texture_with_brightness("lightvol l1x", 128, wgpu::TextureDimension::D3),
+            create_texture_with_brightness("lightvol l1y", 128, wgpu::TextureDimension::D3),
+            create_texture_with_brightness("lightvol l1z", 128, wgpu::TextureDimension::D3),
+            create_texture_with_brightness("lightmap l0", 255, wgpu::TextureDimension::D2),
+            create_texture_with_brightness("lightmap l1x", 128, wgpu::TextureDimension::D2),
+            create_texture_with_brightness("lightmap l1y", 128, wgpu::TextureDimension::D2),
+            create_texture_with_brightness("lightmap l1z", 128, wgpu::TextureDimension::D2),
+            //Entry::Texture(dummy_lightvol_texture.clone()),
+            //Entry::Texture(dummy_lightvol_texture.clone()),
         ],
     ));
 
@@ -566,10 +563,22 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
             ),
         );
 
+        /*
+        let scattering_url =
+            url::Url::parse("http://localhost:8000/assets/smoke/scattering.ktx2").unwrap();
+        let alpha_url = url::Url::parse("http://localhost:8000/assets/smoke/alpha.ktx2").unwrap();
+
+        let smoke_future = futures::future::join(
+            load_ktx2_async(&context, &scattering_url, false, |_| ()),
+            load_ktx2_async(&context, &alpha_url, false, |_| ()),
+        );
+        */
+
         let (
             (sh0, sh1_x, sh1_y, sh1_z),
             (lightmap_sh0, lightmap_sh1_x, lightmap_sh1_y, lightmap_sh1_z),
-        ) = futures::future::join(lightvol_future, lightmap_future).await;
+            //(smoke_scattering, smoke_alpha),
+        ) = futures::future::join(lightvol_future, lightmap_future/*, smoke_future*/).await;
 
         let (sh0, sh1_x, sh1_y, sh1_z) = (sh0?, sh1_x?, sh1_y?, sh1_z?);
         let (lightmap_sh0, lightmap_sh1_x, lightmap_sh1_y, lightmap_sh1_z) = (
@@ -579,18 +588,24 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
             lightmap_sh1_z?,
         );
 
+        //let (smoke_scattering, smoke_alpha) = (smoke_scattering?, smoke_alpha?);
+
+        use renderer_core::mutable_bind_group::Entry::Texture;
+
         main_bind_group.mutate(
             &context.device,
             &context.bind_group_layouts.uniform,
             |entries| {
-                entries[3] = renderer_core::mutable_bind_group::Entry::Texture(sh0);
-                entries[4] = renderer_core::mutable_bind_group::Entry::Texture(sh1_x);
-                entries[5] = renderer_core::mutable_bind_group::Entry::Texture(sh1_y);
-                entries[6] = renderer_core::mutable_bind_group::Entry::Texture(sh1_z);
-                entries[7] = renderer_core::mutable_bind_group::Entry::Texture(lightmap_sh0);
-                entries[8] = renderer_core::mutable_bind_group::Entry::Texture(lightmap_sh1_x);
-                entries[9] = renderer_core::mutable_bind_group::Entry::Texture(lightmap_sh1_y);
-                entries[10] = renderer_core::mutable_bind_group::Entry::Texture(lightmap_sh1_z);
+                entries[3] = Texture(sh0);
+                entries[4] = Texture(sh1_x);
+                entries[5] = Texture(sh1_y);
+                entries[6] = Texture(sh1_z);
+                entries[7] = Texture(lightmap_sh0);
+                entries[8] = Texture(lightmap_sh1_x);
+                entries[9] = Texture(lightmap_sh1_y);
+                entries[10] = Texture(lightmap_sh1_z);
+                //entries[11] = Texture(smoke_scattering);
+                //entries[12] = Texture(smoke_alpha);
             },
         );
 
@@ -665,6 +680,7 @@ pub(crate) fn update_desktop_uniform_buffers(
     camera: Res<Camera>,
     probes_array: Res<ProbesArrayInfo>,
     mut culling_params: ResMut<CullingParams>,
+    mut time: Local<f32>,
 ) {
     let queue = &queue.0;
 
@@ -720,8 +736,11 @@ pub(crate) fn update_desktop_uniform_buffers(
         probes_array_bottom_left_y: probes_array.bottom_left.y,
         probes_array_bottom_left_z: probes_array.bottom_left.z,
         settings,
+        time: *time % 1.0,
         _padding: Default::default(),
     };
+
+    *time += 1.0 / 60.0;
 
     queue.write_buffer(
         &uniform_buffer.0,
@@ -747,6 +766,7 @@ pub(crate) fn update_webxr_uniform_buffers(
     uniform_buffer: Res<UniformBuffer>,
     probes_array: Res<ProbesArrayInfo>,
     mut culling_params: ResMut<CullingParams>,
+    mut time: Local<f32>,
 ) {
     let queue = &queue.0;
 
@@ -816,8 +836,11 @@ pub(crate) fn update_webxr_uniform_buffers(
         probes_array_bottom_left_y: probes_array.bottom_left.y,
         probes_array_bottom_left_z: probes_array.bottom_left.z,
         settings,
+        time: *time % 1.0,
         _padding: Default::default(),
     };
+
+    *time += 1.0 / 60.0;
 
     queue.write_buffer(
         &uniform_buffer.0,

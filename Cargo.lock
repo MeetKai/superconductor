@@ -1200,6 +1200,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "glow"
+version = "0.12.1"
+source = "git+https://github.com/expenses/glow?branch=astc-profile-queries#4ac0c18ac698371b35b9a70c011ff9b4e2e08b7f"
+dependencies = [
+ "js-sys",
+ "slotmap",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "gltf-helpers"
 version = "0.1.0"
 dependencies = [
@@ -1533,7 +1544,7 @@ dependencies = [
 [[package]]
 name = "ktx2"
 version = "0.3.0"
-source = "git+https://github.com/BVE-Reborn/ktx2?rev=0e5b0febb09546c91bc845a5e7b5d04610d70044#0e5b0febb09546c91bc845a5e7b5d04610d70044"
+source = "git+https://github.com/expenses/ktx2?branch=astc-sfloat-formats#bbfc77a582110faa7257a7bb5f3fbce574c3f4c3"
 dependencies = [
  "bitflags",
 ]
@@ -2300,7 +2311,7 @@ dependencies = [
  "bytemuck",
  "futures",
  "glam",
- "glow",
+ "glow 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gltf-helpers",
  "goth-gltf",
  "image",
@@ -3207,7 +3218,7 @@ dependencies = [
 [[package]]
 name = "wgpu"
 version = "0.15.0"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#4529db23ca13b2bf69263232641735fc96c10172"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#bcae81f58a4fd49f2466017fadf62ba240aa8e9a"
 dependencies = [
  "arrayvec",
  "cfg-if",
@@ -3230,7 +3241,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "0.15.0"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#4529db23ca13b2bf69263232641735fc96c10172"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#bcae81f58a4fd49f2466017fadf62ba240aa8e9a"
 dependencies = [
  "arrayvec",
  "bit-vec",
@@ -3252,7 +3263,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "0.15.1"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#4529db23ca13b2bf69263232641735fc96c10172"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#bcae81f58a4fd49f2466017fadf62ba240aa8e9a"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -3263,7 +3274,7 @@ dependencies = [
  "core-graphics-types",
  "d3d12",
  "foreign-types",
- "glow",
+ "glow 0.12.1 (git+https://github.com/expenses/glow?branch=astc-profile-queries)",
  "gpu-alloc",
  "gpu-allocator",
  "gpu-descriptor",
@@ -3293,7 +3304,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "0.15.0"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#4529db23ca13b2bf69263232641735fc96c10172"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#bcae81f58a4fd49f2466017fadf62ba240aa8e9a"
 dependencies = [
  "bitflags",
  "js-sys",

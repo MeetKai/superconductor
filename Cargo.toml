@@ -65,3 +65,6 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.superconductor]
 opt-level = 3
+
+[patch.'https://github.com/BVE-Reborn/ktx2']
+ktx2 = { git = "https://github.com/expenses/ktx2", branch = "astc-sfloat-formats" }

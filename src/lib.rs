@@ -258,7 +258,7 @@ pub async fn initialise_xr(xr_mode: web_sys::XrSessionMode) -> InitialisedState 
         adapter.get_downlevel_capabilities()
     );
 
-    log::info!("Supported features: {:?}", adapter.features());
+    log::error!("Supported features: {:?}", adapter.features());
 
     let (device, queue) = adapter
         .request_device(
@@ -359,7 +359,7 @@ pub async fn initialise_desktop() -> InitialisedState {
         adapter.get_downlevel_capabilities()
     );
 
-    log::info!("Supported features: {:?}", adapter.features());
+    log::error!("Supported features: {:?}", adapter.features());
 
     let (device, queue) = adapter
         .request_device(
