@@ -12,7 +12,7 @@ console_error_panic_hook = "0.1.7"
 console_log = "1.0"
 dolly = "0.4"
 env_logger = "0.10.0"
-futures = "0.3.27"
+futures = "0.3.28"
 js-sys = "0.3.61"
 log = "0.4.17"
 superconductor = { path = ".." }
