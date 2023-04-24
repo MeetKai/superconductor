@@ -50,7 +50,7 @@ impl Pipelines {
             wgpu::TextureFormat::Rgba16Float
         };
 
-        let front_face = if options.flip_viewport {
+        let front_face = if false {//options.flip_viewport {
             wgpu::FrontFace::Cw
         } else {
             wgpu::FrontFace::Ccw
@@ -175,9 +175,9 @@ impl Pipelines {
 
         let vertex_state = wgpu::VertexState {
             module: &device.create_shader_module(if options.multiview.is_none() {
-                wgpu::include_spirv!("../../compiled-shaders/single_view_vertex.spv")
+                wgpu::include_wgsl!("../../compiled-shaders/single_view_vertex.spv.wgsl")
             } else {
-                wgpu::include_spirv!("../../compiled-shaders/vertex.spv")
+                wgpu::include_wgsl!("../../compiled-shaders/vertex.spv.wgsl")
             }),
             entry_point: &format!("{}vertex", prefix),
             buffers: vertex_buffers,
@@ -185,9 +185,9 @@ impl Pipelines {
 
         let stationary_depth_prepass_vertex_state = wgpu::VertexState {
             module: &device.create_shader_module(if options.multiview.is_none() {
-                wgpu::include_spirv!("../../compiled-shaders/single_view_depth_prepass_vertex.spv")
+                wgpu::include_wgsl!("../../compiled-shaders/single_view_depth_prepass_vertex.spv.wgsl")
             } else {
-                wgpu::include_spirv!("../../compiled-shaders/depth_prepass_vertex.spv")
+                wgpu::include_wgsl!("../../compiled-shaders/depth_prepass_vertex.spv.wgsl")
             }),
             entry_point: &format!("{}depth_prepass_vertex", prefix),
             buffers: stationary_depth_prepass_vertex_buffers,
@@ -195,9 +195,9 @@ impl Pipelines {
 
         let animated_vertex_state = wgpu::VertexState {
             module: &device.create_shader_module(if options.multiview.is_none() {
-                wgpu::include_spirv!("../../compiled-shaders/single_view_animated_vertex.spv")
+                wgpu::include_wgsl!("../../compiled-shaders/single_view_animated_vertex.spv.wgsl")
             } else {
-                wgpu::include_spirv!("../../compiled-shaders/animated_vertex.spv")
+                wgpu::include_wgsl!("../../compiled-shaders/animated_vertex.spv.wgsl")
             }),
             entry_point: &format!("{}animated_vertex", prefix),
             buffers: animated_vertex_buffers,
@@ -224,8 +224,8 @@ impl Pipelines {
         };
 
         let fullscreen_tri_vertex_state = wgpu::VertexState {
-            module: &device.create_shader_module(wgpu::include_spirv!(
-                "../../compiled-shaders/fullscreen_tri.spv"
+            module: &device.create_shader_module(wgpu::include_wgsl!(
+                "../../compiled-shaders/fullscreen_tri.spv.wgsl"
             )),
             entry_point: "fullscreen_tri",
             buffers: &[],
@@ -244,9 +244,9 @@ impl Pipelines {
             vertex: fullscreen_tri_vertex_state.clone(),
             fragment: Some(wgpu::FragmentState {
                 module: &device.create_shader_module(if options.multiview.is_none() {
-                    wgpu::include_spirv!("../../compiled-shaders/single_view_tonemap.spv")
+                    wgpu::include_wgsl!("../../compiled-shaders/single_view_tonemap.spv.wgsl")
                 } else {
-                    wgpu::include_spirv!("../../compiled-shaders/tonemap.spv")
+                    wgpu::include_wgsl!("../../compiled-shaders/tonemap.spv.wgsl")
                 }),
                 entry_point: &format!("{}tonemap", prefix),
                 targets: &[Some(options.framebuffer_format.into())],
@@ -267,9 +267,9 @@ impl Pipelines {
 
         let fragment_opaque = wgpu::FragmentState {
             module: &device.create_shader_module(if options.multiview.is_none() {
-                wgpu::include_spirv!("../../compiled-shaders/single_view_fragment.spv")
+                wgpu::include_wgsl!("../../compiled-shaders/single_view_fragment.spv.wgsl")
             } else {
-                wgpu::include_spirv!("../../compiled-shaders/fragment.spv")
+                wgpu::include_wgsl!("../../compiled-shaders/fragment.spv.wgsl")
             }),
             entry_point: &format!("{}fragment", prefix),
             targets: &[Some(target_format.into())],
@@ -277,11 +277,11 @@ impl Pipelines {
 
         let fragment_alpha_clipped = wgpu::FragmentState {
             module: &device.create_shader_module(if options.multiview.is_none() {
-                wgpu::include_spirv!(
-                    "../../compiled-shaders/single_view_fragment_alpha_clipped.spv"
+                wgpu::include_wgsl!(
+                    "../../compiled-shaders/single_view_fragment_alpha_clipped.spv.wgsl"
                 )
             } else {
-                wgpu::include_spirv!("../../compiled-shaders/fragment_alpha_clipped.spv")
+                wgpu::include_wgsl!("../../compiled-shaders/fragment_alpha_clipped.spv.wgsl")
             }),
             entry_point: &format!("{}fragment_alpha_clipped", prefix),
             targets: &[Some(target_format.into())],
@@ -289,11 +289,11 @@ impl Pipelines {
 
         let fragment_alpha_blended = wgpu::FragmentState {
             module: &device.create_shader_module(if options.multiview.is_none() {
-                wgpu::include_spirv!(
-                    "../../compiled-shaders/single_view_fragment_alpha_blended.spv"
+                wgpu::include_wgsl!(
+                    "../../compiled-shaders/single_view_fragment_alpha_blended.spv.wgsl"
                 )
             } else {
-                wgpu::include_spirv!("../../compiled-shaders/fragment_alpha_blended.spv")
+                wgpu::include_wgsl!("../../compiled-shaders/fragment_alpha_blended.spv.wgsl")
             }),
             entry_point: &format!("{}fragment_alpha_blended", prefix),
             targets: &[Some(wgpu::ColorTargetState {
@@ -317,10 +317,10 @@ impl Pipelines {
         });
 
         let blit_fragment_shader =
-            device.create_shader_module(wgpu::include_spirv!("../../compiled-shaders/blit.spv"));
+            device.create_shader_module(wgpu::include_wgsl!("../../compiled-shaders/blit.spv.wgsl"));
 
-        let skybox_fragment_shader = device.create_shader_module(wgpu::include_spirv!(
-            "../../compiled-shaders/fragment_skybox.spv"
+        let skybox_fragment_shader = device.create_shader_module(wgpu::include_wgsl!(
+            "../../compiled-shaders/fragment_skybox.spv.wgsl"
         ));
 
         let backface_culling_primitive_state = wgpu::PrimitiveState {
@@ -512,9 +512,9 @@ impl Pipelines {
                 layout: Some(&uniform_only_pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &device.create_shader_module(if options.multiview.is_none() {
-                        wgpu::include_spirv!("../../compiled-shaders/single_view_vertex_skybox.spv")
+                        wgpu::include_wgsl!("../../compiled-shaders/single_view_vertex_skybox.spv.wgsl")
                     } else {
-                        wgpu::include_spirv!("../../compiled-shaders/vertex_skybox.spv")
+                        wgpu::include_wgsl!("../../compiled-shaders/vertex_skybox.spv.wgsl")
                     }),
                     entry_point: &format!("{}vertex_skybox", prefix),
                     buffers: &[],
@@ -544,8 +544,8 @@ impl Pipelines {
                 layout: Some(&bc6h_decompression_pipeline_layout),
                 vertex: fullscreen_tri_vertex_state.clone(),
                 fragment: Some(wgpu::FragmentState {
-                    module: &device.create_shader_module(wgpu::include_spirv!(
-                        "../../compiled-shaders/bc6.spv"
+                    module: &device.create_shader_module(wgpu::include_wgsl!(
+                        "../../compiled-shaders/bc6.spv.wgsl"
                     )),
                     entry_point: "main",
                     targets: &[Some(BC6H_DECOMPRESSION_TARGET_FORMAT.into())],
@@ -588,16 +588,16 @@ impl Pipelines {
                 layout: Some(&uniform_only_pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &device.create_shader_module(if options.multiview.is_none() {
-                        wgpu::include_spirv!("../../compiled-shaders/single_view_line_vertex.spv")
+                        wgpu::include_wgsl!("../../compiled-shaders/single_view_line_vertex.spv.wgsl")
                     } else {
-                        wgpu::include_spirv!("../../compiled-shaders/line_vertex.spv")
+                        wgpu::include_wgsl!("../../compiled-shaders/line_vertex.spv.wgsl")
                     }),
                     entry_point: &format!("{}line_vertex", prefix),
                     buffers: line_vertex_buffers,
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &device.create_shader_module(wgpu::include_spirv!(
-                        "../../compiled-shaders/flat_colour.spv"
+                    module: &device.create_shader_module(wgpu::include_wgsl!(
+                        "../../compiled-shaders/flat_colour.spv.wgsl"
                     )),
                     entry_point: "flat_colour",
                     targets: &[Some(target_format.into())],

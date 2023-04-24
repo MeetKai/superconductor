@@ -384,7 +384,7 @@ pub async fn initialise_desktop() -> InitialisedState {
             inline_tonemapping: true,
             framebuffer_format: surface_capabilites.formats[0],
             // wgpu handles this for us.
-            flip_viewport: false,
+            flip_viewport: cfg!(all(feature = "wasm", not(feature = "webgl"))),
             depth_prepass: false,
             // Reverse z has more accurate depth info.
             reverse_z: true,
