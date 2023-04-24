@@ -66,5 +66,8 @@ opt-level = 3
 [profile.dev.package.superconductor]
 opt-level = 3
 
+[patch.'https://github.com/gfx-rs/naga']
+naga = {git = "https://github.com/expenses/naga", branch = "wgsl-out-interpolate-flat"}
+
 [patch.'https://github.com/BVE-Reborn/ktx2']
 ktx2 = { git = "https://github.com/expenses/ktx2", branch = "astc-sfloat-formats" }
