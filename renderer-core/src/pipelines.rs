@@ -50,7 +50,7 @@ impl Pipelines {
             wgpu::TextureFormat::Rgba16Float
         };
 
-        let front_face = if false {//options.flip_viewport {
+        let front_face = if options.flip_viewport {
             wgpu::FrontFace::Cw
         } else {
             wgpu::FrontFace::Ccw

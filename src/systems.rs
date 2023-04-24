@@ -716,10 +716,6 @@ pub(crate) fn update_desktop_uniform_buffers(
         settings |= Settings::INLINE_TONEMAPPING;
     }
 
-    if pipeline_options.0.flip_viewport {
-        settings |= Settings::FLIP_VIEWPORT;
-    }
-
     let uniforms = renderer_core::shared_structs::Uniforms {
         left_projection_view: projection_view.into(),
         right_projection_view: projection_view.into(),
