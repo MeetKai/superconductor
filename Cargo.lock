@@ -1777,8 +1777,8 @@ dependencies = [
 
 [[package]]
 name = "naga"
-version = "0.11.0"
-source = "git+https://github.com/gfx-rs/naga?rev=f59668ccfaf7bdb3a7e43d84363a21c77357b2fe#f59668ccfaf7bdb3a7e43d84363a21c77357b2fe"
+version = "0.12.0"
+source = "git+https://github.com/expenses/naga?branch=wgsl-out-interpolate-flat#07afcced39451e8f15d11bdae890e0bba468c1e7"
 dependencies = [
  "bit-set",
  "bitflags 1.3.2",
@@ -3271,8 +3271,8 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.15.0"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#ddc696535313bf161e7f72c2ee0e7f50f6aa23ce"
+version = "0.16.0"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#638e453fc0e9ba811d898a2f6b4d54388fc60e4b"
 dependencies = [
  "arrayvec",
  "cfg-if",
@@ -3294,8 +3294,8 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.15.0"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#ddc696535313bf161e7f72c2ee0e7f50f6aa23ce"
+version = "0.16.0"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#638e453fc0e9ba811d898a2f6b4d54388fc60e4b"
 dependencies = [
  "arrayvec",
  "bit-vec",
@@ -3316,8 +3316,8 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "0.15.1"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#ddc696535313bf161e7f72c2ee0e7f50f6aa23ce"
+version = "0.16.0"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#638e453fc0e9ba811d898a2f6b4d54388fc60e4b"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -3357,8 +3357,8 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "0.15.0"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#ddc696535313bf161e7f72c2ee0e7f50f6aa23ce"
+version = "0.16.0"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#638e453fc0e9ba811d898a2f6b4d54388fc60e4b"
 dependencies = [
  "bitflags 2.1.0",
  "js-sys",

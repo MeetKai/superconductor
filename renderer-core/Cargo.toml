@@ -9,8 +9,8 @@ raw-window-handle = "0.5.2"
 wasm-bindgen = { version = "0.2.84", features = ["serde-serialize"] }
 glow = "0.12.1"
 wgpu = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", features = ["spirv"] }
-wgpu-hal = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex" }
-wgpu-core = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex" }
+wgpu-hal = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", optional = true }
+wgpu-core = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", optional = true }
 log = "0.4.17"
 glam = { version = "0.22", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }
@@ -47,4 +47,4 @@ features = [
 
 [features]
 wasm = []
-webgl = ["wasm", "wgpu/webgl"]
+webgl = ["wasm", "wgpu/webgl", "wgpu-core", "wgpu-hal"]
