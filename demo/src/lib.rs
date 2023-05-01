@@ -109,6 +109,19 @@ impl Plugin for SuperconductorPlugin {
         let plugin: superconductor::XrPlugin = superconductor::XrPlugin::new(self.mode);
 
         plugin.build(app);
+        /*
+        Caused by:
+    In a RenderPass
+      note: encoder = `command encoder`
+    In a pass parameter
+      note: command buffer = `command encoder`
+    The depth attachment's texture view is not renderable:
+    The dimension of this texture view is not 2D. View dimension: D2Array
+
+', /home/ashley/.cargo/git/checkouts/wgpu-c9d051493be6af69/638e453/wgpu/src/backend/direct.rs:3019:5
+
+Stack
+*/
 
         app.insert_resource(NewIblCubemap(Some(
             url::Url::options()
