@@ -912,5 +912,7 @@ pub fn particle_fragment(
     let directional_lighting = spherical_harmonics[0] * rgb_lengths;
     let ambient_lighting = spherical_harmonics[0] * 0.2 * (1.0 - rgb_lengths);
 
-    *output = ((directional_lighting * light_map + ambient_lighting) * colour).extend(alpha.x);
+    let combined_output = (directional_lighting * light_map + ambient_lighting) * colour;
+
+    *output = potentially_tonemap(combined_output, uniforms).extend(alpha.x);
 }
