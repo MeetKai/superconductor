@@ -18,7 +18,8 @@ mod single_view;
 
 pub use single_view::{
     animated_vertex as _, depth_prepass_vertex as _, fragment as _, fragment_alpha_blended as _,
-    fragment_alpha_clipped as _, line_vertex as _, tonemap as _, vertex as _, vertex_skybox as _,
+    fragment_alpha_clipped as _, line_vertex as _, particle_vertex as _, tonemap as _, vertex as _,
+    vertex_skybox as _,
 };
 
 #[spirv(vertex)]
@@ -226,12 +227,6 @@ fn sample_lightmap_sphereical_harmonics(
     ]
 }
 
-struct SmokeLightingInfo {
-    side_scattering: Vec4,
-    front_scattering: f32,
-    back_scattering: f32,
-}
-
 #[spirv(fragment)]
 pub fn fragment(
     position: Vec3,
@@ -250,8 +245,6 @@ pub fn fragment(
     #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &SampledImage,
     #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &SampledImage,
     #[spirv(descriptor_set = 0, binding = 10)] lightmap_z: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 11)] smoke_scattering: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 12)] smoke_alpha: &Image3D,
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -283,74 +276,12 @@ pub fn fragment(
         )
     };
 
-    let mut material_params = ExtendedMaterialParams::new(
+    let material_params = ExtendedMaterialParams::new(
         TextureSampler::new(albedo_texture, *texture_sampler, uv),
         TextureSampler::new(metallic_roughness_texture, *texture_sampler, uv),
         TextureSampler::new(emissive_texture, *texture_sampler, uv),
         &material_settings,
     );
-
-    let (smoke_colour, smoke_alpha) = {
-        let mut normal = normal;
-
-        let scattering: Vec4 =
-            smoke_scattering.sample_by_lod(*clamp_sampler, uv.extend(uniforms.time), 0.0);
-        let alpha: Vec4 = smoke_alpha.sample_by_lod(*clamp_sampler, uv.extend(uniforms.time), 0.0);
-
-        let front_scattering = 0.25 * (scattering.x + scattering.y + scattering.z + scattering.w);
-        let front_scattering = front_scattering.powf(0.625);
-
-        let (red, green, blue) =
-            shared_structs::spherical_harmonics_channel_vectors(spherical_harmonics);
-        let average_light_vector = (red + green + blue) / 3.0;
-        let rgb_lengths = Vec3::new(red.length(), green.length(), blue.length());
-        let average_light_length = (rgb_lengths.x + rgb_lengths.y + rgb_lengths.z) / 3.0;
-        let average_light_direction = average_light_vector / average_light_length;
-
-        if !front_facing {
-            normal = -normal;
-        }
-
-        let tangent_to_world = compute_cotangent_frame(normal.normalize(), position, uv);
-        let world_to_tangent = tangent_to_world.transpose();
-        let average_light_direction_tangent_space = world_to_tangent * average_light_direction;
-
-        let h_map = if average_light_direction_tangent_space.x > 0.0 {
-            scattering.w
-        } else {
-            scattering.z
-        };
-
-        let v_map = if average_light_direction_tangent_space.y > 0.0 {
-            scattering.x
-        } else {
-            scattering.y
-        };
-
-        let z_map = if average_light_direction_tangent_space.z > 0.0 {
-            front_scattering
-        } else {
-            0.0
-        };
-
-        let light_map = h_map
-            * average_light_direction_tangent_space.x
-            * average_light_direction_tangent_space.x
-            + v_map
-                * average_light_direction_tangent_space.y
-                * average_light_direction_tangent_space.y
-            + z_map
-                * average_light_direction_tangent_space.z
-                * average_light_direction_tangent_space.z;
-
-        let directional_lighting = spherical_harmonics[0] * rgb_lengths;
-        let ambient_lighting = spherical_harmonics[0] * 0.2 * (1.0 - rgb_lengths);
-
-        (
-            directional_lighting * light_map + ambient_lighting,
-            alpha.x,
-        )
-    };
 
     if material_settings
         .binary_settings
@@ -378,7 +309,6 @@ pub fn fragment(
         ),
         view,
     )
-    .lerp(smoke_colour, smoke_alpha)
     .extend(1.0);
 }
 
@@ -860,4 +790,127 @@ fn spherical_harmonics_specular_approximation(
         fresnel,
     ) * strength
         * normal_dot_light.value
+}
+
+#[spirv(vertex)]
+pub fn particle_vertex(
+    center: Vec3,
+    scale: f32,
+    colour: Vec3,
+    time: f32,
+    #[spirv(vertex_index)] vertex_index: i32,
+    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(position)] builtin_pos: &mut Vec4,
+    #[spirv(view_index)] view_index: i32,
+    out_position: &mut Vec3,
+    out_uv: &mut Vec2,
+    out_normal: &mut Vec3,
+    out_time: &mut f32,
+    out_colour: &mut Vec3,
+) {
+    /*
+    let vertex_positions = [
+        Vec2::new(-0.5, -0.5),
+        Vec2::new(0.5, -0.5),
+        Vec2::new(-0.5, 0.5),
+        Vec2::new(0.5, -0.5),
+        Vec2::new(-0.5, 0.5),
+        Vec2::new(0.5, 0.5)
+    ];
+    */
+    // Generate the above pattern for x. generating y is a little harder.
+    let x = ((vertex_index % 2) * 2 - 1) as f32 * 0.5;
+    let vertex_ys = [-0.5, -0.5, 0.5, -0.5, 0.5, 0.5];
+    let y = vertex_ys[vertex_index as usize];
+
+    let view_center = (uniforms.view(view_index) * center.extend(1.0)).truncate();
+
+    let vertex_position = view_center + Vec3::new(scale * x, scale * y, 0.0);
+
+    *builtin_pos = uniforms.projection(view_index) * vertex_position.extend(1.0);
+    *out_uv = Vec2::new(x + 0.5, 0.5 - y);
+    *out_position =
+        (uniforms.view_inverse_matrix(view_index) * vertex_position.extend(1.0)).truncate();
+    *out_normal = (uniforms.eye_position(view_index) - center).normalize();
+    *out_time = time;
+    *out_colour = colour;
+
+    if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
+        builtin_pos.y = -builtin_pos.y;
+    }
+}
+
+#[spirv(fragment)]
+pub fn particle_fragment(
+    position: Vec3,
+    uv: Vec2,
+    normal: Vec3,
+    time: f32,
+    colour: Vec3,
+    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 11)] smoke_scattering: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 12)] smoke_alpha: &Image3D,
+    output: &mut Vec4,
+) {
+    let spherical_harmonics = sample_spherical_harmonics(
+        uniforms,
+        position,
+        *clamp_sampler,
+        sh_l_0,
+        sh_l_1_x,
+        sh_l_1_y,
+        sh_l_1_z,
+    );
+
+    let scattering: Vec4 = smoke_scattering.sample_by_lod(*clamp_sampler, uv.extend(time), 0.0);
+    let alpha: Vec4 = smoke_alpha.sample_by_lod(*clamp_sampler, uv.extend(time), 0.0);
+
+    let front_scattering = 0.25 * (scattering.x + scattering.y + scattering.z + scattering.w);
+    let front_scattering = front_scattering.powf(0.625);
+
+    let (red, green, blue) =
+        shared_structs::spherical_harmonics_channel_vectors(spherical_harmonics);
+
+    let average_light_vector = (red + green + blue) / 3.0;
+    let rgb_lengths = Vec3::new(red.length(), green.length(), blue.length());
+    let average_light_length = (rgb_lengths.x + rgb_lengths.y + rgb_lengths.z) / 3.0;
+    let average_light_direction = average_light_vector / average_light_length;
+
+    let tangent_to_world = compute_cotangent_frame(normal, position, uv);
+    let world_to_tangent = tangent_to_world.transpose();
+    let average_light_direction_tangent_space = world_to_tangent * average_light_direction;
+
+    let h_map = if average_light_direction_tangent_space.x > 0.0 {
+        scattering.w
+    } else {
+        scattering.z
+    };
+
+    let v_map = if average_light_direction_tangent_space.y > 0.0 {
+        scattering.x
+    } else {
+        scattering.y
+    };
+
+    let z_map = if average_light_direction_tangent_space.z > 0.0 {
+        front_scattering
+    } else {
+        0.0
+    };
+
+    let light_map = h_map
+        * average_light_direction_tangent_space.x
+        * average_light_direction_tangent_space.x
+        + v_map * average_light_direction_tangent_space.y * average_light_direction_tangent_space.y
+        + z_map * average_light_direction_tangent_space.z * average_light_direction_tangent_space.z;
+
+    let directional_lighting = spherical_harmonics[0] * rgb_lengths;
+    let ambient_lighting = spherical_harmonics[0] * 0.2 * (1.0 - rgb_lengths);
+
+    *output = ((directional_lighting * light_map + ambient_lighting) * colour).extend(alpha.x);
 }

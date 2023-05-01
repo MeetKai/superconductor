@@ -1,10 +1,10 @@
 use crate::resources::{
     self, AnimatedVertexBuffers, Device, IndexBuffer, InstanceBuffer, LineBuffer, MainBindGroup,
-    PipelineOptions, Pipelines, Queue, SurfaceFrameView, VertexBuffers,
+    ParticleBuffer, PipelineOptions, Pipelines, Queue, SurfaceFrameView, VertexBuffers,
 };
 use renderer_core::{
-    arc_swap, assets::models::Ranges, permutations, pipelines::DEPTH_FORMAT, LineVertex,
-    RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
+    arc_swap, assets::models::Ranges, instance::ParticleInstance, permutations,
+    pipelines::DEPTH_FORMAT, LineVertex, RawAnimatedVertexBuffers, RawVertexBuffers, VecGpuBuffer,
 };
 use std::ops::Range;
 use std::sync::Arc;
@@ -48,6 +48,15 @@ type AnimatedModelQuery<'world, 'state, 'component> = Query<
     ),
 >;
 
+type Buffers<'a> = (
+    Res<'a, IndexBuffer>,
+    Res<'a, VertexBuffers>,
+    Res<'a, AnimatedVertexBuffers>,
+    Res<'a, InstanceBuffer>,
+    Res<'a, LineBuffer>,
+    Res<'a, ParticleBuffer>,
+);
+
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub(crate) fn render_desktop(
     (device, queue, pipelines): (Res<Device>, Res<Queue>, Res<Pipelines>),
@@ -55,13 +64,14 @@ pub(crate) fn render_desktop(
     surface_frame_view: Res<SurfaceFrameView>,
     pipeline_options: Res<PipelineOptions>,
     mut intermediate_depth_framebuffer: ResMut<resources::IntermediateDepthFramebuffer>,
-    (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer, line_buffer): (
-        Res<IndexBuffer>,
-        Res<VertexBuffers>,
-        Res<AnimatedVertexBuffers>,
-        Res<InstanceBuffer>,
-        Res<LineBuffer>,
-    ),
+    (
+        index_buffer,
+        vertex_buffers,
+        animated_vertex_buffers,
+        instance_buffer,
+        line_buffer,
+        particle_buffer,
+    ): Buffers,
     static_models: ModelQuery,
     animated_models: AnimatedModelQuery,
     mut static_model_bind_groups: Local<ModelBindGroups>,
@@ -182,6 +192,7 @@ pub(crate) fn render_desktop(
             static_model_bind_groups: &static_model_bind_groups,
             animated_model_bind_groups: &animated_model_bind_groups,
             line_buffer: &line_buffer.buffer,
+            particle_buffer: &particle_buffer.buffer,
         },
         &static_models,
         &animated_models,
@@ -203,13 +214,14 @@ pub(crate) fn render_webxr(
     mut intermediate_depth_framebuffer: ResMut<resources::IntermediateDepthFramebuffer>,
     mut composite_bind_group: ResMut<resources::CompositeBindGroup>,
     pipeline_options: Res<PipelineOptions>,
-    (index_buffer, vertex_buffers, animated_vertex_buffers, instance_buffer, line_buffer): (
-        Res<IndexBuffer>,
-        Res<VertexBuffers>,
-        Res<AnimatedVertexBuffers>,
-        Res<InstanceBuffer>,
-        Res<LineBuffer>,
-    ),
+    (
+        index_buffer,
+        vertex_buffers,
+        animated_vertex_buffers,
+        instance_buffer,
+        line_buffer,
+        particle_buffer,
+    ): Buffers,
     static_models: ModelQuery,
     animated_models: AnimatedModelQuery,
     (mut static_model_bind_groups, mut animated_model_bind_groups): (
@@ -391,6 +403,7 @@ pub(crate) fn render_webxr(
             static_model_bind_groups: &static_model_bind_groups,
             animated_model_bind_groups: &animated_model_bind_groups,
             line_buffer: &line_buffer.buffer,
+            particle_buffer: &particle_buffer.buffer,
         },
         &static_models,
         &animated_models,
@@ -484,6 +497,7 @@ struct Context<'a> {
     static_model_bind_groups: &'a ModelBindGroups,
     animated_model_bind_groups: &'a ModelBindGroups,
     line_buffer: &'a VecGpuBuffer<LineVertex>,
+    particle_buffer: &'a VecGpuBuffer<ParticleInstance>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -524,6 +538,12 @@ fn render_everything<'a>(
 
     render_pass.set_pipeline(&context.pipelines.skybox);
     render_pass.draw(0..3, 0..1);
+
+    if context.particle_buffer.len() > 0 {
+        render_pass.set_pipeline(&context.pipelines.particle);
+        render_pass.set_vertex_buffer(0, context.particle_buffer.buffer.slice(..));
+        render_pass.draw(0..6, 0..context.particle_buffer.len());
+    }
 
     render_mode(
         render_pass,

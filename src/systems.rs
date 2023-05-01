@@ -7,8 +7,8 @@ use crate::resources::{
     AnimatedVertexBuffers, BindGroupLayouts, BoundingSphereParams, Camera, CompositeBindGroup,
     CullingParams, Device, HttpClient, IndexBuffer, InstanceBuffer, IntermediateColorFramebuffer,
     IntermediateDepthFramebuffer, LineBuffer, MainBindGroup, NewIblCubemap, NewLightvolTextures,
-    PipelineOptions, Pipelines, ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings,
-    UniformBuffer, VertexBuffers,
+    ParticleBuffer, PipelineOptions, Pipelines, ProbesArrayInfo, Queue, SurfaceFrameView,
+    TextureSettings, UniformBuffer, VertexBuffers,
 };
 use bevy_ecs::prelude::{Added, Commands, Entity, Local, Query, Res, ResMut, Without};
 use renderer_core::{
@@ -66,6 +66,11 @@ pub(crate) fn clear_joint_buffers(mut query: Query<&mut JointBuffers>) {
 pub(crate) fn clear_line_buffer(mut line_buffer: ResMut<LineBuffer>) {
     line_buffer.staging.clear();
     line_buffer.buffer.clear();
+}
+
+pub(crate) fn clear_particle_buffer(mut particle_buffer: ResMut<ParticleBuffer>) {
+    particle_buffer.staging.clear();
+    particle_buffer.buffer.clear();
 }
 
 pub(crate) fn progress_animation_times(
@@ -376,6 +381,23 @@ pub(crate) fn upload_lines(
     queue.0.submit(std::iter::once(command_encoder.finish()));
 }
 
+pub(crate) fn upload_particles(
+    device: Res<Device>,
+    queue: Res<Queue>,
+    mut particle_buffer: ResMut<ParticleBuffer>,
+) {
+    let mut command_encoder = device
+        .0
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("command encoder"),
+        });
+
+    let ParticleBuffer { staging, buffer } = &mut *particle_buffer;
+    buffer.push(staging, &device.0, &queue.0, &mut command_encoder);
+
+    queue.0.submit(std::iter::once(command_encoder.finish()));
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
     device: Res<Device>,
@@ -490,6 +512,16 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             device,
             wgpu::BufferUsages::VERTEX,
             "line buffer",
+        ),
+        staging: Vec::new(),
+    });
+
+    commands.insert_resource(ParticleBuffer {
+        buffer: renderer_core::VecGpuBuffer::new(
+            1,
+            device,
+            wgpu::BufferUsages::VERTEX,
+            "particle buffer",
         ),
         staging: Vec::new(),
     });
@@ -681,7 +713,6 @@ pub(crate) fn update_desktop_uniform_buffers(
     camera: Res<Camera>,
     probes_array: Res<ProbesArrayInfo>,
     mut culling_params: ResMut<CullingParams>,
-    mut time: Local<f32>,
 ) {
     let queue = &queue.0;
 
@@ -724,6 +755,12 @@ pub(crate) fn update_desktop_uniform_buffers(
         right_projection_inverse: perspective_matrix.inverse().into(),
         left_view_inverse: camera.rotation.into(),
         right_view_inverse: camera.rotation.into(),
+        left_view: camera.view_matrix().into(),
+        right_view: camera.view_matrix().into(),
+        left_view_inverse_matrix: camera.view_matrix().inverse().into(),
+        right_view_inverse_matrix: camera.view_matrix().inverse().into(),
+        left_projection: perspective_matrix.into(),
+        right_projection: perspective_matrix.into(),
         left_eye_x: camera.position.x,
         left_eye_y: camera.position.y,
         left_eye_z: camera.position.z,
@@ -737,11 +774,8 @@ pub(crate) fn update_desktop_uniform_buffers(
         probes_array_bottom_left_y: probes_array.bottom_left.y,
         probes_array_bottom_left_z: probes_array.bottom_left.z,
         settings,
-        time: *time % 1.0,
         _padding: Default::default(),
     };
-
-    *time += 1.0 / 60.0;
 
     queue.write_buffer(
         &uniform_buffer.0,
@@ -767,7 +801,6 @@ pub(crate) fn update_webxr_uniform_buffers(
     uniform_buffer: Res<UniformBuffer>,
     probes_array: Res<ProbesArrayInfo>,
     mut culling_params: ResMut<CullingParams>,
-    mut time: Local<f32>,
 ) {
     let queue = &queue.0;
 
@@ -822,6 +855,12 @@ pub(crate) fn update_webxr_uniform_buffers(
         right_projection_view: (right_view_data.projection * right_view_data.view).into(),
         left_projection_inverse: left_view_data.projection.inverse().into(),
         right_projection_inverse: right_view_data.projection.inverse().into(),
+        left_projection: left_view_data.projection.into(),
+        right_projection: right_view_data.projection.into(),
+        left_view: left_view_data.view.into(),
+        right_view: right_view_data.view.into(),
+        left_view_inverse_matrix: left_view_data.view.inverse().into(),
+        right_view_inverse_matrix: right_view_data.view.inverse().into(),
         left_view_inverse: left_view_data.instance.rotation.into(),
         right_view_inverse: right_view_data.instance.rotation.into(),
         left_eye_x: left_view_data.instance.translation.x,
@@ -837,11 +876,8 @@ pub(crate) fn update_webxr_uniform_buffers(
         probes_array_bottom_left_y: probes_array.bottom_left.y,
         probes_array_bottom_left_z: probes_array.bottom_left.z,
         settings,
-        time: *time % 1.0,
         _padding: Default::default(),
     };
-
-    *time += 1.0 / 60.0;
 
     queue.write_buffer(
         &uniform_buffer.0,

@@ -14,6 +14,13 @@ use num_traits::Float;
 pub struct Uniforms {
     pub left_projection_view: FlatMat4,
     pub right_projection_view: FlatMat4,
+    // For particles
+    pub left_view: FlatMat4,
+    pub right_view: FlatMat4,
+    pub left_view_inverse_matrix: FlatMat4,
+    pub right_view_inverse_matrix: FlatMat4,
+    pub left_projection: FlatMat4,
+    pub right_projection: FlatMat4,
     // For the skybox
     pub left_projection_inverse: FlatMat4,
     pub right_projection_inverse: FlatMat4,
@@ -33,11 +40,10 @@ pub struct Uniforms {
     pub probes_array_scale_x: f32,
     pub probes_array_scale_y: f32,
     pub probes_array_scale_z: f32,
-    pub time: f32,
     // As the struct is 16-byte aligned due to the Vec4s in the FlatMat4s,
     // we need to pad it to 16 bytes by adding a few more bytes.
     #[cfg(not(target_arch = "spirv"))]
-    pub _padding: [u32; 2],
+    pub _padding: [u32; 3],
 }
 
 impl Uniforms {
@@ -62,6 +68,30 @@ impl Uniforms {
             self.right_projection_inverse
         } else {
             self.left_projection_inverse
+        })
+    }
+
+    pub fn projection(&self, view_index: i32) -> Mat4 {
+        Mat4::from(if view_index != 0 {
+            self.right_projection
+        } else {
+            self.left_projection
+        })
+    }
+
+    pub fn view(&self, view_index: i32) -> Mat4 {
+        Mat4::from(if view_index != 0 {
+            self.right_view
+        } else {
+            self.left_view
+        })
+    }
+
+    pub fn view_inverse_matrix(&self, view_index: i32) -> Mat4 {
+        Mat4::from(if view_index != 0 {
+            self.right_view_inverse_matrix
+        } else {
+            self.left_view_inverse_matrix
         })
     }
 

@@ -17,6 +17,15 @@ pub struct GpuInstance {
     pub _padding: u32,
 }
 
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[repr(C)]
+pub struct ParticleInstance {
+    pub position: Vec3,
+    pub scale: f32,
+    pub colour: Vec3,
+    pub time: f32,
+}
+
 pub type Instance = gltf_helpers::Similarity;
 
 #[cfg(feature = "wasm")]

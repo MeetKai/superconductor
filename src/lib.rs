@@ -98,7 +98,8 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
             .with_system(systems::clear_instance_buffers)
             .with_system(systems::clear_joint_buffers)
             .with_system(systems::sample_animations)
-            .with_system(systems::clear_line_buffer);
+            .with_system(systems::clear_line_buffer)
+            .with_system(systems::clear_particle_buffer);
 
         buffer_resetting_stage = match self.mode {
             Mode::Desktop => {
@@ -124,6 +125,8 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
                 // For debugging joints
                 //.with_system(systems::push_debug_joints_to_lines_buffer)
                 //.with_system(systems::push_debug_bounding_boxes_to_lines_buffer)
+                // for debugging particles
+                .with_system(systems::debugging::push_test_particle)
         );
 
         app.add_stage_after(
@@ -133,7 +136,8 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
                 .with_system(systems::upload_instances)
                 .with_system(systems::upload_joint_buffers)
                 .with_system(systems::progress_animation_times)
-                .with_system(systems::upload_lines),
+                .with_system(systems::upload_lines)
+                .with_system(systems::upload_particles),
         );
 
         let mut rendering_stage = SystemStage::parallel();

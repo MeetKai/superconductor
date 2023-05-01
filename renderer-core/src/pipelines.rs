@@ -36,6 +36,7 @@ pub struct Pipelines {
     pub blit: wgpu::RenderPipeline,
     pub srgb_blit: wgpu::RenderPipeline,
     pub line: wgpu::RenderPipeline,
+    pub particle: wgpu::RenderPipeline,
 }
 
 impl Pipelines {
@@ -167,6 +168,12 @@ impl Pipelines {
             attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Uint32],
         }];
 
+        let particle_vertex_buffers = &[wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<crate::instance::ParticleInstance>() as u64,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32, 2 => Float32x3, 3 => Float32],
+        }];
+
         let prefix = if options.multiview.is_none() {
             "single_view__"
         } else {
@@ -206,6 +213,18 @@ impl Pipelines {
         let normal_depth_state = wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
             depth_write_enabled: true,
+            depth_compare: if options.reverse_z {
+                wgpu::CompareFunction::Greater
+            } else {
+                wgpu::CompareFunction::Less
+            },
+            bias: wgpu::DepthBiasState::default(),
+            stencil: wgpu::StencilState::default(),
+        };
+
+        let read_only_depth_state = wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: false,
             depth_compare: if options.reverse_z {
                 wgpu::CompareFunction::Greater
             } else {
@@ -501,7 +520,7 @@ impl Pipelines {
                     vertex: stationary_depth_prepass_vertex_state.clone(),
                     fragment: None,
                     primitive: double_sided_primitive_state,
-                    depth_stencil: Some(normal_depth_state),
+                    depth_stencil: Some(normal_depth_state.clone()),
                     multisample: Default::default(),
                     multiview: options.multiview,
                 }),
@@ -607,6 +626,36 @@ impl Pipelines {
                     ..Default::default()
                 },
                 depth_stencil: Some(always_depth_stencil_state),
+                multisample: Default::default(),
+                multiview: options.multiview,
+            }),
+            particle: device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("particle pipeline"),
+                layout: Some(&uniform_only_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &device.create_shader_module(if options.multiview.is_none() {
+                        wgpu::include_spirv!(
+                            "../../compiled-shaders/single_view_particle_vertex.spv"
+                        )
+                    } else {
+                        wgpu::include_spirv!("../../compiled-shaders/particle_vertex.spv")
+                    }),
+                    entry_point: &format!("{}particle_vertex", prefix),
+                    buffers: particle_vertex_buffers,
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &device.create_shader_module(wgpu::include_spirv!(
+                        "../../compiled-shaders/particle_fragment.spv"
+                    )),
+                    entry_point: "particle_fragment",
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: target_format,
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: Default::default(),
+                    })],
+                }),
+                primitive: double_sided_primitive_state,
+                depth_stencil: Some(read_only_depth_state),
                 multisample: Default::default(),
                 multiview: options.multiview,
             }),

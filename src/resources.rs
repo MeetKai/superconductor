@@ -3,6 +3,7 @@ use renderer_core::{
     assets::textures,
     culling::{BoundingSphereCullingParams, CullingFrustum},
     glam::{Mat4, Quat, Vec3},
+    instance::ParticleInstance,
     GpuInstance, LineVertex, MutableBindGroup,
 };
 use std::sync::Arc;
@@ -51,6 +52,12 @@ pub(crate) struct InstanceBuffer(pub(crate) renderer_core::VecGpuBuffer<GpuInsta
 pub(crate) struct LineBuffer {
     pub(crate) staging: Vec<LineVertex>,
     pub(crate) buffer: renderer_core::VecGpuBuffer<LineVertex>,
+}
+
+#[derive(Resource)]
+pub(crate) struct ParticleBuffer {
+    pub(crate) staging: Vec<ParticleInstance>,
+    pub(crate) buffer: renderer_core::VecGpuBuffer<ParticleInstance>,
 }
 
 #[derive(Resource)]

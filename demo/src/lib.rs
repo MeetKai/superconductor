@@ -92,28 +92,6 @@ impl Plugin for SuperconductorPlugin {
                 Default::default(),
             )));
 
-        let probes = app
-            .world
-            .spawn_empty()
-            .insert(components::ModelUrl(
-                url::Url::options()
-                    .base_url(Some(&href))
-                    .parse("assets/models/sponza_planes.glb")
-                    .unwrap(),
-            ))
-            .insert(components::Instances::default())
-            .insert(components::InstanceRanges::default())
-            .id();
-
-        app.world
-            .spawn_empty()
-            .insert(components::InstanceOf(probes))
-            .insert(components::Instance(renderer_core::Instance::new(
-                Vec3::new(0.0, 0.0, 0.0),
-                1.0,
-                Default::default(),
-            )));
-
         let camera_rig: dolly::rig::CameraRig = dolly::rig::CameraRig::builder()
             .with(dolly::drivers::Position::new(Vec3::new(0.0, 1.75, 0.0)))
             .with(dolly::drivers::YawPitch::new().pitch_degrees(0.0))

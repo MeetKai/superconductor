@@ -111,8 +111,6 @@ pub fn fragment(
     #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &SampledImage,
     #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &SampledImage,
     #[spirv(descriptor_set = 0, binding = 10)] lightmap_z: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 11)] smoke_scattering: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 12)] smoke_alpha: &Image3D,
     #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
     #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
@@ -139,8 +137,6 @@ pub fn fragment(
         lightmap_x,
         lightmap_y,
         lightmap_z,
-        smoke_scattering,
-        smoke_alpha,
         albedo_texture,
         normal_texture,
         metallic_roughness_texture,
@@ -316,5 +312,37 @@ pub fn depth_prepass_vertex(
         uniforms,
         builtin_pos,
         0,
+    )
+}
+
+#[spirv(vertex)]
+pub fn particle_vertex(
+    center: Vec3,
+    scale: f32,
+    colour: Vec3,
+    time: f32,
+    #[spirv(vertex_index)] vertex_index: i32,
+    #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
+    #[spirv(position)] builtin_pos: &mut Vec4,
+    out_position: &mut Vec3,
+    out_uv: &mut Vec2,
+    out_normal: &mut Vec3,
+    out_time: &mut f32,
+    out_colour: &mut Vec3,
+) {
+    super::particle_vertex(
+        center,
+        scale,
+        colour,
+        time,
+        vertex_index,
+        uniforms,
+        builtin_pos,
+        0,
+        out_position,
+        out_uv,
+        out_normal,
+        out_time,
+        out_colour,
     )
 }

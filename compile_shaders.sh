@@ -23,3 +23,5 @@ spirv-location-injector compiled-shaders/single_view_vertex.spv compiled-shaders
 spirv-location-injector compiled-shaders/single_view_vertex.spv compiled-shaders/single_view_fragment_alpha_blended.spv compiled-shaders/single_view_fragment_alpha_blended.spv
 
 spirv-location-injector compiled-shaders/fullscreen_tri.spv compiled-shaders/bc6.spv compiled-shaders/bc6.spv
+
+spirv-location-injector compiled-shaders/particle_vertex.spv compiled-shaders/particle_fragment.spv compiled-shaders/particle_fragment.spv
