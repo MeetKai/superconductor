@@ -591,6 +591,10 @@ fn saturate(value: Vec3) -> Vec3 {
     value.max(Vec3::ZERO).min(Vec3::ONE)
 }
 
+fn saturate_scalar(value: f32) -> f32 {
+    value.max(0.0).min(1.0)
+}
+
 // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
 fn aces_filmic(x: Vec3) -> Vec3 {
     let a = 2.51;
@@ -857,6 +861,9 @@ pub fn particle_fragment(
     #[spirv(descriptor_set = 0, binding = 12)] smoke_alpha: &Image3D,
     output: &mut Vec4,
 ) {
+    // Smoke lighting technique heavily inspired by
+    // https://realtimevfx.com/t/smoke-lighting-and-texture-re-usability-in-skull-bones/5339
+
     let spherical_harmonics = sample_spherical_harmonics(
         uniforms,
         position,
@@ -872,6 +879,11 @@ pub fn particle_fragment(
 
     let front_scattering = 0.25 * (scattering.x + scattering.y + scattering.z + scattering.w);
     let front_scattering = front_scattering.powf(0.625);
+    let back_scattering = 1.0 - front_scattering;
+    // todo: I don't understand this 1.0 - normal.x term at all. Is it still relevent here?
+    let back_scattering = saturate_scalar(0.25 * (
+        1.0 - normal.x
+    ) + 0.5 * (back_scattering * back_scattering * back_scattering * back_scattering));
 
     let (red, green, blue) =
         shared_structs::spherical_harmonics_channel_vectors(spherical_harmonics);
@@ -886,9 +898,9 @@ pub fn particle_fragment(
     let average_light_direction_tangent_space = world_to_tangent * average_light_direction;
 
     let h_map = if average_light_direction_tangent_space.x > 0.0 {
-        scattering.w
-    } else {
         scattering.z
+    } else {
+        scattering.w
     };
 
     let v_map = if average_light_direction_tangent_space.y > 0.0 {
@@ -900,7 +912,7 @@ pub fn particle_fragment(
     let z_map = if average_light_direction_tangent_space.z > 0.0 {
         front_scattering
     } else {
-        0.0
+        back_scattering
     };
 
     let light_map = h_map
