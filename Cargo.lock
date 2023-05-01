@@ -3272,7 +3272,7 @@ dependencies = [
 [[package]]
 name = "wgpu"
 version = "0.16.0"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#638e453fc0e9ba811d898a2f6b4d54388fc60e4b"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#73411463836ddcc5611e7e05b35d1fff6d57dd8f"
 dependencies = [
  "arrayvec",
  "cfg-if",
@@ -3295,7 +3295,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "0.16.0"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#638e453fc0e9ba811d898a2f6b4d54388fc60e4b"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#73411463836ddcc5611e7e05b35d1fff6d57dd8f"
 dependencies = [
  "arrayvec",
  "bit-vec",
@@ -3317,7 +3317,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "0.16.0"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#638e453fc0e9ba811d898a2f6b4d54388fc60e4b"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#73411463836ddcc5611e7e05b35d1fff6d57dd8f"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -3358,7 +3358,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "0.16.0"
-source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#638e453fc0e9ba811d898a2f6b4d54388fc60e4b"
+source = "git+https://github.com/expenses/wgpu?branch=3d-compressed-tex#73411463836ddcc5611e7e05b35d1fff6d57dd8f"
 dependencies = [
  "bitflags 2.1.0",
  "js-sys",
