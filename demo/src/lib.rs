@@ -5,8 +5,8 @@ use bevy_ecs::system::Resource;
 use superconductor::{
     bevy_app, bevy_ecs, components, renderer_core,
     resources::{
-        Camera, EventQueue, HdrTexture, LdrTexture, LightvolTextures, NewIblCubemap, NewLightvolTextures,
-        ProbesArrayInfo, WindowChanges,
+        Camera, EventQueue, HdrTexture, LdrTexture, LightvolTextures, NewIblCubemap,
+        NewLightvolTextures, ProbesArrayInfo, WindowChanges,
     },
     url, winit,
     winit::event::{ElementState, VirtualKeyCode},
@@ -98,7 +98,7 @@ impl Plugin for SuperconductorPlugin {
             .insert(components::ModelUrl(
                 url::Url::options()
                     .base_url(Some(&href))
-                    .parse("assets/models/sponza_cubes.glb")
+                    .parse("assets/models/sponza_planes.glb")
                     .unwrap(),
             ))
             .insert(components::Instances::default())
@@ -145,11 +145,13 @@ impl Plugin for SuperconductorPlugin {
 
         let astc_base_url = url::Url::options()
             .base_url(Some(&href))
-            .parse("assets/lighting/astc/").unwrap();
+            .parse("assets/lighting/astc/")
+            .unwrap();
 
         let bcn_base_url = url::Url::options()
             .base_url(Some(&href))
-            .parse("assets/lighting/bcn/").unwrap();
+            .parse("assets/lighting/bcn/")
+            .unwrap();
 
         app.insert_resource(NewLightvolTextures(Some(LightvolTextures {
             sh0: url::Url::options()
@@ -185,7 +187,8 @@ impl Plugin for SuperconductorPlugin {
                     .unwrap(),
                 bc7: url::Url::options()
                     .base_url(Some(&bcn_base_url))
-                    .parse("lightmap_x.ktx2").unwrap(),
+                    .parse("lightmap_x.ktx2")
+                    .unwrap(),
             },
             lightmap_sh1_y: LdrTexture {
                 astc: url::Url::options()
@@ -194,7 +197,8 @@ impl Plugin for SuperconductorPlugin {
                     .unwrap(),
                 bc7: url::Url::options()
                     .base_url(Some(&bcn_base_url))
-                    .parse("lightmap_y.ktx2").unwrap(),
+                    .parse("lightmap_y.ktx2")
+                    .unwrap(),
             },
             lightmap_sh1_z: LdrTexture {
                 astc: url::Url::options()
@@ -203,7 +207,8 @@ impl Plugin for SuperconductorPlugin {
                     .unwrap(),
                 bc7: url::Url::options()
                     .base_url(Some(&bcn_base_url))
-                    .parse("lightmap_z.ktx2").unwrap(),
+                    .parse("lightmap_z.ktx2")
+                    .unwrap(),
             },
         })));
     }

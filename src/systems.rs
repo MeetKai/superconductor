@@ -19,8 +19,8 @@ use renderer_core::{
     shared_structs::{self, Settings},
     spawn, GpuInstance, MutableBindGroup, Texture,
 };
-use wgpu::util::DeviceExt;
 use std::sync::Arc;
+use wgpu::util::DeviceExt;
 
 pub(crate) mod debugging;
 pub(crate) mod rendering;
@@ -422,13 +422,11 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             view_formats: &[],
         };
 
-        Entry::Texture(Arc::new(Texture::new(
-            device.create_texture_with_data(
-                &queue.0,
-                desc,
-                &[brightness; 4]
-            )
-        )))
+        Entry::Texture(Arc::new(Texture::new(device.create_texture_with_data(
+            &queue.0,
+            desc,
+            &[brightness; 4],
+        ))))
     };
 
     let main_bind_group = Arc::new(MutableBindGroup::new(
@@ -437,8 +435,8 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
         vec![
             Entry::Buffer(uniform_buffer.clone(), 0),
             Entry::Sampler(clamp_sampler),
-            Entry::Texture(Arc::new(Texture::new_cubemap(
-                device.create_texture(&wgpu::TextureDescriptor {
+            Entry::Texture(Arc::new(Texture::new_cubemap(device.create_texture(
+                &wgpu::TextureDescriptor {
                     label: Some("dummy ibl cubemap"),
                     size: wgpu::Extent3d {
                         width: 1,
@@ -451,8 +449,8 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     format: wgpu::TextureFormat::Rgba16Float,
                     view_formats: &[],
-                }),
-            ))),
+                },
+            )))),
             create_texture_with_brightness("lightvol l0", 255, wgpu::TextureDimension::D3),
             create_texture_with_brightness("lightvol l1x", 128, wgpu::TextureDimension::D3),
             create_texture_with_brightness("lightvol l1y", 128, wgpu::TextureDimension::D3),
@@ -461,8 +459,8 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             create_texture_with_brightness("lightmap l1x", 128, wgpu::TextureDimension::D2),
             create_texture_with_brightness("lightmap l1y", 128, wgpu::TextureDimension::D2),
             create_texture_with_brightness("lightmap l1z", 128, wgpu::TextureDimension::D2),
-            //Entry::Texture(dummy_lightvol_texture.clone()),
-            //Entry::Texture(dummy_lightvol_texture.clone()),
+            create_texture_with_brightness("smoke 0", 255, wgpu::TextureDimension::D3),
+            create_texture_with_brightness("smoke 1", 255, wgpu::TextureDimension::D3),
         ],
     ));
 
@@ -542,7 +540,12 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
         );
 
         let lightmap_future = futures::future::join4(
-            load_ktx2_async(&context, new_lightvol_textures.lightmap_sh0.choose(features), false, |_| ()),
+            load_ktx2_async(
+                &context,
+                new_lightvol_textures.lightmap_sh0.choose(features),
+                false,
+                |_| (),
+            ),
             load_ktx2_async(
                 &context,
                 &new_lightvol_textures.lightmap_sh1_x.choose(features),
@@ -563,7 +566,6 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
             ),
         );
 
-        /*
         let scattering_url =
             url::Url::parse("http://localhost:8000/assets/smoke/scattering.ktx2").unwrap();
         let alpha_url = url::Url::parse("http://localhost:8000/assets/smoke/alpha.ktx2").unwrap();
@@ -572,13 +574,12 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
             load_ktx2_async(&context, &scattering_url, false, |_| ()),
             load_ktx2_async(&context, &alpha_url, false, |_| ()),
         );
-        */
 
         let (
             (sh0, sh1_x, sh1_y, sh1_z),
             (lightmap_sh0, lightmap_sh1_x, lightmap_sh1_y, lightmap_sh1_z),
-            //(smoke_scattering, smoke_alpha),
-        ) = futures::future::join(lightvol_future, lightmap_future/*, smoke_future*/).await;
+            (smoke_scattering, smoke_alpha),
+        ) = futures::future::join3(lightvol_future, lightmap_future, smoke_future).await;
 
         let (sh0, sh1_x, sh1_y, sh1_z) = (sh0?, sh1_x?, sh1_y?, sh1_z?);
         let (lightmap_sh0, lightmap_sh1_x, lightmap_sh1_y, lightmap_sh1_z) = (
@@ -588,7 +589,7 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
             lightmap_sh1_z?,
         );
 
-        //let (smoke_scattering, smoke_alpha) = (smoke_scattering?, smoke_alpha?);
+        let (smoke_scattering, smoke_alpha) = (smoke_scattering?, smoke_alpha?);
 
         use renderer_core::mutable_bind_group::Entry::Texture;
 
@@ -604,8 +605,8 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
                 entries[8] = Texture(lightmap_sh1_x);
                 entries[9] = Texture(lightmap_sh1_y);
                 entries[10] = Texture(lightmap_sh1_z);
-                //entries[11] = Texture(smoke_scattering);
-                //entries[12] = Texture(smoke_alpha);
+                entries[11] = Texture(smoke_scattering);
+                entries[12] = Texture(smoke_alpha);
             },
         );
 

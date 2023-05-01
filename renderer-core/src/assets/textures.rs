@@ -602,7 +602,7 @@ impl Ktx2Format {
 
         Ok(Self::WgpuCompatible(wgpu::TextureFormat::Astc {
             block: block_format,
-            channel
+            channel,
         }))
     }
 }
@@ -647,7 +647,8 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
                 .contains(wgpu::Features::TEXTURE_COMPRESSION_BC)
             {
                 return Err(anyhow::anyhow!(
-                    "BC7 Compressed textures are not supported on this device (url: {:?})", url,
+                    "BC7 Compressed textures are not supported on this device (url: {:?})",
+                    url,
                 ));
             }
 
@@ -661,14 +662,32 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
             Ktx2Format::WgpuCompatible(wgpu::TextureFormat::Bc6hRgbUfloat)
         }
         Some(ktx2::Format::ASTC_6x6_SRGB_BLOCK | ktx2::Format::ASTC_6x6_UNORM_BLOCK) => {
-            Ktx2Format::from_astc(wgpu::AstcBlock::B6x6, if srgb { wgpu::AstcChannel::UnormSrgb} else { wgpu::AstcChannel::Unorm}, &context.device)?
+            Ktx2Format::from_astc(
+                wgpu::AstcBlock::B6x6,
+                if srgb {
+                    wgpu::AstcChannel::UnormSrgb
+                } else {
+                    wgpu::AstcChannel::Unorm
+                },
+                &context.device,
+            )?
         }
         Some(ktx2::Format::ASTC_4x4_SRGB_BLOCK | ktx2::Format::ASTC_4x4_UNORM_BLOCK) => {
-            Ktx2Format::from_astc(wgpu::AstcBlock::B4x4, if srgb { wgpu::AstcChannel::UnormSrgb} else { wgpu::AstcChannel::Unorm}, &context.device)?
+            Ktx2Format::from_astc(
+                wgpu::AstcBlock::B4x4,
+                if srgb {
+                    wgpu::AstcChannel::UnormSrgb
+                } else {
+                    wgpu::AstcChannel::Unorm
+                },
+                &context.device,
+            )?
         }
-        Some(ktx2::Format::ASTC_4x4_SFLOAT_BLOCK) => {
-            Ktx2Format::from_astc(wgpu::AstcBlock::B4x4, wgpu::AstcChannel::Hdr, &context.device)?
-        }
+        Some(ktx2::Format::ASTC_4x4_SFLOAT_BLOCK) => Ktx2Format::from_astc(
+            wgpu::AstcBlock::B4x4,
+            wgpu::AstcChannel::Hdr,
+            &context.device,
+        )?,
         Some(format) => Ktx2Format::WgpuCompatible(match format {
             ktx2::Format::R32G32B32A32_SFLOAT => wgpu::TextureFormat::Rgba32Float,
             ktx2::Format::R16G16B16A16_SFLOAT => wgpu::TextureFormat::Rgba16Float,
@@ -936,7 +955,15 @@ pub(crate) fn load_ktx2_from_bytes<F: Fn(u32) + Send + 'static, T: HttpClient>(
             })
         }
         Some(ktx2::Format::ASTC_6x6_SRGB_BLOCK | ktx2::Format::ASTC_6x6_UNORM_BLOCK) => {
-            Ktx2Format::from_astc(wgpu::AstcBlock::B6x6, if srgb { wgpu::AstcChannel::UnormSrgb} else { wgpu::AstcChannel::Unorm}, &context.device)?
+            Ktx2Format::from_astc(
+                wgpu::AstcBlock::B6x6,
+                if srgb {
+                    wgpu::AstcChannel::UnormSrgb
+                } else {
+                    wgpu::AstcChannel::Unorm
+                },
+                &context.device,
+            )?
         }
         Some(other) => {
             return Err(anyhow::anyhow!("Format {:?} is not supported", other));

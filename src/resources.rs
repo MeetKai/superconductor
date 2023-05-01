@@ -237,5 +237,3 @@ impl<T> LdrTexture<T> {
         }
     }
 }
-
-
