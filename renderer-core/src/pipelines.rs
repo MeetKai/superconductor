@@ -171,7 +171,7 @@ impl Pipelines {
         let particle_vertex_buffers = &[wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<crate::instance::ParticleInstance>() as u64,
             step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32, 2 => Float32x3, 3 => Float32],
+            attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Float32x3, 3 => Float32x2, 4 => Float32x2, 5 => Float32x3, 6 => Uint32],
         }];
 
         let prefix = if options.multiview.is_none() {

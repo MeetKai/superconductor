@@ -11,7 +11,7 @@ use spirv_std::{
     spirv, Image, Sampler,
 };
 
-type SampledImage = Image!(2D, type=f32, sampled);
+type Image2D = Image!(2D, type=f32, sampled);
 type Image3D = Image!(3D, type=f32, sampled);
 
 mod single_view;
@@ -128,12 +128,12 @@ pub fn animated_vertex(
 
 struct TextureSampler<'a> {
     sampler: Sampler,
-    texture: &'a SampledImage,
+    texture: &'a Image2D,
     uv: Vec2,
 }
 
 impl<'a> TextureSampler<'a> {
-    fn new(texture: &'a SampledImage, sampler: Sampler, uv: Vec2) -> Self {
+    fn new(texture: &'a Image2D, sampler: Sampler, uv: Vec2) -> Self {
         Self {
             sampler,
             texture,
@@ -209,12 +209,12 @@ fn sample_spherical_harmonics(
 fn sample_lightmap_sphereical_harmonics(
     lightmap_uv: Vec2,
     sampler: Sampler,
-    l_0: &SampledImage,
-    l_1_x: &SampledImage,
-    l_1_y: &SampledImage,
-    l_1_z: &SampledImage,
+    l_0: &Image2D,
+    l_1_x: &Image2D,
+    l_1_y: &Image2D,
+    l_1_z: &Image2D,
 ) -> [Vec3; 4] {
-    let sample_texture = |texture: &SampledImage| {
+    let sample_texture = |texture: &Image2D| {
         let sample: Vec4 = texture.sample_by_lod(sampler, lightmap_uv, 0.0);
         sample.truncate()
     };
@@ -241,14 +241,14 @@ pub fn fragment(
     #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
     #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
     #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 7)] lightmap: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 10)] lightmap_z: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 7)] lightmap: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 10)] lightmap_z: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &Image2D,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
     #[spirv(descriptor_set = 1, binding = 5)] texture_sampler: &Sampler,
     #[spirv(view_index, flat)] view_index: i32,
@@ -326,14 +326,14 @@ pub fn fragment_alpha_clipped(
     #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
     #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
     #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 7)] lightmap: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 10)] lightmap_z: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 7)] lightmap: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 10)] lightmap_z: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &Image2D,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
     #[spirv(descriptor_set = 1, binding = 5)] texture_sampler: &Sampler,
     #[spirv(view_index, flat)] view_index: i32,
@@ -418,14 +418,14 @@ pub fn fragment_alpha_blended(
     #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
     #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
     #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 7)] lightmap: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &SampledImage,
-    #[spirv(descriptor_set = 0, binding = 10)] lightmap_z: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &SampledImage,
-    #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 7)] lightmap: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 10)] lightmap_z: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 0)] albedo_texture: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 1)] normal_texture: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 2)] metallic_roughness_texture: &Image2D,
+    #[spirv(descriptor_set = 1, binding = 3)] emissive_texture: &Image2D,
     #[spirv(descriptor_set = 1, binding = 4, uniform)] material_settings: &MaterialSettings,
     #[spirv(descriptor_set = 1, binding = 5)] texture_sampler: &Sampler,
     #[spirv(view_index, flat)] view_index: i32,
@@ -580,7 +580,7 @@ pub fn fullscreen_tri(
 pub fn blit(
     mut uv: Vec2,
     #[spirv(descriptor_set = 0, binding = 0)] sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 1)] texture: &SampledImage,
+    #[spirv(descriptor_set = 0, binding = 1)] texture: &Image2D,
     output: &mut Vec4,
 ) {
     uv.y = 1.0 - uv.y;
@@ -589,10 +589,6 @@ pub fn blit(
 
 fn saturate(value: Vec3) -> Vec3 {
     value.max(Vec3::ZERO).min(Vec3::ONE)
-}
-
-fn saturate_scalar(value: f32) -> f32 {
-    value.max(0.0).min(1.0)
 }
 
 // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
@@ -799,9 +795,12 @@ fn spherical_harmonics_specular_approximation(
 #[spirv(vertex)]
 pub fn particle_vertex(
     center: Vec3,
-    scale: f32,
+    scale: Vec2,
     colour: Vec3,
-    time: f32,
+    uv_offset: Vec2,
+    uv_scale: Vec2,
+    emissive_colour: Vec3,
+    use_emissive_texture: u32,
     #[spirv(vertex_index)] vertex_index: i32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(position)] builtin_pos: &mut Vec4,
@@ -809,8 +808,9 @@ pub fn particle_vertex(
     out_position: &mut Vec3,
     out_uv: &mut Vec2,
     out_normal: &mut Vec3,
-    out_time: &mut f32,
     out_colour: &mut Vec3,
+    out_emissive_colour: &mut Vec3,
+    out_use_emissive_texture: &mut u32,
 ) {
     /*
     let vertex_positions = [
@@ -829,15 +829,16 @@ pub fn particle_vertex(
 
     let view_center = (uniforms.view(view_index) * center.extend(1.0)).truncate();
 
-    let vertex_position = view_center + Vec3::new(scale * x, scale * y, 0.0);
+    let vertex_position = view_center + Vec3::new(scale.x * x, scale.y * y, 0.0);
 
     *builtin_pos = uniforms.projection(view_index) * vertex_position.extend(1.0);
-    *out_uv = Vec2::new(x + 0.5, 0.5 - y);
+    *out_uv = uv_offset + Vec2::new(x + 0.5, 0.5 - y) * uv_scale;
     *out_position =
         (uniforms.view_inverse_matrix(view_index) * vertex_position.extend(1.0)).truncate();
     *out_normal = (uniforms.eye_position(view_index) - center).normalize();
-    *out_time = time;
     *out_colour = colour;
+    *out_emissive_colour = emissive_colour;
+    *out_use_emissive_texture = use_emissive_texture;
 
     if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
@@ -849,20 +850,24 @@ pub fn particle_fragment(
     position: Vec3,
     uv: Vec2,
     normal: Vec3,
-    time: f32,
     colour: Vec3,
+    emissive_colour: Vec3,
+    #[spirv(flat)] use_emissive_texture: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
     #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
     #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
     #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 11)] smoke_scattering: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 12)] smoke_alpha: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 11)] smoke_a: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 12)] smoke_b: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 13)] smoke_emission: &Image2D,
     output: &mut Vec4,
 ) {
     // Smoke lighting technique heavily inspired by
     // https://realtimevfx.com/t/smoke-lighting-and-texture-re-usability-in-skull-bones/5339
+    // and
+    // https://blog.unity.com/engine-platform/realistic-smoke-with-6-way-lighting-in-vfx-graph
 
     let spherical_harmonics = sample_spherical_harmonics(
         uniforms,
@@ -874,16 +879,18 @@ pub fn particle_fragment(
         sh_l_1_z,
     );
 
-    let scattering: Vec4 = smoke_scattering.sample_by_lod(*clamp_sampler, uv.extend(time), 0.0);
-    let alpha: Vec4 = smoke_alpha.sample_by_lod(*clamp_sampler, uv.extend(time), 0.0);
+    let smoke_a: Vec4 = smoke_a.sample(*clamp_sampler, uv);
+    let smoke_b: Vec4 = smoke_b.sample(*clamp_sampler, uv);
+    let smoke_emission: Vec4 = smoke_emission.sample(*clamp_sampler, uv);
 
-    let front_scattering = 0.25 * (scattering.x + scattering.y + scattering.z + scattering.w);
-    let front_scattering = front_scattering.powf(0.625);
-    let back_scattering = 1.0 - front_scattering;
-    // todo: I don't understand this 1.0 - normal.x term at all. Is it still relevent here?
-    let back_scattering = saturate_scalar(0.25 * (
-        1.0 - normal.x
-    ) + 0.5 * (back_scattering * back_scattering * back_scattering * back_scattering));
+    let left = smoke_a.x;
+    let bottom = smoke_a.y;
+    let front = smoke_a.z;
+    let emissive = smoke_a.w;
+    let right = smoke_b.x;
+    let top = smoke_b.y;
+    let back = smoke_b.z;
+    let alpha = smoke_b.w;
 
     let (red, green, blue) =
         shared_structs::spherical_harmonics_channel_vectors(spherical_harmonics);
@@ -898,21 +905,21 @@ pub fn particle_fragment(
     let average_light_direction_tangent_space = world_to_tangent * average_light_direction;
 
     let h_map = if average_light_direction_tangent_space.x > 0.0 {
-        scattering.z
+        left
     } else {
-        scattering.w
+        right
     };
 
     let v_map = if average_light_direction_tangent_space.y > 0.0 {
-        scattering.x
+        top
     } else {
-        scattering.y
+        bottom
     };
 
     let z_map = if average_light_direction_tangent_space.z > 0.0 {
-        front_scattering
+        front
     } else {
-        back_scattering
+        back
     };
 
     let light_map = h_map
@@ -921,10 +928,18 @@ pub fn particle_fragment(
         + v_map * average_light_direction_tangent_space.y * average_light_direction_tangent_space.y
         + z_map * average_light_direction_tangent_space.z * average_light_direction_tangent_space.z;
 
+    let ambient_factor = 0.2;
+
     let directional_lighting = spherical_harmonics[0] * rgb_lengths;
-    let ambient_lighting = spherical_harmonics[0] * 0.2 * (1.0 - rgb_lengths);
+    let ambient_lighting = spherical_harmonics[0] * ambient_factor * (1.0 - rgb_lengths);
 
-    let combined_output = (directional_lighting * light_map + ambient_lighting) * colour;
+    let emission = if use_emissive_texture != 0 {
+        smoke_emission.truncate()
+    } else {
+        emissive * emissive_colour
+    };
 
-    *output = potentially_tonemap(combined_output, uniforms).extend(alpha.x);
+    let combined_output = (directional_lighting * light_map + ambient_lighting) * colour + emission;
+
+    *output = potentially_tonemap(combined_output, uniforms).extend(alpha);
 }

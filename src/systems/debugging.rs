@@ -1,7 +1,7 @@
 use crate::components::{AnimatedModel, AnimationJoints, Instance, InstanceOf, Model};
 use crate::resources::{LineBuffer, ParticleBuffer};
-use bevy_ecs::prelude::{Query, ResMut, Local};
-use renderer_core::glam::Vec3;
+use bevy_ecs::prelude::{Local, Query, ResMut};
+use renderer_core::glam::{Vec2, Vec3};
 use renderer_core::instance::ParticleInstance;
 
 #[allow(dead_code)]
@@ -83,19 +83,33 @@ const DEBUG_COLOURS: [Vec3; 16] = [
     Vec3::new(1.0, 1.0, 1.0),         // white
 ];
 
+pub(crate) fn push_test_particle(
+    mut particle_buffer: ResMut<ParticleBuffer>,
+    mut time: Local<f32>,
+) {
+    let img_width = 8;
+    let img_height = 8;
 
-pub(crate) fn push_test_particle(mut particle_buffer: ResMut<ParticleBuffer>, mut time: Local<f32>) {
-    for x in 0 .. 10 {
-        for y in 0 .. 10 {
+    for x in 0..10 {
+        for y in 0..10 {
+            let time = (*time + ((y ^ x) & 1) as f32 * 0.5) % 1.0;
+            let index = (time * (img_width * img_height) as f32) as u32;
+            let uv_x = (index % img_width) as f32 / (img_width as f32);
+            let uv_y = (index / img_width) as f32 / (img_height as f32);
 
-    particle_buffer.staging.push(ParticleInstance {
-        position: Vec3::new(2.5 - x as f32 * 0.5, 0.5, 2.5 - y as f32 * 0.5),
-        scale: 1.0 - x as f32 * 0.05 + y as f32 * 0.05,
-        time: (*time + ((y ^ x) & 1) as f32 * 0.5) % 1.0,
-        colour: DEBUG_COLOURS[(x + y * 10) as usize % DEBUG_COLOURS.len()]
-    });
-}
+            let scale = 1.0 - x as f32 * 0.05 + y as f32 * 0.05;
+
+            particle_buffer.staging.push(ParticleInstance {
+                position: Vec3::new(2.5 - x as f32 * 0.5, 1.0, 2.5 - y as f32 * 0.5),
+                scale: Vec2::new(scale, scale),
+                emissive_colour: DEBUG_COLOURS[(x + y * 10) as usize % DEBUG_COLOURS.len()],
+                uv_offset: Vec2::new(uv_x, uv_y),
+                uv_scale: Vec2::new(1.0 / img_width as f32, 1.0 / img_height as f32),
+                colour: Vec3::splat(x as f32 / 10.0 * 0.5),
+                use_emissive_texture: y % 2,
+            });
+        }
     }
 
-    *time += 1.0 / 200.0;
+    *time += 1.0 / 100.0;
 }

@@ -2724,6 +2724,7 @@ dependencies = [
  "futures",
  "js-sys",
  "log",
+ "ordered-float",
  "renderer-core",
  "surf",
  "url",

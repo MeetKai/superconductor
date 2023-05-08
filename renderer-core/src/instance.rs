@@ -1,4 +1,4 @@
-use glam::Vec3;
+use glam::{Vec2, Vec3};
 
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(C)]
@@ -21,9 +21,12 @@ pub struct GpuInstance {
 #[repr(C)]
 pub struct ParticleInstance {
     pub position: Vec3,
-    pub scale: f32,
+    pub scale: Vec2,
     pub colour: Vec3,
-    pub time: f32,
+    pub uv_offset: Vec2,
+    pub uv_scale: Vec2,
+    pub emissive_colour: Vec3,
+    pub use_emissive_texture: u32,
 }
 
 pub type Instance = gltf_helpers::Similarity;
