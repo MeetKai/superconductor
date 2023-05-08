@@ -92,24 +92,66 @@ pub(crate) fn push_test_particle(
 
     for x in 0..10 {
         for y in 0..10 {
-            let time = (*time + ((y ^ x) & 1) as f32 * 0.5) % 1.0;
+            let time = (*time) % 1.0;
+            //let time = (*time + ((y ^ x) & 1) as f32 * 0.5) % 1.0;
             let index = (time * (img_width * img_height) as f32) as u32;
             let uv_x = (index % img_width) as f32 / (img_width as f32);
             let uv_y = (index / img_width) as f32 / (img_height as f32);
 
             let scale = 1.0 - x as f32 * 0.05 + y as f32 * 0.05;
 
+            let uses_lut = y % 2 == 0;
+
+            let lut_emissive_multiplier = if x >= 9 {
+                Vec3::ZERO
+            } else if x >= 5 {
+                Vec3::Z
+            } else {
+                Vec3::ONE
+            };
+
             particle_buffer.staging.push(ParticleInstance {
                 position: Vec3::new(2.5 - x as f32 * 0.5, 1.0, 2.5 - y as f32 * 0.5),
                 scale: Vec2::new(scale, scale),
-                emissive_colour: DEBUG_COLOURS[(x + y * 10) as usize % DEBUG_COLOURS.len()],
+                emissive_colour: if uses_lut {
+                    lut_emissive_multiplier
+                } else {
+                    DEBUG_COLOURS[(x + y * 10) as usize % DEBUG_COLOURS.len()] / (y as f32 / 10.0)
+                },
                 uv_offset: Vec2::new(uv_x, uv_y),
                 uv_scale: Vec2::new(1.0 / img_width as f32, 1.0 / img_height as f32),
                 colour: Vec3::splat(x as f32 / 10.0 * 0.5),
-                use_emissive_texture: y % 2,
+                use_emissive_lut: uses_lut as u32,
             });
         }
     }
+
+    /*{
+        let time = (*time) % 1.0;
+        let index = (time * (img_width * img_height) as f32) as u32;
+        let uv_x = (index % img_width) as f32 / (img_width as f32);
+        let uv_y = (index / img_width) as f32 / (img_height as f32);
+
+        particle_buffer.staging.push(ParticleInstance {
+            position: Vec3::new(-0.5, 1.0, 0.0),
+            scale: Vec2::new(1.0, 1.0),
+            emissive_colour: DEBUG_COLOURS[0],
+            uv_offset: Vec2::new(uv_x, uv_y),
+            uv_scale: Vec2::new(1.0 / img_width as f32, 1.0 / img_height as f32),
+            colour: Vec3::splat(0.0),
+            use_emissive_lut: 1,
+        });
+
+        particle_buffer.staging.push(ParticleInstance {
+            position: Vec3::new(0.5, 1.0, 0.0),
+            scale: Vec2::new(1.0, 1.0),
+            emissive_colour: DEBUG_COLOURS[0],
+            uv_offset: Vec2::new(uv_x, uv_y),
+            uv_scale: Vec2::new(1.0 / img_width as f32, 1.0 / img_height as f32),
+            colour: Vec3::splat(0.0),
+            use_emissive_lut: 0,
+        });
+    }*/
 
     *time += 1.0 / 100.0;
 }

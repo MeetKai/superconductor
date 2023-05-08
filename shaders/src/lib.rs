@@ -800,7 +800,7 @@ pub fn particle_vertex(
     uv_offset: Vec2,
     uv_scale: Vec2,
     emissive_colour: Vec3,
-    use_emissive_texture: u32,
+    use_emissive_lut: u32,
     #[spirv(vertex_index)] vertex_index: i32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(position)] builtin_pos: &mut Vec4,
@@ -810,7 +810,7 @@ pub fn particle_vertex(
     out_normal: &mut Vec3,
     out_colour: &mut Vec3,
     out_emissive_colour: &mut Vec3,
-    out_use_emissive_texture: &mut u32,
+    out_use_emissive_lut: &mut u32,
 ) {
     /*
     let vertex_positions = [
@@ -838,7 +838,7 @@ pub fn particle_vertex(
     *out_normal = (uniforms.eye_position(view_index) - center).normalize();
     *out_colour = colour;
     *out_emissive_colour = emissive_colour;
-    *out_use_emissive_texture = use_emissive_texture;
+    *out_use_emissive_lut = use_emissive_lut;
 
     if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
@@ -852,7 +852,7 @@ pub fn particle_fragment(
     normal: Vec3,
     colour: Vec3,
     emissive_colour: Vec3,
-    #[spirv(flat)] use_emissive_texture: u32,
+    #[spirv(flat)] use_emissive_lut: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
@@ -861,7 +861,7 @@ pub fn particle_fragment(
     #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
     #[spirv(descriptor_set = 0, binding = 11)] smoke_a: &Image2D,
     #[spirv(descriptor_set = 0, binding = 12)] smoke_b: &Image2D,
-    #[spirv(descriptor_set = 0, binding = 13)] smoke_emission: &Image2D,
+    #[spirv(descriptor_set = 0, binding = 13)] smoke_lut: &Image2D,
     output: &mut Vec4,
 ) {
     // Smoke lighting technique heavily inspired by
@@ -881,7 +881,6 @@ pub fn particle_fragment(
 
     let smoke_a: Vec4 = smoke_a.sample(*clamp_sampler, uv);
     let smoke_b: Vec4 = smoke_b.sample(*clamp_sampler, uv);
-    let smoke_emission: Vec4 = smoke_emission.sample(*clamp_sampler, uv);
 
     let left = smoke_a.x;
     let bottom = smoke_a.y;
@@ -891,6 +890,8 @@ pub fn particle_fragment(
     let top = smoke_b.y;
     let back = smoke_b.z;
     let alpha = smoke_b.w;
+
+    let smoke_lut: Vec4 = smoke_lut.sample_by_lod(*clamp_sampler, Vec2::new(emissive, 0.5), 0.0);
 
     let (red, green, blue) =
         shared_structs::spherical_harmonics_channel_vectors(spherical_harmonics);
@@ -933,11 +934,11 @@ pub fn particle_fragment(
     let directional_lighting = spherical_harmonics[0] * rgb_lengths;
     let ambient_lighting = spherical_harmonics[0] * ambient_factor * (1.0 - rgb_lengths);
 
-    let emission = if use_emissive_texture != 0 {
-        smoke_emission.truncate()
+    let emission = if use_emissive_lut != 0 {
+        smoke_lut.truncate()
     } else {
-        emissive * emissive_colour
-    };
+        Vec3::splat(emissive)
+    } * emissive_colour;
 
     let combined_output = (directional_lighting * light_map + ambient_lighting) * colour + emission;
 

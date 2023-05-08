@@ -396,7 +396,9 @@ pub(crate) fn upload_particles(
     let ParticleBuffer { staging, buffer } = &mut *particle_buffer;
 
     staging.sort_unstable_by_key(|p| {
-        std::cmp::Reverse(ordered_float::OrderedFloat(p.position.distance_squared(camera.position)))
+        std::cmp::Reverse(ordered_float::OrderedFloat(
+            p.position.distance_squared(camera.position),
+        ))
     });
 
     buffer.push(staging, &device.0, &queue.0, &mut command_encoder);
@@ -489,7 +491,7 @@ pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
             create_texture_with_brightness("lightmap l1z", 128, wgpu::TextureDimension::D2),
             create_texture_with_brightness("smoke a", 255, wgpu::TextureDimension::D2),
             create_texture_with_brightness("smoke b", 255, wgpu::TextureDimension::D2),
-            create_texture_with_brightness("smoke emissive", 0, wgpu::TextureDimension::D2),
+            create_texture_with_brightness("smoke lut", 0, wgpu::TextureDimension::D2),
         ],
     ));
 
@@ -605,22 +607,27 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
             ),
         );
 
-        let scattering_url =
-            url::Url::parse("http://localhost:8000/assets/smoke/burst/TX_Pyro_AerialBurst_N.tga.ktx2").unwrap();
-        let alpha_url = url::Url::parse("http://localhost:8000/assets/smoke/burst/TX_Pyro_AerialBurst_P.tga.ktx2").unwrap();
-
-        let smoke_emissive = url::Url::parse("http://localhost:8000/assets/smoke/burst/TX_Pyro_AerialBurst_E.tga.ktx2").unwrap();
+        let smoke_a_url = url::Url::parse(
+            "http://localhost:8000/assets/smoke/burst/TX_Pyro_AerialBurst_N.tga.ktx2",
+        )
+        .unwrap();
+        let smoke_b_url = url::Url::parse(
+            "http://localhost:8000/assets/smoke/burst/TX_Pyro_AerialBurst_P.tga.ktx2",
+        )
+        .unwrap();
+        let smoke_emission_lut_url =
+            url::Url::parse("http://localhost:8000/assets/smoke/lut.ktx2").unwrap();
 
         let smoke_future = futures::future::join3(
-            load_ktx2_async(&context, &scattering_url, false, |_| ()),
-            load_ktx2_async(&context, &alpha_url, false, |_| ()),
-            load_ktx2_async(&context, &smoke_emissive, false, |_| ()),
+            load_ktx2_async(&context, &smoke_a_url, false, |_| ()),
+            load_ktx2_async(&context, &smoke_b_url, false, |_| ()),
+            load_ktx2_async(&context, &smoke_emission_lut_url, false, |_| ()),
         );
 
         let (
             (sh0, sh1_x, sh1_y, sh1_z),
             (lightmap_sh0, lightmap_sh1_x, lightmap_sh1_y, lightmap_sh1_z),
-            (smoke_scattering, smoke_alpha,smoke_emissive),
+            (smoke_a, smoke_b, smoke_emission_lut),
         ) = futures::future::join3(lightvol_future, lightmap_future, smoke_future).await;
 
         let (sh0, sh1_x, sh1_y, sh1_z) = (sh0?, sh1_x?, sh1_y?, sh1_z?);
@@ -631,7 +638,7 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
             lightmap_sh1_z?,
         );
 
-        let (smoke_scattering, smoke_alpha, smoke_emissive) = (smoke_scattering?, smoke_alpha?, smoke_emissive?);
+        let (smoke_a, smoke_b, smoke_emission_lut) = (smoke_a?, smoke_b?, smoke_emission_lut?);
 
         use renderer_core::mutable_bind_group::Entry::Texture;
 
@@ -647,9 +654,9 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
                 entries[8] = Texture(lightmap_sh1_x);
                 entries[9] = Texture(lightmap_sh1_y);
                 entries[10] = Texture(lightmap_sh1_z);
-                entries[11] = Texture(smoke_scattering);
-                entries[12] = Texture(smoke_alpha);
-                entries[13] = Texture(smoke_emissive);
+                entries[11] = Texture(smoke_a);
+                entries[12] = Texture(smoke_b);
+                entries[13] = Texture(smoke_emission_lut);
             },
         );
 
