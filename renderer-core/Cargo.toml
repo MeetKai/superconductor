@@ -17,7 +17,7 @@ shared-structs = { path = "../shared-structs" }
 bytemuck = { version = "1.13.1", features = ["derive"] }
 ktx2 = { git = "https://github.com/BVE-Reborn/ktx2", rev = "0e5b0febb09546c91bc845a5e7b5d04610d70044" }
 zstd = { version = "0.12.3", default-features = false, features = ["wasm"] }
-anyhow = "1.0.70"
+anyhow = "1.0.71"
 url = "2.3.1"
 wasm-bindgen-futures = "0.4.34"
 gltf-helpers = { path = "../gltf-helpers" }

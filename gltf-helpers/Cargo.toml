@@ -8,5 +8,5 @@ license = "MIT"
 bytemuck = { version = "1.13.1", features = ["derive"] }
 glam = { version = "0.22", features = ["bytemuck"] }
 log = "0.4.17"
-ordered-float = "3.6"
+ordered-float = "3.7"
 goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "4411edc0aa9157f68bc9f80fdb499e861f225354" }

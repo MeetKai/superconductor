@@ -14,9 +14,9 @@ wasm-bindgen-futures = "0.4.34"
 js-sys = "0.3.61"
 futures = "0.3.28"
 wgpu = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex" }
-anyhow = "1.0.70"
+anyhow = "1.0.71"
 url = "2.3.1"
-winit = "0.28.3"
+winit = "0.28.5"
 arrayvec = "0.7.2"
 surf = { version = "2.3.2", default-features = false }
 
@@ -67,7 +67,8 @@ opt-level = 3
 opt-level = 3
 
 [patch.'https://github.com/gfx-rs/naga']
-naga = {git = "https://github.com/expenses/naga", branch = "wgsl-out-interpolate-flat"}
+# This has been upstreamed but you're forced to change sources with patches :/
+naga = { git = "https://github.com/expenses/naga", rev = "da3f43394f3afd12b2776c3e29f69abaca7ca582" }
 
 [patch.'https://github.com/BVE-Reborn/ktx2']
 ktx2 = { git = "https://github.com/expenses/ktx2", branch = "astc-sfloat-formats" }
