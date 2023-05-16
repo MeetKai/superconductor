@@ -6,7 +6,7 @@ license = "MIT"
 
 [dependencies]
 raw-window-handle = "0.5.2"
-wasm-bindgen = { version = "0.2.84", features = ["serde-serialize"] }
+wasm-bindgen = { version = "0.2.86", features = ["serde-serialize"] }
 glow = "0.12.1"
 wgpu = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", features = ["spirv"] }
 wgpu-hal = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", optional = true }
@@ -19,7 +19,7 @@ ktx2 = { git = "https://github.com/BVE-Reborn/ktx2", rev = "0e5b0febb09546c91bc8
 zstd = { version = "0.12.3", default-features = false, features = ["wasm"] }
 anyhow = "1.0.71"
 url = "2.3.1"
-wasm-bindgen-futures = "0.4.34"
+wasm-bindgen-futures = "0.4.36"
 gltf-helpers = { path = "../gltf-helpers" }
 base64 = "0.21.0"
 range-alloc = { git = "https://github.com/expenses/gfx", rev = "6afbeb6d9733e295404f4fe0ac936591e277a26e" }
@@ -31,10 +31,10 @@ async-std = "1.12.0"
 futures = "0.3.28"
 goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "4411edc0aa9157f68bc9f80fdb499e861f225354" }
 meshopt-decoder = { git = "https://github.com/expenses/meshopt-decoder", rev = "1d7eb93c61d9acc2583a50cb3ec7032bbffec61e" }
-js-sys = "0.3.61"
+js-sys = "0.3.63"
 
 [dependencies.web-sys]
-version = "=0.3.61"
+version = "=0.3.63"
 features = [
     "XrSession",
     "XrFrame",
