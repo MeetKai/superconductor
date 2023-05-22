@@ -558,13 +558,19 @@ impl renderer_core::assets::HttpClient for SimpleHttpClient {
 
         let url = url.clone();
 
-        let mut request_builder = self.0.get(url.clone());
-
-        if let Some(byte_range) = byte_range {
-            request_builder = request_builder.header("Range", byte_range_string(byte_range));
-        }
+        let client = self.0.clone();
 
         Box::pin(async move {
+            let mut request_builder = client
+                .get(url.clone())
+                .map_err(|err| anyhow::anyhow!("{}", err))?;
+
+            if let Some(byte_range) = byte_range {
+                request_builder = request_builder
+                    .header("Range", byte_range_string(byte_range))
+                    .map_err(|err| anyhow::anyhow!("{}", err))?;
+            }
+
             log::debug!("Requesting {}", url);
 
             let bytes = request_builder

@@ -1,5 +1,5 @@
 use crate::{DepthFirstNodes, Extensions, Similarity};
-use glam::{Mat4, Quat, Vec3, Vec4};
+use glam::{Mat4, Quat, Vec3};
 use goth_gltf::{Interpolation, TargetPath};
 use std::borrow::Cow;
 use std::fmt;
@@ -13,8 +13,8 @@ pub fn read_animations<'a, F1, F3, F4>(
 ) -> Vec<Animation>
 where
     F1: Fn(&goth_gltf::Accessor) -> Cow<'a, [f32]>,
-    F3: Fn(&goth_gltf::Accessor) -> Cow<'a, [Vec3]>,
-    F4: Fn(&goth_gltf::Accessor) -> Cow<'a, [Vec4]>,
+    F3: Fn(&goth_gltf::Accessor) -> Cow<'a, [[f32; 3]]>,
+    F4: Fn(&goth_gltf::Accessor) -> Cow<'a, [[f32; 4]]>,
 {
     gltf.animations
         .iter()
@@ -38,7 +38,11 @@ where
                             interpolation: sampler.interpolation,
                             inputs,
                             node_index: channel.target.node.unwrap(),
-                            outputs: read_f32x3(output_accessor).to_vec(),
+                            outputs: read_f32x3(output_accessor)
+                                .iter()
+                                .copied()
+                                .map(Vec3::from)
+                                .collect(),
                         });
                     }
                     TargetPath::Rotation => {
@@ -50,7 +54,7 @@ where
                                 read_f32x4(output_accessor)
                                     .iter()
                                     .copied()
-                                    .map(Quat::from_vec4)
+                                    .map(Quat::from_array)
                                     .collect()
                             },
                         });

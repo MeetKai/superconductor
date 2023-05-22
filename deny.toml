@@ -203,8 +203,8 @@ unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # List of URLs for allowed Git repositories
 allow-git = [
-    "https://github.com/not-fl3/nanoserde",
     "https://github.com/gfx-rs/d3d12-rs",
+    "https://github.com/http-rs/http-types",
     "https://github.com/expenses/gfx",
     "https://github.com/expenses/meshopt-decoder",
     "https://github.com/expenses/goth-gltf",
@@ -214,6 +214,8 @@ allow-git = [
     "https://github.com/expenses/naga",
     "https://github.com/expenses/glow",
     "https://github.com/expenses/ktx2",
+    "https://github.com/expenses/surf-patched",
+    "https://github.com/expenses/http-client-patched"
 ]
 
 [sources.allow-org]

@@ -16,10 +16,11 @@ use std::ops::Range;
 use std::sync::Arc;
 use texture_loading::MaterialBindGroup;
 
-mod accessors;
 mod texture_loading;
 
-use accessors::{read_buffer_with_accessor, read_f32, read_f32x3, read_f32x4, PrimitiveReader};
+use goth_gltf::primitive_reader::{
+    read_buffer_with_accessor, read_f32, read_f32x3, read_f32x4, PrimitiveReader,
+};
 use texture_loading::start_loading_all_material_textures;
 
 #[derive(Clone)]
@@ -517,13 +518,15 @@ impl AnimatedModel {
                     lods: vec![StagingPrimitiveLod {
                         buffers: AnimatedStagingBuffers {
                             joint_indices: match reader.read_joints()? {
-                                Some(joints) => joints.to_vec(),
+                                Some(joints) => joints.iter().copied().map(UVec4::from).collect(),
                                 None => std::iter::repeat(UVec4::splat(node_index as u32))
                                     .take(buffers.positions.len())
                                     .collect(),
                             },
                             joint_weights: match reader.read_weights()? {
-                                Some(joint_weights) => joint_weights.to_vec(),
+                                Some(joint_weights) => {
+                                    joint_weights.iter().copied().map(Vec4::from).collect()
+                                }
                                 None => std::iter::repeat(Vec4::X)
                                     .take(buffers.positions.len())
                                     .collect(),
@@ -721,11 +724,14 @@ struct StagingBuffers {
 }
 
 impl StagingBuffers {
-    fn new(reader: &PrimitiveReader) -> anyhow::Result<Self> {
+    fn new(reader: &PrimitiveReader<Extensions>) -> anyhow::Result<Self> {
         let positions: Vec<Vec3> = reader
             .read_positions()?
             .ok_or_else(|| anyhow::anyhow!("Primitive doesn't specifiy vertex positions."))?
-            .to_vec();
+            .iter()
+            .copied()
+            .map(Vec3::from)
+            .collect();
 
         let lightmap_uvs = reader.read_second_uvs()?;
 
@@ -739,20 +745,20 @@ impl StagingBuffers {
                 }
             },
             normals: match reader.read_normals()? {
-                Some(normals) => normals.to_vec(),
+                Some(normals) => normals.iter().copied().map(Vec3::from).collect(),
                 None => std::iter::repeat(Vec3::ZERO)
                     .take(positions.len())
                     .collect(),
             },
             uvs: match reader.read_uvs()? {
-                Some(uvs) => uvs.to_vec(),
+                Some(uvs) => uvs.iter().copied().map(Vec2::from).collect(),
                 None => std::iter::repeat(Vec2::ZERO)
                     .take(positions.len())
                     .collect(),
             },
             is_lightmapped: lightmap_uvs.is_some(),
             lightmap_uvs: match lightmap_uvs {
-                Some(uvs) => uvs.to_vec(),
+                Some(uvs) => uvs.iter().copied().map(Vec2::from).collect(),
                 None => std::iter::repeat(Vec2::ZERO)
                     .take(positions.len())
                     .collect(),

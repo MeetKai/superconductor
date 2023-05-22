@@ -29,12 +29,12 @@ arc-swap = "1.6.0"
 basis-universal = { git = "https://github.com/expenses/basis-universal-rs", rev = "d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610" }
 async-std = "1.12.0"
 futures = "0.3.28"
-goth-gltf = { git = "https://github.com/expenses/goth-gltf", rev = "4411edc0aa9157f68bc9f80fdb499e861f225354" }
+goth-gltf = { git = "https://github.com/expenses/goth-gltf", features = ["primitive_reader"] }
 meshopt-decoder = { git = "https://github.com/expenses/meshopt-decoder", rev = "1d7eb93c61d9acc2583a50cb3ec7032bbffec61e" }
 js-sys = "0.3.63"
 
 [dependencies.web-sys]
-version = "=0.3.63"
+version = "0.3.63"
 features = [
     "XrSession",
     "XrFrame",

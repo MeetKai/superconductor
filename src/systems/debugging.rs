@@ -100,13 +100,9 @@ pub(crate) fn push_test_particle(
 
             let scale = 1.0 - x as f32 * 0.05 + y as f32 * 0.05;
 
-            let uses_lut = true;//y % 2 == 0;
+            let uses_lut = true; //y % 2 == 0;
 
-            let lut_index = if y % 2 == 0 {
-                2.0 / 3.0
-            } else {
-                1.0 / 3.0
-            };
+            let lut_index = if y % 2 == 0 { 2.0 / 3.0 } else { 1.0 / 3.0 };
 
             let lut_emissive_multiplier = if x >= 9 {
                 Vec3::ZERO
@@ -128,7 +124,7 @@ pub(crate) fn push_test_particle(
                 uv_scale: Vec2::new(1.0 / img_width as f32, 1.0 / img_height as f32),
                 colour: Vec3::splat(x as f32 / 10.0 * 0.5),
                 use_emissive_lut: uses_lut as u32,
-                lut_y_index: lut_index
+                lut_y_index: lut_index,
             });
         }
     }
