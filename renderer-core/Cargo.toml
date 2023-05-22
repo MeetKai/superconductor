@@ -21,7 +21,7 @@ anyhow = "1.0.71"
 url = "2.3.1"
 wasm-bindgen-futures = "0.4.36"
 gltf-helpers = { path = "../gltf-helpers" }
-base64 = "0.21.0"
+base64 = "0.21.1"
 range-alloc = { git = "https://github.com/expenses/gfx", rev = "6afbeb6d9733e295404f4fe0ac936591e277a26e" }
 parking_lot = "0.12.1"
 image = { version = "0.24.6", default-features = false, features = ["jpeg", "png"] }

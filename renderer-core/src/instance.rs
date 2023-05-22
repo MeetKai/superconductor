@@ -27,6 +27,7 @@ pub struct ParticleInstance {
     pub uv_scale: Vec2,
     pub emissive_colour: Vec3,
     pub use_emissive_lut: u32,
+    pub lut_y_index: f32,
 }
 
 pub type Instance = gltf_helpers::Similarity;

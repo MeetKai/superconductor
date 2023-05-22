@@ -801,6 +801,7 @@ pub fn particle_vertex(
     uv_scale: Vec2,
     emissive_colour: Vec3,
     use_emissive_lut: u32,
+    lut_y_index: f32,
     #[spirv(vertex_index)] vertex_index: i32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(position)] builtin_pos: &mut Vec4,
@@ -811,6 +812,7 @@ pub fn particle_vertex(
     out_colour: &mut Vec3,
     out_emissive_colour: &mut Vec3,
     out_use_emissive_lut: &mut u32,
+    out_lut_y_index: &mut f32,
 ) {
     /*
     let vertex_positions = [
@@ -839,6 +841,7 @@ pub fn particle_vertex(
     *out_colour = colour;
     *out_emissive_colour = emissive_colour;
     *out_use_emissive_lut = use_emissive_lut;
+    *out_lut_y_index = lut_y_index;
 
     if uniforms.settings.contains(Settings::FLIP_VIEWPORT) {
         builtin_pos.y = -builtin_pos.y;
@@ -853,6 +856,7 @@ pub fn particle_fragment(
     colour: Vec3,
     emissive_colour: Vec3,
     #[spirv(flat)] use_emissive_lut: u32,
+    lut_y_index: f32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
     #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
@@ -891,7 +895,7 @@ pub fn particle_fragment(
     let back = smoke_b.z;
     let alpha = smoke_b.w;
 
-    let smoke_lut: Vec4 = smoke_lut.sample_by_lod(*clamp_sampler, Vec2::new(emissive, 0.5), 0.0);
+    let smoke_lut: Vec4 = smoke_lut.sample_by_lod(*clamp_sampler, Vec2::new(emissive, lut_y_index), 0.0);
 
     let (red, green, blue) =
         shared_structs::spherical_harmonics_channel_vectors(spherical_harmonics);

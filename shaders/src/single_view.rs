@@ -324,6 +324,7 @@ pub fn particle_vertex(
     uv_scale: Vec2,
     emissive_colour: Vec3,
     use_emissive_lut: u32,
+    lut_y_index: f32,
     #[spirv(vertex_index)] vertex_index: i32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(position)] builtin_pos: &mut Vec4,
@@ -333,6 +334,7 @@ pub fn particle_vertex(
     out_colour: &mut Vec3,
     out_emissive_colour: &mut Vec3,
     out_use_emissive_lut: &mut u32,
+    out_lut_y_index: &mut f32,
 ) {
     super::particle_vertex(
         center,
@@ -342,6 +344,7 @@ pub fn particle_vertex(
         uv_scale,
         emissive_colour,
         use_emissive_lut,
+        lut_y_index,
         vertex_index,
         uniforms,
         builtin_pos,
@@ -352,5 +355,6 @@ pub fn particle_vertex(
         out_colour,
         out_emissive_colour,
         out_use_emissive_lut,
+        out_lut_y_index,
     )
 }
