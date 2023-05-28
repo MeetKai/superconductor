@@ -126,7 +126,7 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
                 //.with_system(systems::push_debug_joints_to_lines_buffer)
                 //.with_system(systems::push_debug_bounding_boxes_to_lines_buffer)
                 // for debugging particles
-                .with_system(systems::debugging::push_test_particle)
+                //.with_system(systems::debugging::push_test_particle)
         );
 
         app.add_stage_after(

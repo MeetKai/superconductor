@@ -83,7 +83,7 @@ const DEBUG_COLOURS: [Vec3; 16] = [
     Vec3::new(1.0, 1.0, 1.0),         // white
 ];
 
-pub(crate) fn push_test_particle(
+pub(crate) fn push_test_particles(
     mut particle_buffer: ResMut<ParticleBuffer>,
     mut time: Local<f32>,
 ) {
