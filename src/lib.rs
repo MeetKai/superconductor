@@ -1,5 +1,5 @@
 use bevy_app::{App, Plugin};
-use bevy_ecs::prelude::SystemStage;
+use bevy_ecs::schedule::{IntoSystemConfig, IntoSystemConfigs, SystemSet};
 use std::ops::Range;
 use std::sync::Arc;
 use winit::{
@@ -31,13 +31,13 @@ use resources::{
     PipelineOptions, ProbesArrayInfo, Queue, SurfaceFrameView, TextureSettings, WindowChanges,
 };
 
-#[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(SystemSet, Debug, PartialEq, Eq, Clone, Hash)]
 pub enum StartupStage {
     PipelineCreation,
     BindGroupCreation,
 }
 
-#[derive(bevy_ecs::prelude::StageLabel, Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(SystemSet, Debug, PartialEq, Eq, Clone, Hash)]
 pub enum Stage {
     AssetLoading,
     BufferResetting,
@@ -74,81 +74,95 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
         app.insert_resource(ProbesArrayInfo::new(Vec3::ZERO, Vec3::ONE));
         app.insert_resource(NewLightvolTextures(None));
 
-        app.add_startup_stage(
-            StartupStage::PipelineCreation,
-            SystemStage::parallel().with_system(systems::create_bind_group_layouts_and_pipelines),
-        );
-        app.add_startup_stage_after(
-            StartupStage::PipelineCreation,
-            StartupStage::BindGroupCreation,
-            SystemStage::parallel().with_system(systems::allocate_bind_groups::<T>),
+        app.add_startup_system(
+            systems::create_bind_group_layouts_and_pipelines
+                .in_base_set(bevy_app::StartupSet::Startup),
         );
 
-        app.add_stage(
-            Stage::AssetLoading,
-            SystemStage::parallel()
-                .with_system(systems::start_loading_models::<T>)
-                .with_system(systems::finish_loading_models)
-                .with_system(systems::update_ibl_resources::<T>)
-                .with_system(systems::update_lightvol_textures::<T>)
-                .with_system(systems::add_joints_to_instances),
+        app.add_startup_system(
+            systems::allocate_bind_groups.in_base_set(bevy_app::StartupSet::PostStartup),
         );
 
-        let mut buffer_resetting_stage = SystemStage::parallel()
-            .with_system(systems::clear_instance_buffers)
-            .with_system(systems::clear_joint_buffers)
-            .with_system(systems::sample_animations)
-            .with_system(systems::clear_line_buffer)
-            .with_system(systems::clear_particle_buffer);
+        app.add_systems(
+            (
+                systems::start_loading_models::<T>,
+                systems::finish_loading_models,
+                systems::update_ibl_resources::<T>,
+                systems::update_lightvol_textures::<T>,
+                systems::add_joints_to_instances,
+            )
+                .in_set(Stage::AssetLoading),
+        );
 
-        buffer_resetting_stage = match self.mode {
+        app.add_systems(
+            (
+                systems::clear_instance_buffers,
+                systems::clear_joint_buffers,
+                systems::sample_animations,
+                systems::clear_line_buffer,
+                systems::clear_particle_buffer,
+            )
+                .in_set(Stage::BufferResetting)
+                .after(Stage::AssetLoading),
+        );
+
+        match self.mode {
             Mode::Desktop => {
-                buffer_resetting_stage.with_system(systems::update_desktop_uniform_buffers)
+                app.add_system(
+                    systems::update_desktop_uniform_buffers
+                        .in_set(Stage::BufferResetting)
+                        .after(Stage::AssetLoading),
+                );
             }
             #[cfg(feature = "webgl")]
-            _ => buffer_resetting_stage.with_system(systems::update_webxr_uniform_buffers),
+            _ => {
+                app.add_system(
+                    systems::update_webxr_uniform_buffers
+                        .in_set(Stage::BufferResetting)
+                        .after(Stage::AssetLoading),
+                );
+            }
         };
 
-        app.add_stage_after(
-            Stage::AssetLoading,
-            Stage::BufferResetting,
-            buffer_resetting_stage,
-        );
-
-        #[rustfmt::skip]
-        app.add_stage_after(
-            Stage::BufferResetting,
-            Stage::InstanceBuffering,
-            SystemStage::parallel()
-                .with_system(systems::push_entity_instances)
-                .with_system(systems::push_joints)
+        app.add_systems(
+            (
+                systems::push_entity_instances,
+                systems::push_joints,
                 // For debugging joints
-                //.with_system(systems::push_debug_joints_to_lines_buffer)
-                //.with_system(systems::push_debug_bounding_boxes_to_lines_buffer)
+                //systems::push_debug_joints_to_lines_buffer,
+                //systems::push_debug_bounding_boxes_to_lines_buffer,
                 // for debugging particles
-                //.with_system(systems::debugging::push_test_particle)
+                //systems::debugging::push_test_particles,
+            )
+                .in_set(Stage::InstanceBuffering)
+                .after(Stage::BufferResetting),
         );
 
-        app.add_stage_after(
-            Stage::InstanceBuffering,
-            Stage::BufferUploading,
-            SystemStage::parallel()
-                .with_system(systems::upload_instances)
-                .with_system(systems::upload_joint_buffers)
-                .with_system(systems::progress_animation_times)
-                .with_system(systems::upload_lines)
-                .with_system(systems::upload_particles),
+        app.add_systems(
+            (
+                systems::upload_instances,
+                systems::upload_joint_buffers,
+                systems::progress_animation_times,
+                systems::upload_lines,
+                systems::upload_particles,
+            )
+                .in_set(Stage::BufferUploading)
+                .after(Stage::InstanceBuffering),
         );
 
-        let mut rendering_stage = SystemStage::parallel();
-
-        rendering_stage = match self.mode {
-            Mode::Desktop => rendering_stage.with_system(systems::rendering::render_desktop),
+        match self.mode {
+            Mode::Desktop => app.add_system(
+                systems::rendering::render_desktop
+                    .in_set(Stage::Rendering)
+                    .after(Stage::BufferUploading),
+            ),
             #[cfg(feature = "webgl")]
-            _ => rendering_stage.with_system(systems::rendering::render_webxr),
+            _ => app.add_system(
+                systems::rendering::render_webxr
+                    .in_set(Stage::Rendering)
+                    .after(Stage::BufferUploading),
+            ),
         };
-
-        app.add_stage_after(Stage::BufferUploading, Stage::Rendering, rendering_stage);
     }
 }
 
@@ -422,7 +436,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                 app.insert_non_send_resource(frame);
                 app.insert_non_send_resource(pose);
                 app.insert_resource(resources::FrameTime(time));
-                app.schedule.run_once(&mut app.world);
+                app.update();
             });
         }
         ModeSpecificState::Desktop { window, event_loop } => {
@@ -475,7 +489,7 @@ pub fn run_rendering_loop(mut app: bevy_app::App, initialised_state: Initialised
                             height: config.height,
                         });
 
-                        app.schedule.run_once(&mut app.world);
+                        app.update();
 
                         // Reset event queue just in case nothing is consuming these.
                         app.world

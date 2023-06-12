@@ -407,7 +407,7 @@ pub(crate) fn upload_particles(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn allocate_bind_groups<T: assets::HttpClient>(
+pub(crate) fn allocate_bind_groups(
     device: Res<Device>,
     queue: Res<Queue>,
     bind_group_layouts: Res<BindGroupLayouts>,
@@ -589,19 +589,19 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
             ),
             load_ktx2_async(
                 &context,
-                &new_lightvol_textures.lightmap_sh1_x.choose(features),
+                new_lightvol_textures.lightmap_sh1_x.choose(features),
                 false,
                 |_| (),
             ),
             load_ktx2_async(
                 &context,
-                &new_lightvol_textures.lightmap_sh1_y.choose(features),
+                new_lightvol_textures.lightmap_sh1_y.choose(features),
                 false,
                 |_| (),
             ),
             load_ktx2_async(
                 &context,
-                &new_lightvol_textures.lightmap_sh1_z.choose(features),
+                new_lightvol_textures.lightmap_sh1_z.choose(features),
                 false,
                 |_| (),
             ),
