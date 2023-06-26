@@ -8,21 +8,21 @@ license = "MIT"
 bevy_app = { version = "0.10", default-features = false }
 bevy_ecs = { version = "0.10", default-features = false }
 log = "0.4.19"
-wasm-bindgen = "0.2.86"
+wasm-bindgen = "0.2.87"
 renderer-core = { path = "renderer-core" }
-wasm-bindgen-futures = "0.4.36"
-js-sys = "0.3.63"
+wasm-bindgen-futures = "0.4.37"
+js-sys = "0.3.64"
 futures = "0.3.28"
 wgpu = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex" }
 anyhow = "1.0.71"
 url = "2.4.0"
 winit = "0.28.6"
-arrayvec = "0.7.2"
+arrayvec = "0.7.4"
 surf = { git = "https://github.com/expenses/surf-patched", branch = "update-deps", default-features = false }
 ordered-float = "3.7.0"
 
 [dependencies.web-sys]
-version = "=0.3.63"
+version = "0.3.64"
 features = [
     "HtmlButtonElement",
     "Document",
@@ -69,7 +69,7 @@ opt-level = 3
 
 [patch.'https://github.com/gfx-rs/naga']
 # This has been upstreamed but you're forced to change sources with patches :/
-naga = { git = "https://github.com/expenses/naga", rev = "da3f43394f3afd12b2776c3e29f69abaca7ca582" }
+naga = { git = "https://github.com/expenses/naga" }
 
 [patch.'https://github.com/BVE-Reborn/ktx2']
 ktx2 = { git = "https://github.com/expenses/ktx2", branch = "astc-sfloat-formats" }
