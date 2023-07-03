@@ -29,7 +29,7 @@ arc-swap = "1.6.0"
 basis-universal = { git = "https://github.com/expenses/basis-universal-rs", rev = "d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610" }
 async-std = "1.12.0"
 futures = "0.3.28"
-goth-gltf = { git = "https://github.com/expenses/goth-gltf", features = ["primitive_reader"] }
+goth-gltf = { version = "0.1.1", features = ["primitive_reader"] }
 meshopt-decoder = { git = "https://github.com/expenses/meshopt-decoder", rev = "1d7eb93c61d9acc2583a50cb3ec7032bbffec61e" }
 js-sys = "0.3.64"
 
