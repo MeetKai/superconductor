@@ -13,7 +13,7 @@ renderer-core = { path = "renderer-core" }
 wasm-bindgen-futures = "0.4.37"
 js-sys = "0.3.64"
 futures = "0.3.28"
-wgpu = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex" }
+wgpu = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", features = ["fragile-send-sync-non-atomic-wasm"] }
 anyhow = "1.0.71"
 url = "2.4.0"
 winit = "0.28.6"
