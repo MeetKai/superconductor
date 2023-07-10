@@ -5,8 +5,8 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-bevy_app = { version = "0.10", default-features = false }
-bevy_ecs = { version = "0.10", default-features = false }
+bevy_app = { version = "0.11", default-features = false }
+bevy_ecs = { version = "0.11", default-features = false }
 log = "0.4.19"
 wasm-bindgen = "0.2.87"
 renderer-core = { path = "renderer-core" }

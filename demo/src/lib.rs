@@ -1,6 +1,7 @@
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
+use bevy_app::Update;
 use bevy_ecs::system::Resource;
 use superconductor::{
     bevy_app, bevy_ecs, components, renderer_core,
@@ -35,7 +36,7 @@ pub async fn run() {
 
     let mut app = bevy_app::App::new();
 
-    app.add_plugin(SuperconductorPlugin::new(mode));
+    app.add_plugins(SuperconductorPlugin::new(mode));
 
     superconductor::run_rendering_loop(app, initialised_state);
 }
@@ -101,10 +102,10 @@ impl Plugin for SuperconductorPlugin {
         app.insert_resource(KeyboardState::default());
         app.insert_resource(CameraRig(camera_rig));
 
-        app.add_system(rotate_entities);
-        app.add_system(handle_keyboard_input);
-        app.add_system(update_camera);
-        app.add_system(animate_vrms);
+        app.add_systems(Update, rotate_entities);
+        app.add_systems(Update, handle_keyboard_input);
+        app.add_systems(Update, update_camera);
+        app.add_systems(Update, animate_vrms);
 
         let plugin: superconductor::XrPlugin = superconductor::XrPlugin::new(self.mode);
 

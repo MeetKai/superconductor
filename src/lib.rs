@@ -1,5 +1,5 @@
 use bevy_app::{App, Plugin};
-use bevy_ecs::schedule::{IntoSystemConfig, IntoSystemConfigs, SystemSet};
+use bevy_ecs::schedule::{IntoSystemConfigs, SystemSet};
 use std::ops::Range;
 use std::sync::Arc;
 use winit::{
@@ -74,16 +74,15 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
         app.insert_resource(ProbesArrayInfo::new(Vec3::ZERO, Vec3::ONE));
         app.insert_resource(NewLightvolTextures(None));
 
-        app.add_startup_system(
-            systems::create_bind_group_layouts_and_pipelines
-                .in_base_set(bevy_app::StartupSet::Startup),
+        app.add_systems(
+            bevy_app::Startup,
+            systems::create_bind_group_layouts_and_pipelines,
         );
 
-        app.add_startup_system(
-            systems::allocate_bind_groups.in_base_set(bevy_app::StartupSet::PostStartup),
-        );
+        app.add_systems(bevy_app::PostStartup, systems::allocate_bind_groups);
 
         app.add_systems(
+            bevy_app::Update,
             (
                 systems::start_loading_models::<T>,
                 systems::finish_loading_models,
@@ -95,6 +94,7 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
         );
 
         app.add_systems(
+            bevy_app::Update,
             (
                 systems::clear_instance_buffers,
                 systems::clear_joint_buffers,
@@ -108,7 +108,8 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
 
         match self.mode {
             Mode::Desktop => {
-                app.add_system(
+                app.add_systems(
+                    bevy_app::Update,
                     systems::update_desktop_uniform_buffers
                         .in_set(Stage::BufferResetting)
                         .after(Stage::AssetLoading),
@@ -116,7 +117,8 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
             }
             #[cfg(feature = "webgl")]
             _ => {
-                app.add_system(
+                app.add_systems(
+                    bevy_app::Update,
                     systems::update_webxr_uniform_buffers
                         .in_set(Stage::BufferResetting)
                         .after(Stage::AssetLoading),
@@ -125,6 +127,7 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
         };
 
         app.add_systems(
+            bevy_app::Update,
             (
                 systems::push_entity_instances,
                 systems::push_joints,
@@ -139,6 +142,7 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
         );
 
         app.add_systems(
+            bevy_app::Update,
             (
                 systems::upload_instances,
                 systems::upload_joint_buffers,
@@ -151,13 +155,15 @@ impl<T: assets::HttpClient> Plugin for XrPlugin<T> {
         );
 
         match self.mode {
-            Mode::Desktop => app.add_system(
+            Mode::Desktop => app.add_systems(
+                bevy_app::Update,
                 systems::rendering::render_desktop
                     .in_set(Stage::Rendering)
                     .after(Stage::BufferUploading),
             ),
             #[cfg(feature = "webgl")]
-            _ => app.add_system(
+            _ => app.add_systems(
+                bevy_app::Update,
                 systems::rendering::render_webxr
                     .in_set(Stage::Rendering)
                     .after(Stage::BufferUploading),
