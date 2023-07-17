@@ -212,7 +212,6 @@ allow-git = [
     "https://github.com/expenses/basis-universal-rs",
     "https://github.com/expenses/wgpu",
     "https://github.com/expenses/naga",
-    "https://github.com/expenses/glow",
     "https://github.com/expenses/ktx2",
     "https://github.com/expenses/surf-patched",
     "https://github.com/expenses/http-client-patched"

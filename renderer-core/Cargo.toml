@@ -7,7 +7,7 @@ license = "MIT"
 [dependencies]
 raw-window-handle = "0.5.2"
 wasm-bindgen = { version = "0.2.87", features = ["serde-serialize"] }
-glow = "0.12.2"
+glow = "0.12.3"
 wgpu = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", features = ["spirv"] }
 wgpu-hal = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", optional = true }
 wgpu-core = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", optional = true }
@@ -17,7 +17,7 @@ shared-structs = { path = "../shared-structs" }
 bytemuck = { version = "1.13.1", features = ["derive"] }
 ktx2 = { git = "https://github.com/BVE-Reborn/ktx2", rev = "0e5b0febb09546c91bc845a5e7b5d04610d70044" }
 zstd = { version = "0.12.3", default-features = false, features = ["wasm"] }
-anyhow = "1.0.71"
+anyhow = "1.0.72"
 url = "2.4.0"
 wasm-bindgen-futures = "0.4.37"
 gltf-helpers = { path = "../gltf-helpers" }
