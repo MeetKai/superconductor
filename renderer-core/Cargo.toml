@@ -16,7 +16,7 @@ glam = { version = "0.24", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }
 bytemuck = { version = "1.13.1", features = ["derive"] }
 ktx2 = { git = "https://github.com/BVE-Reborn/ktx2", rev = "0e5b0febb09546c91bc845a5e7b5d04610d70044" }
-zstd = { version = "0.12.3", default-features = false, features = ["wasm"] }
+zstd = { version = "0.12.4", default-features = false, features = ["wasm"] }
 anyhow = "1.0.72"
 url = "2.4.0"
 wasm-bindgen-futures = "0.4.37"
