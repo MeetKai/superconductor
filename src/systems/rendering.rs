@@ -178,6 +178,7 @@ pub(crate) fn render_desktop(
             }),
             stencil_ops: None,
         }),
+        ..Default::default()
     });
 
     render_everything(
@@ -389,6 +390,7 @@ pub(crate) fn render_webxr(
             }),
             stencil_ops: None,
         }),
+        ..Default::default()
     });
 
     render_everything(
@@ -422,7 +424,7 @@ pub(crate) fn render_webxr(
                     store: true,
                 },
             })],
-            depth_stencil_attachment: None,
+            ..Default::default()
         });
 
         render_pass.set_pipeline(&pipelines.tonemap);

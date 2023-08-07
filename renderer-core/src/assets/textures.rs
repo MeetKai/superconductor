@@ -209,7 +209,6 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
 
                     let mut render_pass =
                         command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: None,
                             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                                 view: &output_view,
                                 resolve_target: None,
@@ -218,7 +217,7 @@ pub async fn load_ibl_cubemap<T: HttpClient>(
                                     store: true,
                                 },
                             })],
-                            depth_stencil_attachment: None,
+                            ..Default::default()
                         });
 
                     render_pass.set_pipeline(&pipelines.bc6h_decompression);
@@ -481,7 +480,7 @@ pub fn load_image_crate_image<T>(
                     store: true,
                 },
             })],
-            depth_stencil_attachment: None,
+            ..Default::default()
         });
 
         render_pass.set_pipeline(if srgb {
