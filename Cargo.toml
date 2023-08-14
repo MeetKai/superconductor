@@ -7,7 +7,7 @@ license = "MIT"
 [dependencies]
 bevy_app = { version = "0.11", default-features = false }
 bevy_ecs = { version = "0.11", default-features = false }
-log = "0.4.19"
+log = "0.4.20"
 wasm-bindgen = "0.2.87"
 renderer-core = { path = "renderer-core" }
 wasm-bindgen-futures = "0.4.37"

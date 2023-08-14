@@ -11,7 +11,7 @@ glow = "0.12.3"
 wgpu = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", features = ["spirv"] }
 wgpu-hal = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", optional = true }
 wgpu-core = { git = "https://github.com/expenses/wgpu", branch = "3d-compressed-tex", optional = true }
-log = "0.4.19"
+log = "0.4.20"
 glam = { version = "0.24", features = ["bytemuck"] }
 shared-structs = { path = "../shared-structs" }
 bytemuck = { version = "1.13.1", features = ["derive"] }
@@ -24,7 +24,7 @@ gltf-helpers = { path = "../gltf-helpers" }
 base64 = "0.21.2"
 range-alloc = { git = "https://github.com/expenses/gfx", rev = "6afbeb6d9733e295404f4fe0ac936591e277a26e" }
 parking_lot = "0.12.1"
-image = { version = "0.24.6", default-features = false, features = ["jpeg", "png"] }
+image = { version = "0.24.7", default-features = false, features = ["jpeg", "png"] }
 arc-swap = "1.6.0"
 basis-universal = { git = "https://github.com/expenses/basis-universal-rs", rev = "d7ffc5afb2101ce645ebdf8b8bcefdefbcbd1610" }
 async-std = "1.12.0"
