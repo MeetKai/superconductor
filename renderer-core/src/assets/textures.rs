@@ -760,23 +760,25 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
     // We round down the width and height below, but if they're less than 3 then they're rounded down to 0.
     // The smallest block size is 4x4 so we just round the sizes up to that here.
 
-    let texture_descriptor = move || wgpu::TextureDescriptor {
+    let texture_descriptor = wgpu::TextureDescriptor {
         label: None,
         size: starting_extent,
         mip_level_count: header.level_count - down_scaling_level,
         sample_count: 1,
-        dimension: if header.pixel_depth > 1 {
-            wgpu::TextureDimension::D3
-        } else {
-            wgpu::TextureDimension::D2
-        },
+        dimension: wgpu::TextureDimension::D2,
         format: wgpu_format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     };
 
-    let texture = Arc::new(Texture::new(
-        context.device.create_texture(&texture_descriptor()),
+    let texture = Arc::new(Texture::new_with_view_dimension(
+        context.device.create_texture(&texture_descriptor),
+        if header.pixel_depth > 1 {
+            // wgpu doesn't allow 3d compressed textures.
+            wgpu::TextureViewDimension::D2Array
+        } else {
+            wgpu::TextureViewDimension::D2
+        },
     ));
 
     let mut levels = level_indices.into_iter().enumerate().rev();
@@ -839,7 +841,7 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
             &texture.texture,
             i as u32 - down_scaling_level,
             &bytes_to_upload,
-            &texture_descriptor(),
+            &texture_descriptor,
         );
 
         on_level_load(i as u32 - down_scaling_level)
@@ -910,7 +912,7 @@ pub async fn load_ktx2_async<F: Fn(u32) + Send + 'static, T: HttpClient>(
                     &texture.texture,
                     i as u32 - down_scaling_level,
                     &bytes_to_upload,
-                    &texture_descriptor(),
+                    &texture_descriptor,
                 );
 
                 on_level_load(i as u32 - down_scaling_level)

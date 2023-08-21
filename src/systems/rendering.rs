@@ -80,7 +80,7 @@ pub(crate) fn render_desktop(
     let device = &device.0;
     let queue = &queue.0;
     let pipelines = &pipelines.0;
-    let main_bind_group = main_bind_group.0.load();
+    let main_bind_group = main_bind_group.inner.load();
 
     let vertex_buffers = vertex_buffers.0.buffers.load();
     let animated_vertex_buffers = animated_vertex_buffers.0.buffers.load();
@@ -236,7 +236,7 @@ pub(crate) fn render_webxr(
     let queue = &queue.0;
     let pipelines = &pipelines.0;
     let bind_group_layouts = &bind_group_layouts.0;
-    let main_bind_group = main_bind_group.0.load();
+    let main_bind_group = main_bind_group.inner.load();
 
     let vertex_buffers = vertex_buffers.0.buffers.load();
     let animated_vertex_buffers = animated_vertex_buffers.0.buffers.load();

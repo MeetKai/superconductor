@@ -19,7 +19,7 @@ use renderer_core::{
     shared_structs::{self, Settings},
     spawn, GpuInstance, MutableBindGroup, Texture,
 };
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 use wgpu::util::DeviceExt;
 
 pub(crate) mod debugging;
@@ -436,7 +436,7 @@ pub(crate) fn allocate_bind_groups(
         ..Default::default()
     }));
 
-    let create_texture_with_brightness = |label, brightness, dimension| {
+    let create_texture_with_brightness = |label, brightness, dimension, view_dimension| {
         let desc = &wgpu::TextureDescriptor {
             label: Some(label),
             size: wgpu::Extent3d {
@@ -452,11 +452,10 @@ pub(crate) fn allocate_bind_groups(
             view_formats: &[],
         };
 
-        Entry::Texture(Arc::new(Texture::new(device.create_texture_with_data(
-            &queue.0,
-            desc,
-            &[brightness; 4],
-        ))))
+        Entry::Texture(Arc::new(Texture::new_with_view_dimension(
+            device.create_texture_with_data(&queue.0, desc, &[brightness; 4]),
+            view_dimension,
+        )))
     };
 
     let main_bind_group = Arc::new(MutableBindGroup::new(
@@ -481,22 +480,77 @@ pub(crate) fn allocate_bind_groups(
                     view_formats: &[],
                 },
             )))),
-            create_texture_with_brightness("lightvol l0", 255, wgpu::TextureDimension::D3),
-            create_texture_with_brightness("lightvol l1x", 128, wgpu::TextureDimension::D3),
-            create_texture_with_brightness("lightvol l1y", 128, wgpu::TextureDimension::D3),
-            create_texture_with_brightness("lightvol l1z", 128, wgpu::TextureDimension::D3),
-            create_texture_with_brightness("lightmap l0", 255, wgpu::TextureDimension::D2),
-            create_texture_with_brightness("lightmap l1x", 128, wgpu::TextureDimension::D2),
-            create_texture_with_brightness("lightmap l1y", 128, wgpu::TextureDimension::D2),
-            create_texture_with_brightness("lightmap l1z", 128, wgpu::TextureDimension::D2),
-            create_texture_with_brightness("smoke a", 255, wgpu::TextureDimension::D2),
-            create_texture_with_brightness("smoke b", 255, wgpu::TextureDimension::D2),
-            create_texture_with_brightness("smoke lut", 0, wgpu::TextureDimension::D2),
+            create_texture_with_brightness(
+                "lightvol l0",
+                255,
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2Array,
+            ),
+            create_texture_with_brightness(
+                "lightvol l1x",
+                128,
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2Array,
+            ),
+            create_texture_with_brightness(
+                "lightvol l1y",
+                128,
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2Array,
+            ),
+            create_texture_with_brightness(
+                "lightvol l1z",
+                128,
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2Array,
+            ),
+            create_texture_with_brightness(
+                "lightmap l0",
+                255,
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2,
+            ),
+            create_texture_with_brightness(
+                "lightmap l1x",
+                128,
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2,
+            ),
+            create_texture_with_brightness(
+                "lightmap l1y",
+                128,
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2,
+            ),
+            create_texture_with_brightness(
+                "lightmap l1z",
+                128,
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2,
+            ),
+            create_texture_with_brightness(
+                "smoke a",
+                255,
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2,
+            ),
+            create_texture_with_brightness(
+                "smoke b",
+                255,
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2,
+            ),
+            create_texture_with_brightness(
+                "smoke lut",
+                0,
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2,
+            ),
         ],
     ));
 
     commands.insert_resource(UniformBuffer(uniform_buffer));
-    commands.insert_resource(MainBindGroup(main_bind_group));
+    commands.insert_resource(MainBindGroup::new(main_bind_group));
 
     commands.insert_resource(IndexBuffer(Arc::new(renderer_core::IndexBuffer::new(
         1024, device,
@@ -552,7 +606,8 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
         None => return,
     };
 
-    let main_bind_group = main_bind_group.0.clone();
+    let lightvol_z_layers = main_bind_group.lightvol_z_layers.clone();
+    let main_bind_group = main_bind_group.inner.clone();
 
     let device = &device.0;
     let queue = &queue.0;
@@ -642,6 +697,7 @@ pub(crate) fn update_lightvol_textures<T: assets::HttpClient>(
 
         use renderer_core::mutable_bind_group::Entry::Texture;
 
+        lightvol_z_layers.store(sh0.texture.size().depth_or_array_layers, Ordering::Relaxed);
         main_bind_group.mutate(
             &context.device,
             &context.bind_group_layouts.uniform,
@@ -680,7 +736,7 @@ pub(crate) fn update_ibl_resources<T: assets::HttpClient>(
         None => return,
     };
 
-    let main_bind_group = main_bind_group.0.clone();
+    let main_bind_group = main_bind_group.inner.clone();
 
     let device = &device.0;
     let queue = &queue.0;
@@ -730,6 +786,7 @@ pub(crate) fn update_desktop_uniform_buffers(
     surface_frame_view: Res<SurfaceFrameView>,
     camera: Res<Camera>,
     probes_array: Res<ProbesArrayInfo>,
+    main_bind_group: Res<MainBindGroup>,
     mut culling_params: ResMut<CullingParams>,
 ) {
     let queue = &queue.0;
@@ -792,6 +849,7 @@ pub(crate) fn update_desktop_uniform_buffers(
         probes_array_bottom_left_y: probes_array.bottom_left.y,
         probes_array_bottom_left_z: probes_array.bottom_left.z,
         settings,
+        lightvol_z_layers: main_bind_group.lightvol_z_layers.load(Ordering::Relaxed),
         _padding: Default::default(),
     };
 

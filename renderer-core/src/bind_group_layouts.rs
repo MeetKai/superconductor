@@ -31,13 +31,13 @@ impl BindGroupLayouts {
             },
         };
 
-        let d3_texture_entry = |binding| wgpu::BindGroupLayoutEntry {
+        let d2array_texture_entry = |binding| wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
             count: None,
             ty: wgpu::BindingType::Texture {
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                view_dimension: wgpu::TextureViewDimension::D3,
+                view_dimension: wgpu::TextureViewDimension::D2Array,
                 multisampled: false,
             },
         };
@@ -89,10 +89,10 @@ impl BindGroupLayouts {
                     uniform_entry(0, wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT),
                     sampler_entry(1),
                     cubemap_entry(2),
-                    d3_texture_entry(3),
-                    d3_texture_entry(4),
-                    d3_texture_entry(5),
-                    d3_texture_entry(6),
+                    d2array_texture_entry(3),
+                    d2array_texture_entry(4),
+                    d2array_texture_entry(5),
+                    d2array_texture_entry(6),
                     texture_entry(7),
                     texture_entry(8),
                     texture_entry(9),

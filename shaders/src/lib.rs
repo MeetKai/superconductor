@@ -12,7 +12,7 @@ use spirv_std::{
 };
 
 type Image2D = Image!(2D, type=f32, sampled);
-type Image3D = Image!(3D, type=f32, sampled);
+type Image2DArray = Image!(2D, type=f32, sampled, arrayed);
 
 mod single_view;
 
@@ -182,20 +182,42 @@ impl ExtendedMaterialParams {
     }
 }
 
+fn sample_2d_array_as_3d(
+    point: Vec3,
+    num_layers: u32,
+    array: &Image2DArray,
+    sampler: Sampler,
+) -> Vec4 {
+    let xy = point.truncate();
+    let z = point.z * num_layers as f32 - 0.5;
+
+    let z_base = z.floor();
+    let z_fract = z.fract();
+
+    let sample_a: Vec4 = array.sample_by_lod(sampler, xy.extend(z_base), 0.0) * (1.0 - z_fract);
+    let sample_b: Vec4 = array.sample_by_lod(sampler, xy.extend(z_base + 1.0), 0.0) * z_fract;
+
+    sample_a + sample_b
+}
+
 fn sample_spherical_harmonics(
     uniforms: &Uniforms,
     position: Vec3,
     sampler: Sampler,
-    l_0: &Image3D,
-    l_1_x: &Image3D,
-    l_1_y: &Image3D,
-    l_1_z: &Image3D,
+    l_0: &Image2DArray,
+    l_1_x: &Image2DArray,
+    l_1_y: &Image2DArray,
+    l_1_z: &Image2DArray,
 ) -> [Vec3; 4] {
     let rescaled = uniforms.probes_array().rescale(position);
 
-    let sample_texture = |texture: &Image3D| {
-        let sample: Vec4 = texture.sample_by_lod(sampler, rescaled, 0.0);
-        sample.truncate()
+    let sample_texture = |texture: &Image2DArray| {
+        sample_2d_array_as_3d(
+            rescaled,
+            uniforms.lightvol_z_layers,
+            texture,
+            sampler
+        ).truncate()
     };
 
     [
@@ -237,10 +259,10 @@ pub fn fragment(
     #[spirv(flat)] is_lightmapped: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image2DArray,
     #[spirv(descriptor_set = 0, binding = 7)] lightmap: &Image2D,
     #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &Image2D,
     #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &Image2D,
@@ -322,10 +344,10 @@ pub fn fragment_alpha_clipped(
     #[spirv(flat)] is_lightmapped: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image2DArray,
     #[spirv(descriptor_set = 0, binding = 7)] lightmap: &Image2D,
     #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &Image2D,
     #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &Image2D,
@@ -414,10 +436,10 @@ pub fn fragment_alpha_blended(
     #[spirv(flat)] is_lightmapped: u32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image2DArray,
     #[spirv(descriptor_set = 0, binding = 7)] lightmap: &Image2D,
     #[spirv(descriptor_set = 0, binding = 8)] lightmap_x: &Image2D,
     #[spirv(descriptor_set = 0, binding = 9)] lightmap_y: &Image2D,
@@ -859,10 +881,10 @@ pub fn particle_fragment(
     lut_y_index: f32,
     #[spirv(descriptor_set = 0, binding = 0, uniform)] uniforms: &Uniforms,
     #[spirv(descriptor_set = 0, binding = 1)] clamp_sampler: &Sampler,
-    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image3D,
-    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image3D,
+    #[spirv(descriptor_set = 0, binding = 3)] sh_l_0: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 4)] sh_l_1_x: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 5)] sh_l_1_y: &Image2DArray,
+    #[spirv(descriptor_set = 0, binding = 6)] sh_l_1_z: &Image2DArray,
     #[spirv(descriptor_set = 0, binding = 11)] smoke_a: &Image2D,
     #[spirv(descriptor_set = 0, binding = 12)] smoke_b: &Image2D,
     #[spirv(descriptor_set = 0, binding = 13)] smoke_lut: &Image2D,

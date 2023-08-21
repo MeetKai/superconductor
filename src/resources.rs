@@ -7,6 +7,7 @@ use renderer_core::{
     GpuInstance, LineVertex, MutableBindGroup,
 };
 use std::sync::Arc;
+use std::sync::atomic::AtomicU32;
 
 #[derive(Resource)]
 pub struct Device(pub Arc<wgpu::Device>);
@@ -36,8 +37,21 @@ pub struct BindGroupLayouts(pub Arc<renderer_core::BindGroupLayouts>);
 
 #[derive(Resource)]
 pub(crate) struct UniformBuffer(pub(crate) Arc<wgpu::Buffer>);
+
 #[derive(Resource)]
-pub(crate) struct MainBindGroup(pub(crate) Arc<MutableBindGroup>);
+pub(crate) struct MainBindGroup {
+    pub(crate) inner: Arc<MutableBindGroup>,
+    pub(crate) lightvol_z_layers: Arc<AtomicU32>,
+}
+
+impl MainBindGroup {
+    pub(crate) fn new(inner: Arc<MutableBindGroup>) -> Self {
+        Self {
+            inner,
+            lightvol_z_layers: Arc::new(AtomicU32::new(1))
+        }
+    }
+}
 
 #[derive(Resource)]
 pub struct IndexBuffer(pub Arc<renderer_core::IndexBuffer>);

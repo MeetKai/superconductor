@@ -135,19 +135,19 @@ impl Plugin for SuperconductorPlugin {
         app.insert_resource(NewLightvolTextures(Some(LightvolTextures {
             sh0: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/uncompressed/lightvol.ktx2")
+                .parse("assets/lighting/bcn/lightvol.ktx2")
                 .unwrap(),
             sh1_x: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/uncompressed/lightvol_x.ktx2")
+                .parse("assets/lighting/bcn/lightvol_x.ktx2")
                 .unwrap(),
             sh1_y: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/uncompressed/lightvol_y.ktx2")
+                .parse("assets/lighting/bcn/lightvol_y.ktx2")
                 .unwrap(),
             sh1_z: url::Url::options()
                 .base_url(Some(&href))
-                .parse("assets/lighting/uncompressed/lightvol_z.ktx2")
+                .parse("assets/lighting/bcn/lightvol_z.ktx2")
                 .unwrap(),
             lightmap_sh0: HdrTexture {
                 bc6h: url::Url::options()

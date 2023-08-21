@@ -40,10 +40,11 @@ pub struct Uniforms {
     pub probes_array_scale_x: f32,
     pub probes_array_scale_y: f32,
     pub probes_array_scale_z: f32,
+    pub lightvol_z_layers: u32,
     // As the struct is 16-byte aligned due to the Vec4s in the FlatMat4s,
     // we need to pad it to 16 bytes by adding a few more bytes.
     #[cfg(not(target_arch = "spirv"))]
-    pub _padding: [u32; 3],
+    pub _padding: [u32; 2],
 }
 
 impl Uniforms {

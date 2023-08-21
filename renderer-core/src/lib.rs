@@ -221,6 +221,19 @@ impl Texture {
         }
     }
 
+    pub fn new_with_view_dimension(
+        texture: wgpu::Texture,
+        dimension: wgpu::TextureViewDimension,
+    ) -> Self {
+        Self {
+            view: texture.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(dimension),
+                ..Default::default()
+            }),
+            texture,
+        }
+    }
+
     pub fn new_cubemap(texture: wgpu::Texture) -> Self {
         Self {
             view: texture.create_view(&wgpu::TextureViewDescriptor {
