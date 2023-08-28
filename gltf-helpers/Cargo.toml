@@ -8,5 +8,5 @@ license = "MIT"
 bytemuck = { version = "1.13.1", features = ["derive"] }
 glam = { version = "0.24", features = ["bytemuck"] }
 log = "0.4.20"
-ordered-float = "3.7"
+ordered-float = "3.9"
 goth-gltf = { version = "0.1.1", features = ["primitive_reader"] }

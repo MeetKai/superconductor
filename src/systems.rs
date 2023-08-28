@@ -876,6 +876,7 @@ pub(crate) fn update_webxr_uniform_buffers(
     queue: Res<Queue>,
     uniform_buffer: Res<UniformBuffer>,
     probes_array: Res<ProbesArrayInfo>,
+    main_bind_group: Res<MainBindGroup>,
     mut culling_params: ResMut<CullingParams>,
 ) {
     let queue = &queue.0;
@@ -952,6 +953,7 @@ pub(crate) fn update_webxr_uniform_buffers(
         probes_array_bottom_left_y: probes_array.bottom_left.y,
         probes_array_bottom_left_z: probes_array.bottom_left.z,
         settings,
+        lightvol_z_layers: main_bind_group.lightvol_z_layers.load(Ordering::Relaxed),
         _padding: Default::default(),
     };
 
