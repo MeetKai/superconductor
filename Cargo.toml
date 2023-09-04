@@ -15,7 +15,7 @@ js-sys = "0.3.64"
 futures = "0.3.28"
 wgpu = { version = "0.17.0", features = ["fragile-send-sync-non-atomic-wasm"] }
 anyhow = "1.0.75"
-url = "2.4.0"
+url = "2.4.1"
 winit = "0.28.6"
 arrayvec = "0.7.4"
 surf = { git = "https://github.com/expenses/surf-patched", branch = "update-deps", default-features = false }
